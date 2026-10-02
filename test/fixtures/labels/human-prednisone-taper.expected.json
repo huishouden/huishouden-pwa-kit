@@ -1,0 +1,12 @@
+{
+  "parsed": {
+    "name": "Prednisone", "strength": "10 mg", "patient": "Alex Example", "dose": "2 tablets",
+    "timesPerDay": 1, "timesOfDay": ["morning"], "days": 5, "withFood": true,
+    "unparsed": ["then 1 tablet daily for 5 days."],
+    "assumptions": ["the label changes the dose partway; only the first step was read"]
+  },
+  "course": {
+    "name": "Prednisone 10 mg", "dose": "2 tablets", "timesPerDay": 1, "times": ["08:00"],
+    "startDate": "2026-03-14", "days": 5, "withFood": true, "notes": ""
+  }
+}
