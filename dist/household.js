@@ -1,19 +1,35 @@
-import { addDoc, arrayRemove, arrayUnion, collection, doc, onSnapshot, query, updateDoc, where, } from 'firebase/firestore';
+import { addDoc, arrayRemove, arrayUnion, collection, doc, getDocs, onSnapshot, query, updateDoc, where, } from 'firebase/firestore';
 export const normalizeEmail = (email) => email.trim().toLowerCase();
 const COLLECTION = 'households';
 /**
- * Follows the household the signed-in person belongs to. If they belong to several, the oldest
- * wins, so every app picks the same one.
+ * The household an app uses when a person belongs to several: the oldest, so every app picks the
+ * same one. Documents still waiting for the server (a household created a moment ago on this device)
+ * are skipped — the rules can't see them yet, so subscriptions under them would be refused.
  */
+export function pickHousehold(docs) {
+    const households = docs
+        .filter((d) => !d.pending)
+        .map((d) => toHousehold(d.id, d.data))
+        .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+    return households[0] ?? null;
+}
+const membersQuery = (db, email) => query(collection(db, COLLECTION), where('members', 'array-contains', normalizeEmail(email)));
+/** Follows the household the signed-in person belongs to (see `pickHousehold`). */
 export function watchHousehold(db, email, onChange) {
     onChange({ status: 'loading' });
-    const q = query(collection(db, COLLECTION), where('members', 'array-contains', normalizeEmail(email)));
-    return onSnapshot(q, (snap) => {
-        const households = snap.docs
-            .map((d) => toHousehold(d.id, d.data()))
-            .sort((a, b) => a.createdAt - b.createdAt);
-        onChange(households.length ? { status: 'ready', household: households[0] } : { status: 'none' });
+    return onSnapshot(membersQuery(db, email), { includeMetadataChanges: true }, (snap) => {
+        const docs = snap.docs.map((d) => ({ id: d.id, data: d.data(), pending: d.metadata.hasPendingWrites }));
+        // Stay loading while the only household is a local one the server hasn't accepted yet.
+        if (docs.length && docs.every((d) => d.pending))
+            return;
+        const household = pickHousehold(docs);
+        onChange(household ? { status: 'ready', household } : { status: 'none' });
     }, (error) => onChange({ status: 'error', error }));
+}
+/** One-off lookup of the same household `watchHousehold` follows; null when not a member anywhere. */
+export async function findHousehold(db, email) {
+    const snap = await getDocs(membersQuery(db, email));
+    return pickHousehold(snap.docs.map((d) => ({ id: d.id, data: d.data() })));
 }
 export function toHousehold(id, data) {
     return {
