@@ -94,8 +94,21 @@ export function isStrict(diet) {
 }
 /** The preference diets, in DIETS order. */
 export const GENTLE_DIETS = Object.freeze(DIETS.filter((d) => !DIET_STRICT[d]));
+/**
+ * How much heat (chili spice) someone enjoys. Matches the 0–3 heat scale meal ideas use:
+ * none = 0 (a slight touch now and then is tolerable, not ideal), mild = 1, medium = 2, hot = 3.
+ */
+export const SPICE_LEVELS = ['none', 'mild', 'medium', 'hot'];
+export const SPICE_LABELS = {
+    none: 'No heat',
+    mild: 'A little',
+    medium: 'Medium',
+    hot: 'Loves heat',
+};
+/** The highest heat (0–3) that suits someone most of the time. */
+export const SPICE_MAX_HEAT = { none: 0, mild: 1, medium: 2, hot: 3 };
 export const FOOD_FIELDS = ['people', 'pantryAssumed', 'updatedAt', 'by'];
-export const FOOD_PERSON_FIELDS = ['id', 'name', 'member', 'diets', 'avoid', 'note'];
+export const FOOD_PERSON_FIELDS = ['id', 'name', 'member', 'diets', 'avoid', 'spice', 'note'];
 /** The rules' limits. List entries may not contain `|` (the rules check a list as one joined string). */
 export const FOOD_LIMITS = { people: 20, id: 60, name: 60, member: 254, avoid: 30, avoidItem: 40, note: 200, pantry: 40, pantryItem: 40 };
 /** What a kitchen usually has; the household edits it. */
@@ -134,6 +147,7 @@ function toPerson(value) {
         ...(member ? { member } : {}),
         diets,
         avoid: words(v.avoid, FOOD_LIMITS.avoid, FOOD_LIMITS.avoidItem),
+        ...(SPICE_LEVELS.includes(v.spice) ? { spice: v.spice } : {}),
         ...(note ? { note } : {}),
     };
 }
@@ -188,6 +202,24 @@ export function withMembers(people, members) {
     }));
     return [...people, ...added].slice(0, FOOD_LIMITS.people);
 }
+/**
+ * The most heat (0–3) a shared meal should usually have: the lowest tolerance anyone has set, or
+ * undefined when nobody has set one.
+ */
+export function householdMaxHeat(food) {
+    const levels = food.people.flatMap((p) => (p.spice ? [SPICE_MAX_HEAT[p.spice]] : []));
+    return levels.length ? Math.min(...levels) : undefined;
+}
+const SPICE_GUIDANCE = {
+    none: 'keep meals mild, heat 0 of 3; a slight touch of heat (1) is tolerable now and then but not ideal',
+    mild: 'a little heat is fine, up to 1 of 3; hotter now and then at most',
+    medium: 'medium heat is welcome, up to 2 of 3',
+    hot: 'enjoys spicy food, any heat',
+};
+/** "Amanda: keep meals mild, heat 0 of 3; …", one line per person who set a tolerance. */
+export function householdSpiceLines(food) {
+    return food.people.flatMap((p) => (p.spice ? [`${p.name}: ${SPICE_GUIDANCE[p.spice]}.`] : []));
+}
 /** Every diet anyone in the household has, in the fixed order: for filtering recipes. */
 export function householdDiets(food) {
     return DIETS.filter((d) => food.people.some((p) => p.diets.includes(d)));
@@ -225,7 +257,10 @@ export function householdDietRules(food, { strictOnly = false } = {}) {
  * { strictOnly: true })`: most meals should lean this way, not every one.
  */
 export function householdDietPreferences(food) {
-    return food.people.flatMap((p) => p.diets.filter((d) => !isStrict(d)).map((d) => `${p.name} ${DIET_PHRASES[d]}: most meals, not every one, should follow this: ${DIET_GUIDANCE[d]}.`));
+    return [
+        ...food.people.flatMap((p) => p.diets.filter((d) => !isStrict(d)).map((d) => `${p.name} ${DIET_PHRASES[d]}: most meals, not every one, should follow this: ${DIET_GUIDANCE[d]}.`)),
+        ...householdSpiceLines(food),
+    ];
 }
 /** "Assume the kitchen already has salt, black pepper and cooking oil." or '' when the list is empty. */
 export function pantryText(food) {
