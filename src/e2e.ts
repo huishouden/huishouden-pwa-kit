@@ -143,6 +143,29 @@ export async function stubGoogleTokens(page: Page, { token = 'test-token', fail 
   await page.route('https://accounts.google.com/gsi/client*', (route) => route.fulfill({ contentType: 'text/javascript', body: script }));
 }
 
+export interface CalendarStubOptions {
+  /** What the calendar holds, as `findCalendarEvents` returns it (`CalendarMatch[]` from `./calendar`). */
+  events: unknown[];
+  /** Also stand in for a calendar token already granted on this device, so suggestions look on open (default true). */
+  cachedToken?: boolean;
+}
+
+/**
+ * Before the page loads: Google Calendar answers from `events` (`window.__mockCalendarEvents`) and,
+ * with `cachedToken`, the device counts as having a calendar token (`window.__mockCalendarToken`),
+ * which `useCalendarSuggestions` needs before it looks. Works signed out, in the sample app.
+ */
+export async function stubCalendar(page: Page | BrowserContext, { events, cachedToken = true }: CalendarStubOptions) {
+  await page.addInitScript(
+    ({ events, cachedToken }) => {
+      const w = window as unknown as { __mockCalendarEvents: unknown[]; __mockCalendarToken?: string };
+      w.__mockCalendarEvents = events;
+      if (cachedToken) w.__mockCalendarToken = 'test-token';
+    },
+    { events, cachedToken },
+  );
+}
+
 export interface SignInTestUserOptions {
   /** One of the seeded test users (`TEST_USERS` in `@huishouden/pwa-kit/staging`). */
   email: string;

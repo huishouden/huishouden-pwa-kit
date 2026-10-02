@@ -106,6 +106,19 @@ export async function stubGoogleTokens(page, { token = 'test-token', fail } = {}
 })();`;
     await page.route('https://accounts.google.com/gsi/client*', (route) => route.fulfill({ contentType: 'text/javascript', body: script }));
 }
+/**
+ * Before the page loads: Google Calendar answers from `events` (`window.__mockCalendarEvents`) and,
+ * with `cachedToken`, the device counts as having a calendar token (`window.__mockCalendarToken`),
+ * which `useCalendarSuggestions` needs before it looks. Works signed out, in the sample app.
+ */
+export async function stubCalendar(page, { events, cachedToken = true }) {
+    await page.addInitScript(({ events, cachedToken }) => {
+        const w = window;
+        w.__mockCalendarEvents = events;
+        if (cachedToken)
+            w.__mockCalendarToken = 'test-token';
+    }, { events, cachedToken });
+}
 /** The Firebase web SDK the test sign-in loads; its saved session is read by any v9+ app build. */
 export const FIREBASE_WEB_SDK = '12.19.0';
 /**
