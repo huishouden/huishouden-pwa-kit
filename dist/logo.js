@@ -16,6 +16,12 @@ export const GLYPHS = {
     card: `<rect x="166" y="282" width="180" height="116" rx="16" fill="none" stroke="${FOREST_600}" stroke-width="24"/><path d="M166 322 h180" stroke="${FOREST_600}" stroke-width="22"/><path d="M196 364 h44" stroke="${FOREST_600}" stroke-width="18" stroke-linecap="round"/>`,
     /** Baby: a feeding bottle. */
     bottle: `<path d="M240 272 v-16 a16 16 0 0 1 32 0 v16" fill="none" stroke="${FOREST_600}" stroke-width="20" stroke-linecap="round"/><rect x="216" y="272" width="80" height="140" rx="26" fill="none" stroke="${FOREST_600}" stroke-width="22"/><path d="M228 318 h56 M228 352 h56" stroke="${FOREST_600}" stroke-width="16" stroke-linecap="round"/>`,
+    /** Pet: a paw print. */
+    paw: `<ellipse cx="256" cy="362" rx="46" ry="38" fill="${FOREST_600}"/><circle cx="204" cy="306" r="17" fill="${FOREST_600}"/><circle cx="236" cy="278" r="17" fill="${FOREST_600}"/><circle cx="276" cy="278" r="17" fill="${FOREST_600}"/><circle cx="308" cy="306" r="17" fill="${FOREST_600}"/>`,
+    /** Home upkeep: a wrench. */
+    wrench: `<path d="M200 398 l84 -84" stroke="${FOREST_600}" stroke-width="32" stroke-linecap="round"/><path d="M286 268 a40 40 0 1 0 40 40 l-26 2 l-14 -14 z" fill="${FOREST_600}"/>`,
+    /** Car: a small car. */
+    car: `<path d="M210 322 l16 -34 h60 l16 34" fill="none" stroke="${FOREST_600}" stroke-width="20" stroke-linejoin="round"/><rect x="176" y="318" width="160" height="58" rx="18" fill="${FOREST_600}"/><circle cx="216" cy="380" r="18" fill="${FOREST_600}" stroke="#faf9f5" stroke-width="8"/><circle cx="296" cy="380" r="18" fill="${FOREST_600}" stroke="#faf9f5" stroke-width="8"/>`,
     /** Lists: three lines. */
     list: `<path d="M184 290 h144 M184 334 h144 M184 378 h96" stroke="${FOREST_600}" stroke-width="26" stroke-linecap="round"/>`,
     /** Shopping: a cart. */

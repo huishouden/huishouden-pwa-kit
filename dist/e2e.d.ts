@@ -27,3 +27,16 @@ export interface ScreenshotOptions {
  * commits docs/screenshots back to main when the bytes change.
  */
 export declare function captureScreenshot(page: Page, name: string, options?: ScreenshotOptions): Promise<void>;
+export interface FrameOptions {
+    /** The app's short name as the bar shows it ("Spending"); the portal's is "Huishouden". */
+    app: string;
+    /** Where the logo must lead. Defaults to any https URL (or `/` on the portal). */
+    portalUrl?: string | RegExp;
+    /** Page to load first; leave unset to check the page as it is. */
+    path?: string;
+}
+/**
+ * The Huishouden frame (DESIGN.md "Frame") on the running app: an `<hh-app-bar>` with the family
+ * logo linking to the portal, the app's name, and the bar set in Inter.
+ */
+export declare function expectHuishoudenFrame(page: Page, { app, portalUrl, path }: FrameOptions): Promise<void>;
