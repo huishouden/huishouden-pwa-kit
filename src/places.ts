@@ -17,6 +17,8 @@ export interface Place {
   address: string;
   phone?: string;
   website?: string;
+  /** Business hours as OpenStreetMap writes them ("Mo-Fr 07:00-18:00"); see `@huishouden/pwa-kit/hours`. Often missing. */
+  openingHours?: string;
   lat: number;
   lon: number;
   /** The place on openstreetmap.org. */
@@ -70,6 +72,7 @@ export function toPlace(r: NominatimResult): Place {
     address,
     phone: tags.phone ?? tags['contact:phone'],
     website: website && !/^https?:\/\//.test(website) ? `https://${website}` : website,
+    openingHours: tags.opening_hours,
     lat: Number(r.lat),
     lon: Number(r.lon),
     osmUrl: `https://www.openstreetmap.org/${r.osm_type}/${r.osm_id}`,
@@ -169,6 +172,7 @@ function overpassPlace(e: OverpassElement): Place | null {
     address,
     phone: t.phone ?? t['contact:phone'],
     website: website && !/^https?:\/\//.test(website) ? `https://${website}` : website,
+    openingHours: t.opening_hours,
     lat,
     lon,
     osmUrl: `https://www.openstreetmap.org/${e.type}/${e.id}`,
@@ -177,10 +181,14 @@ function overpassPlace(e: OverpassElement): Place | null {
 }
 
 /** Public Overpass servers, tried in order: the main one rate-limits bursts with an HTML page. */
-const OVERPASS_SERVERS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+const OVERPASS_SERVERS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
 
 /** A hung server counts as a failure, so the next fallback runs instead of waiting forever. */
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 10_000;
 
 async function searchOverpass(text: string, near: NearPoint, radiusKm: number, fetchImpl: typeof fetch): Promise<Place[]> {
   const body = new URLSearchParams({ data: overpassQuery(text, near, radiusKm) }).toString();
@@ -207,9 +215,27 @@ async function searchNominatim(q: string, limit: number, fetchImpl: typeof fetch
   const params: Record<string, string> = { q, format: 'jsonv2', extratags: '1', limit: String(limit) };
   if (near) Object.assign(params, { viewbox: viewbox(near, radiusKm), bounded: '1' });
   url.search = new URLSearchParams(params).toString();
-  const res = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`[${res.status}] Place search failed`);
-  return ((await res.json()) as NominatimResult[]).map(toPlace);
+  try {
+    const res = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    if (!res.ok) throw new Error(`[${res.status}] Place search failed`);
+    // A rate-limit or captive-portal page can arrive as 200 with HTML: treat it as busy too.
+    return ((await res.json()) as NominatimResult[]).map(toPlace);
+  } catch (e) {
+    throw new PlaceSearchUnavailable(e);
+  }
+}
+
+/**
+ * The free map service is busy or unreachable (rate limits, timeouts, server errors), so apps can
+ * say so instead of "nothing nearby". A `near` search throws it when every Overpass server failed
+ * and the Nominatim fallback failed or found nothing; a name search when Nominatim fails.
+ */
+export class PlaceSearchUnavailable extends Error {
+  /** `cause` is the underlying error, or an `AggregateError` of both when Overpass and Nominatim failed. */
+  constructor(cause: unknown) {
+    super('The free map service is busy or unreachable', { cause });
+    this.name = 'PlaceSearchUnavailable';
+  }
 }
 
 /**
@@ -221,14 +247,55 @@ export async function searchPlaces(query: string, { limit = 5, near, radiusKm = 
   if (!q) return [];
   if (!near) return searchNominatim(q, limit, fetchImpl);
   // Overpass down or finding nothing: a bounded name search, which still finds named places.
-  let places = await searchOverpass(q, near, radiusKm, fetchImpl).catch(() => [] as Place[]);
-  if (places.length === 0) places = await searchNominatim(q, Math.max(limit, 10), fetchImpl, near, radiusKm);
+  let overpassError: unknown = null;
+  let places = await searchOverpass(q, near, radiusKm, fetchImpl).catch((e: unknown) => {
+    overpassError = e;
+    return [] as Place[];
+  });
+  let nominatimError: unknown = null;
+  if (places.length === 0) {
+    places = await searchNominatim(q, Math.max(limit, 10), fetchImpl, near, radiusKm).catch((e: unknown) => {
+      nominatimError = e;
+      return [] as Place[];
+    });
+  }
+  // Both down: busy. Overpass down but Nominatim answered empty: also busy, since only Overpass
+  // finds places by kind. Overpass answered empty: nothing there.
+  if (places.length === 0 && overpassError) {
+    const nominatimCause = nominatimError instanceof PlaceSearchUnavailable ? nominatimError.cause : nominatimError;
+    throw new PlaceSearchUnavailable(nominatimError ? new AggregateError([overpassError, nominatimCause], 'Overpass and Nominatim both failed') : overpassError);
+  }
   const seen = new Set<string>();
   return places
     .map((p) => ({ ...p, distanceKm: distanceKm(near, p) }))
     .sort((a, b) => a.distanceKm - b.distanceKm)
     .filter((p) => !seen.has(p.osmUrl) && seen.add(p.osmUrl))
     .slice(0, limit);
+}
+
+/** Regions whose people think in miles and feet for distances (road signs, maps). */
+const MILES_REGIONS = new Set(['US', 'GB', 'LR', 'MM']);
+
+/** The device's region from its language ("en-US" → "US"; "en" → its likely region). */
+function region(locale: string): string | undefined {
+  try {
+    return new Intl.Locale(locale).maximize().region;
+  } catch {
+    return undefined;
+  }
+}
+
+export function usesMiles(locale: string = navigator.language): boolean {
+  return MILES_REGIONS.has(region(locale) ?? '');
+}
+
+/** "0.5 mi", "12 mi" where miles are used; "650 m", "3.1 km" elsewhere. */
+export function formatDistance(km: number, locale: string = navigator.language): string {
+  if (usesMiles(locale)) {
+    const mi = km / 1.609344;
+    return `${mi < 10 ? mi.toFixed(1) : Math.round(mi)} mi`;
+  }
+  return km < 1 ? `${Math.round(km * 100) * 10} m` : `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
 }
 
 /** `tel:` link for a phone number as people write it. */

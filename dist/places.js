@@ -32,6 +32,7 @@ export function toPlace(r) {
         address,
         phone: tags.phone ?? tags['contact:phone'],
         website: website && !/^https?:\/\//.test(website) ? `https://${website}` : website,
+        openingHours: tags.opening_hours,
         lat: Number(r.lat),
         lon: Number(r.lon),
         osmUrl: `https://www.openstreetmap.org/${r.osm_type}/${r.osm_id}`,
@@ -95,6 +96,7 @@ function overpassPlace(e) {
         address,
         phone: t.phone ?? t['contact:phone'],
         website: website && !/^https?:\/\//.test(website) ? `https://${website}` : website,
+        openingHours: t.opening_hours,
         lat,
         lon,
         osmUrl: `https://www.openstreetmap.org/${e.type}/${e.id}`,
@@ -102,9 +104,13 @@ function overpassPlace(e) {
     };
 }
 /** Public Overpass servers, tried in order: the main one rate-limits bursts with an HTML page. */
-const OVERPASS_SERVERS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+const OVERPASS_SERVERS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+];
 /** A hung server counts as a failure, so the next fallback runs instead of waiting forever. */
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 10_000;
 async function searchOverpass(text, near, radiusKm, fetchImpl) {
     const body = new URLSearchParams({ data: overpassQuery(text, near, radiusKm) }).toString();
     let failure = new Error('Place search failed');
@@ -134,10 +140,28 @@ async function searchNominatim(q, limit, fetchImpl, near, radiusKm = 15) {
     if (near)
         Object.assign(params, { viewbox: viewbox(near, radiusKm), bounded: '1' });
     url.search = new URLSearchParams(params).toString();
-    const res = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-    if (!res.ok)
-        throw new Error(`[${res.status}] Place search failed`);
-    return (await res.json()).map(toPlace);
+    try {
+        const res = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+        if (!res.ok)
+            throw new Error(`[${res.status}] Place search failed`);
+        // A rate-limit or captive-portal page can arrive as 200 with HTML: treat it as busy too.
+        return (await res.json()).map(toPlace);
+    }
+    catch (e) {
+        throw new PlaceSearchUnavailable(e);
+    }
+}
+/**
+ * The free map service is busy or unreachable (rate limits, timeouts, server errors), so apps can
+ * say so instead of "nothing nearby". A `near` search throws it when every Overpass server failed
+ * and the Nominatim fallback failed or found nothing; a name search when Nominatim fails.
+ */
+export class PlaceSearchUnavailable extends Error {
+    /** `cause` is the underlying error, or an `AggregateError` of both when Overpass and Nominatim failed. */
+    constructor(cause) {
+        super('The free map service is busy or unreachable', { cause });
+        this.name = 'PlaceSearchUnavailable';
+    }
 }
 /**
  * Up to `limit` (default 5) places matching the text, e.g. "Riverside Pediatrics Springfield", or
@@ -150,15 +174,52 @@ export async function searchPlaces(query, { limit = 5, near, radiusKm = 10, fetc
     if (!near)
         return searchNominatim(q, limit, fetchImpl);
     // Overpass down or finding nothing: a bounded name search, which still finds named places.
-    let places = await searchOverpass(q, near, radiusKm, fetchImpl).catch(() => []);
-    if (places.length === 0)
-        places = await searchNominatim(q, Math.max(limit, 10), fetchImpl, near, radiusKm);
+    let overpassError = null;
+    let places = await searchOverpass(q, near, radiusKm, fetchImpl).catch((e) => {
+        overpassError = e;
+        return [];
+    });
+    let nominatimError = null;
+    if (places.length === 0) {
+        places = await searchNominatim(q, Math.max(limit, 10), fetchImpl, near, radiusKm).catch((e) => {
+            nominatimError = e;
+            return [];
+        });
+    }
+    // Both down: busy. Overpass down but Nominatim answered empty: also busy, since only Overpass
+    // finds places by kind. Overpass answered empty: nothing there.
+    if (places.length === 0 && overpassError) {
+        const nominatimCause = nominatimError instanceof PlaceSearchUnavailable ? nominatimError.cause : nominatimError;
+        throw new PlaceSearchUnavailable(nominatimError ? new AggregateError([overpassError, nominatimCause], 'Overpass and Nominatim both failed') : overpassError);
+    }
     const seen = new Set();
     return places
         .map((p) => ({ ...p, distanceKm: distanceKm(near, p) }))
         .sort((a, b) => a.distanceKm - b.distanceKm)
         .filter((p) => !seen.has(p.osmUrl) && seen.add(p.osmUrl))
         .slice(0, limit);
+}
+/** Regions whose people think in miles and feet for distances (road signs, maps). */
+const MILES_REGIONS = new Set(['US', 'GB', 'LR', 'MM']);
+/** The device's region from its language ("en-US" → "US"; "en" → its likely region). */
+function region(locale) {
+    try {
+        return new Intl.Locale(locale).maximize().region;
+    }
+    catch {
+        return undefined;
+    }
+}
+export function usesMiles(locale = navigator.language) {
+    return MILES_REGIONS.has(region(locale) ?? '');
+}
+/** "0.5 mi", "12 mi" where miles are used; "650 m", "3.1 km" elsewhere. */
+export function formatDistance(km, locale = navigator.language) {
+    if (usesMiles(locale)) {
+        const mi = km / 1.609344;
+        return `${mi < 10 ? mi.toFixed(1) : Math.round(mi)} mi`;
+    }
+    return km < 1 ? `${Math.round(km * 100) * 10} m` : `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
 }
 /** `tel:` link for a phone number as people write it. */
 export function telHref(phone) {
