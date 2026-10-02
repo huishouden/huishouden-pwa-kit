@@ -8,7 +8,8 @@ judges the rest, and `expectHuishoudenFrame` checks the running app.
 ## Principles
 
 1. **Calm.** The apps live on a shared wall tablet. Nothing shouts: no gradients, no glow, no
-   rainbow badges, no exclamation marks. Colour carries meaning, never decoration.
+   rainbow badges, no exclamation marks. Colour carries meaning, never decoration. The one
+   exception is a celebration (below).
 2. **Glanceable.** The one number or list that matters is readable from across the room. One
    primary action per screen.
 3. **Plain words.** Short sentences that say what happens. No marketing ("sleek", "seamless",
@@ -153,6 +154,21 @@ rather than copying the class strings; the shapes are:
 - Transitions 120–200ms, ease-out, opacity/transform only; none when `prefers-reduced-motion`.
 - Confirm destructive actions in words ("Remove Sam? They lose access to every household app.").
 - Undo over confirm where the action is cheap to reverse.
+
+## Celebrations
+
+One moment may break the calm: a celebration of someone in the household on their day (Pet's "Happy
+birthday, Biscuit!"). It is the only place an exclamation mark or decorative colour is allowed.
+
+- **Only on the day.** Before it, a quiet line with the other coming things ("Biscuit's birthday in
+  3 weeks", within three months, counted down in months, then weeks, then days). After it, nothing.
+- **Never above the work.** On a home screen it sits below what needs doing, as one card that taps
+  through to the person's or pet's page; the page itself may carry a band at the top.
+- **The suite's palette.** A forest-50 card with a forest-200 border, the title in forest-700, and
+  confetti in the chart colours, kept to the card's edges, clear of the words. No gradients, glow or
+  emoji; an icon (lucide `Cake`) in a terracotta badge is enough illustration.
+- **Motion once.** Confetti may settle in on arrival (under a second, opacity and transform only)
+  and never loops; none at all under `prefers-reduced-motion`.
 
 ## Accessibility
 
