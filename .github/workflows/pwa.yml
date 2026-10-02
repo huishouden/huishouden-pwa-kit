@@ -57,6 +57,8 @@ jobs:
           key: bun-${{ hashFiles('bun.lock') }}
       - run: bun install --frozen-lockfile
       - run: bun run lint
+      - name: Huishouden design language (DESIGN.md)
+        run: bunx pwa-design-check
       - name: Unit tests
         run: if jq -e '.scripts.test' package.json >/dev/null; then bun run test; else echo "no test script"; fi
       - run: bun run build
