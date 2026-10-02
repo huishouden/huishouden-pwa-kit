@@ -1,7 +1,20 @@
 #!/bin/sh
 # Blocks a commit that adds secrets or personal data, before it exists anywhere but this machine.
 # Enable once per clone: git config core.hooksPath .githooks   (apps do this in "prepare").
-command -v gitleaks >/dev/null 2>&1 || { echo "pre-commit: gitleaks not installed (brew install gitleaks); skipping leak check" >&2; exit 0; }
+# Fails closed: a missing scanner or rules file stops the commit instead of skipping the scan.
+# To commit anyway (CI still scans the push), run: LEAK_SCAN_SKIP=1 git commit ...
+if [ "${LEAK_SCAN_SKIP:-}" = 1 ]; then
+  echo "pre-commit: LEAK_SCAN_SKIP=1, leak scan skipped; CI will still scan this push" >&2
+  exit 0
+fi
+command -v gitleaks >/dev/null 2>&1 || {
+  echo "pre-commit: gitleaks is not installed, so this commit was not scanned. Install it (brew install gitleaks) or set LEAK_SCAN_SKIP=1." >&2
+  exit 1
+}
 config=.gitleaks.toml
 [ -f "$config" ] || config=node_modules/@huishouden/pwa-kit/actions/leak-scan/gitleaks.toml
+[ -f "$config" ] || {
+  echo "pre-commit: no leak-scan rules found (.gitleaks.toml or $config). Run bun install, or set LEAK_SCAN_SKIP=1." >&2
+  exit 1
+}
 exec gitleaks git --pre-commit --staged --redact --no-banner --config "$config"
