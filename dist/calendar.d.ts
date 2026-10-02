@@ -107,8 +107,7 @@ export declare function isImported(m: CalendarMatch, records: ImportedRecord[]):
 export declare function notImported(matches: CalendarMatch[], records: ImportedRecord[]): CalendarMatch[];
 /** A readable reason for a failed calendar search; every case offers Try again. */
 export declare function calendarError(e: unknown): string;
-/** How often an open app looks again when it comes back into view. */
-export declare const SUGGESTION_RESCAN_MS: number;
+export { SUGGESTION_RESCAN_MS } from './suggestions';
 /** Event ids this household member said "Not this one" to in this app, on this device. */
 export declare function dismissedEvents(app: string, member: string): string[];
 /** Remembers "Not this one" for an event, so it is never suggested to this member again. */
@@ -123,4 +122,3 @@ export declare function newSuggestions(matches: CalendarMatch[], { isImported, d
  * "Tue 3:00 PM" within the week, then "Tue, Oct 14, 3:00 PM"; all-day events drop the time.
  */
 export declare function suggestionWhen(m: CalendarMatch, now: number): string;
-export {};
