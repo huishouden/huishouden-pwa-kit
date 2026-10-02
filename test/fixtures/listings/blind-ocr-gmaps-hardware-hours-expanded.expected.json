@@ -1,0 +1,9 @@
+{
+  "name": "Ace Hardware",
+  "address": "1544 N Main St, Logan, UT 84341",
+  "phone": "(435) 555-0177",
+  "website": "https://acehardware.example.com",
+  "hours": "Sunday 9AM-6PM; Monday 7AM-8PM; Tuesday 7AM-8PM; Wednesday 7AM-8PM; Thursday 7AM-8PM; Friday 7AM-8PM; Saturday 8AM-7PM",
+  "category": "Hardware store",
+  "unparsed": []
+}

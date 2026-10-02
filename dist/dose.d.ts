@@ -7,35 +7,15 @@
  * and every assumption it makes (a month read as 30 days, only the first step of a taper) comes
  * back in `assumptions`, so the app can show them next to the fields it filled in.
  */
+import { type ReadTextOptions } from './ocr';
+export { OCR_LANG_PATH, releaseOcr } from './ocr';
+export type ReadLabelOptions = Omit<ReadTextOptions, 'screenshot'>;
 /**
- * Where the OCR engine's files come from. tesseract.js loads its worker and WebAssembly core from
- * jsDelivr at the exact version installed (its own default), and the English language data from
- * the pinned package below (about 2 MB, gzipped). The language data is kept in IndexedDB after the
- * first read; with `pwaApp({ ocr: true })` the service worker also caches the worker and core, so
- * reading labels works offline after the first use. To self-host instead, copy the files into the
- * app's `public/` and pass their paths as `readLabel(image, { paths })`.
- */
-export declare const OCR_LANG_PATH = "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int";
-export interface ReadLabelOptions {
-    /** Self-hosted engine files: `workerPath`, `corePath`, `langPath` (see OCR_LANG_PATH). */
-    paths?: {
-        workerPath?: string;
-        corePath?: string;
-        langPath?: string;
-    };
-    /** 0..1 while the engine loads and reads. */
-    onProgress?: (progress: number, status: string) => void;
-    /** Longest side the photo is scaled down to before reading (phone photos are slow at full size). Default 2000. */
-    maxSide?: number;
-}
-/**
- * The text on a label photo, read on the device with tesseract.js (English). The engine is loaded
- * on first use only, so apps that never call this don't download it; it needs `tesseract.js`
- * (v7) installed in the app. Accuracy depends on the photo: flat, well lit and in focus.
+ * The text on a label photo, read on the device with tesseract.js (English; see `./ocr`). The
+ * engine is loaded on first use only, so apps that never call this don't download it. Accuracy
+ * depends on the photo: flat, well lit and in focus.
  */
 export declare function readLabel(image: Blob, options?: ReadLabelOptions): Promise<string>;
-/** Stops the OCR engine and frees its memory; the next `readLabel` starts it again. */
-export declare function releaseOcr(): Promise<void>;
 export type TimeOfDay = 'morning' | 'midday' | 'evening' | 'bedtime';
 export interface ParsedCourse {
     /** Medicine name from the label's drug line ("Carprofen"). */

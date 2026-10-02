@@ -87,4 +87,5 @@ export declare function usesMiles(locale?: string): boolean;
 export declare function formatDistance(km: number, locale?: string): string;
 /** `tel:` link for a phone number as people write it. */
 export declare function telHref(phone: string): string;
-export {};
+export { SHARE_PARAMS, clearSharedPlace, parsePlaceText, readPlaceScreenshot, readSharedPlace } from './place-text';
+export type { ParsedPlace, ReadPlaceScreenshotOptions, SharedPlace } from './place-text';

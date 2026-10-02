@@ -1,0 +1,11 @@
+{
+  "name": "Jiffy Lube",
+  "address": "1125 N Dixie Hwy, Elizabethtown, KY 42701",
+  "phone": "(270) 555-0125",
+  "website": "https://jiffylube.example.com/locations/ky/elizabethtown/2187",
+  "category": "Oil change service",
+  "unparsed": [
+    "Located in: Westgate Plaza",
+    "Thursdays"
+  ]
+}

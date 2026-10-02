@@ -1,16 +1,29 @@
 /**
  * The household's contacts in React: the add/edit dialog (with an OpenStreetMap business search
- * that fills in the address, phone and website) and the contact card with tap-to-call, email,
+ * that fills in the address, phone and website, and for businesses the map lacks, filling from a
+ * listing screenshot or pasted listing text) and the contact card with tap-to-call, email,
  * website and map links. Saves go through `contactInput` in `../contacts`, so every app trims and
  * links the same way.
  */
-import { useState } from 'react';
-import { ExternalLink, Globe, Mail, MapPin, Pencil, Phone, Search, Trash2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ClipboardPaste, ExternalLink, Globe, ImageUp, Mail, MapPin, Pencil, Phone, Search, Trash2 } from 'lucide-react';
 import { CONTACT_LIMITS, contactInput, displayWebsite, type Contact, type ContactInput } from '../contacts';
-import { mapsSearchUrl, searchPlaces, telHref, type Place } from '../places';
+import { mapsSearchUrl, parsePlaceText, readPlaceScreenshot, searchPlaces, telHref, type ParsedPlace, type Place } from '../places';
 import { Chip, Dialog, ErrorNotice, Field, cardClass, deleteButton, ghostButton, iconButton, inputClass, linkClass, overline, primaryButton, secondaryButton } from './ui';
 
 type PlaceSearch = { status: 'idle' } | { status: 'searching' } | { status: 'done'; places: Place[]; query: string } | { status: 'error' };
+
+/** Where filled-in details came from, for the note under the buttons. */
+type FillSource = 'screenshot' | 'text' | 'share';
+type Fill =
+  | { status: 'idle' }
+  | { status: 'reading'; progress?: number }
+  | { status: 'error' }
+  | { status: 'done'; source: FillSource; place: ParsedPlace; filled: string[] };
+
+const SOURCE_WORDS: Record<FillSource, string> = { screenshot: 'the screenshot', text: 'the pasted text', share: 'what was shared' };
+
+const listWords = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
 
 export interface ContactDialogProps {
   contact: Contact | null;
@@ -26,6 +39,13 @@ export interface ContactDialogProps {
   searchPlaceholder?: string;
   /** The name field's placeholder, an invented example: "Example Pediatrics". */
   namePlaceholder?: string;
+  /**
+   * Details to start a new contact with, e.g. `readSharedPlace(location)?.place` when the app was
+   * opened from Google Maps' Share menu. Shown with what wasn't understood, for the person to check.
+   */
+  prefill?: ParsedPlace;
+  /** Reads a listing screenshot; defaults to on-device OCR (`readPlaceScreenshot`). Tests pass a stand-in. */
+  readScreenshot?: (image: Blob, onProgress: (progress: number, status: string) => void) => Promise<ParsedPlace>;
   onSave: (input: ContactInput) => void;
   onDelete?: () => void;
   onClose: () => void;
@@ -39,20 +59,28 @@ export function ContactDialog({
   title = { add: 'New contact', edit: 'Edit contact' },
   searchPlaceholder = 'Business name and town',
   namePlaceholder,
+  prefill,
+  readScreenshot = (image, onProgress) => readPlaceScreenshot(image, { onProgress }),
   onSave,
   onDelete,
   onClose,
 }: ContactDialogProps) {
-  const [name, setName] = useState(contact?.name ?? '');
+  const start = contact ? undefined : prefill;
+  const [name, setName] = useState(contact?.name ?? start?.name?.slice(0, CONTACT_LIMITS.name) ?? '');
   const [role, setRole] = useState(contact?.role ?? initialRole ?? '');
-  const [phone, setPhone] = useState(contact?.phone ?? '');
-  const [email, setEmail] = useState(contact?.email ?? '');
-  const [website, setWebsite] = useState(contact?.website ?? '');
-  const [address, setAddress] = useState(contact?.address ?? '');
-  const [mapsUrl, setMapsUrl] = useState(contact?.mapsUrl ?? '');
-  const [notes, setNotes] = useState(contact?.notes ?? '');
+  const [phone, setPhone] = useState(contact?.phone ?? start?.phone ?? '');
+  const [email, setEmail] = useState(contact?.email ?? start?.email ?? '');
+  const [website, setWebsite] = useState(contact?.website ?? start?.website ?? '');
+  const [address, setAddress] = useState(contact?.address ?? start?.address?.slice(0, CONTACT_LIMITS.address) ?? '');
+  const [mapsUrl, setMapsUrl] = useState(contact?.mapsUrl ?? start?.mapsUrl ?? '');
+  const [notes, setNotes] = useState(contact?.notes ?? (start?.hours ? `Hours: ${start.hours}`.slice(0, CONTACT_LIMITS.notes) : ''));
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState<PlaceSearch>({ status: 'idle' });
+  const [fill, setFill] = useState<Fill>(start ? { status: 'done', source: 'share', place: start, filled: filledFields(start) } : { status: 'idle' });
+  const [pasting, setPasting] = useState(false);
+  const [pasted, setPasted] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
+  const lastImage = useRef<Blob | null>(null);
   const valid = name.trim().length > 0;
 
   const save = () => {
@@ -80,6 +108,32 @@ export function ContactDialog({
     if (p.website) setWebsite(p.website);
     setMapsUrl(p.mapsUrl);
     setSearch({ status: 'idle' });
+  };
+
+  // Fills what the listing had, keeps what was typed for anything it lacked, and says which.
+  const fillFrom = (p: ParsedPlace, source: FillSource) => {
+    if (p.name) setName(p.name.slice(0, CONTACT_LIMITS.name));
+    if (p.address) setAddress(p.address.slice(0, CONTACT_LIMITS.address));
+    if (p.phone) setPhone(p.phone);
+    if (p.email) setEmail(p.email);
+    if (p.website) setWebsite(p.website);
+    if (p.mapsUrl) setMapsUrl(p.mapsUrl);
+    else if (p.address) setMapsUrl('');
+    if (p.hours && !notes.trim()) setNotes(`Hours: ${p.hours}`.slice(0, CONTACT_LIMITS.notes));
+    setSearch({ status: 'idle' });
+    setFill({ status: 'done', source, place: p, filled: filledFields(p, !notes.trim()) });
+  };
+
+  const readImage = async (image: Blob) => {
+    lastImage.current = image;
+    setPasting(false);
+    setFill({ status: 'reading' });
+    try {
+      const place = await readScreenshot(image, (progress, status) => setFill({ status: 'reading', progress: status.startsWith('recogniz') ? progress : undefined }));
+      fillFrom(place, 'screenshot');
+    } catch {
+      setFill({ status: 'error' });
+    }
   };
 
   const mapsQuery = query.trim() || name.trim();
@@ -158,6 +212,64 @@ export function ContactDialog({
             </a>
           )}
         </div>
+        <div className="space-y-2 border-t border-stone-200 pt-3">
+          <p className="text-sm text-stone-600">Not listed? Take a screenshot of the business in Google Maps, then choose it here.</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={secondaryButton} disabled={fill.status === 'reading'} onClick={() => fileInput.current?.click()}>
+              <ImageUp size={18} aria-hidden="true" /> Fill from a screenshot
+            </button>
+            <button type="button" className={secondaryButton} aria-expanded={pasting} onClick={() => setPasting(!pasting)}>
+              <ClipboardPaste size={18} aria-hidden="true" /> Paste listing text
+            </button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/*"
+              hidden
+              aria-label="Screenshot of the business"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) void readImage(file);
+              }}
+            />
+          </div>
+          {pasting && (
+            <div className="space-y-2">
+              <textarea
+                className={`${inputClass} min-h-28`}
+                value={pasted}
+                onChange={(e) => setPasted(e.target.value)}
+                aria-label="Listing text"
+                placeholder="Copy the business's name, address and phone number from Google Maps, Apple Maps or Yelp and paste them here."
+              />
+              <button
+                type="button"
+                className={secondaryButton}
+                disabled={!pasted.trim()}
+                onClick={() => {
+                  fillFrom(parsePlaceText(pasted), 'text');
+                  setPasting(false);
+                  setPasted('');
+                }}
+              >
+                Fill in
+              </button>
+            </div>
+          )}
+          {fill.status === 'reading' && (
+            <p role="status" className="text-base text-stone-600">
+              {fill.progress === undefined ? 'Getting the text reader ready…' : `Reading the screenshot… ${Math.round(fill.progress * 100)}%`}
+            </p>
+          )}
+          {fill.status === 'error' && (
+            <ErrorNotice
+              message="Couldn't read the screenshot. The text reader needs a connection the first time."
+              onRetry={() => lastImage.current && void readImage(lastImage.current)}
+            />
+          )}
+          {fill.status === 'done' && <FillNote source={fill.source} place={fill.place} filled={fill.filled} />}
+        </div>
       </section>
 
       <form
@@ -210,6 +322,51 @@ export function ContactDialog({
         <button type="submit" hidden />
       </form>
     </Dialog>
+  );
+}
+
+/** Field names a parsed listing fills in, in the order the form shows them. */
+function filledFields(p: ParsedPlace, hoursToNotes = true): string[] {
+  return [
+    p.name && 'name',
+    p.phone && 'phone',
+    p.email && 'email',
+    p.website && 'website',
+    p.address && 'address',
+    p.hours && hoursToNotes && 'hours (in notes)',
+  ].filter((f): f is string => !!f);
+}
+
+/** What was filled in from a listing and, so nothing is dropped silently, what wasn't used. */
+function FillNote({ source, place, filled }: { source: FillSource; place: ParsedPlace; filled: string[] }) {
+  const from = SOURCE_WORDS[source];
+  const unparsed = place.unparsed.slice(0, 8);
+  return (
+    <div role="status" className="space-y-1 text-base text-stone-700">
+      {filled.length ? (
+        <p>
+          Filled in the {listWords(filled)} from {from}. Check them before saving.
+        </p>
+      ) : (
+        <p>
+          Couldn't find a business's details in {from}.
+          {source === 'screenshot' ? ' Try a screenshot that shows the name, address and phone number, or paste the text instead.' : ''}
+        </p>
+      )}
+      {unparsed.length > 0 && (
+        <div className="text-sm text-stone-600">
+          <p>Not used:</p>
+          <ul className="list-disc pl-5">
+            {unparsed.map((line, i) => (
+              <li key={i} className="[overflow-wrap:anywhere]">
+                {line}
+              </li>
+            ))}
+          </ul>
+          {place.unparsed.length > unparsed.length && <p>And {place.unparsed.length - unparsed.length} more lines.</p>}
+        </div>
+      )}
+    </div>
   );
 }
 

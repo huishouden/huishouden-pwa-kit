@@ -1,0 +1,10 @@
+{
+  "name": "Maple Grove Animal Hospital",
+  "address": "1234 Elm St, Springfield, IL 62704",
+  "phone": "(217) 555-0142",
+  "website": "https://maplegrove.example.com",
+  "category": "Veterinarian",
+  "unparsed": [
+    "\"Dr. Lee was so gentle with our cat.\""
+  ]
+}
