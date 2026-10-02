@@ -61,6 +61,12 @@ user of it (dogfooding), never a special case. So:
   so exactly one repo deploys it: a dedicated rules repo (for Huishouden, `huishouden/rules`),
   never an app's repo, so one app's failing build can't hold back everyone's rules. Apps send their
   rules blocks there, with emulator tests next to the others.
+- Apps open Firestore with `initFirestore(app, { auth })` and write with `setDoc`, `updateDoc`,
+  `deleteDoc`, `addDoc`, `writeBatch` and the field sentinels from `@huishouden/pwa-kit/firestore`,
+  not `firebase/firestore`. A write reaches Firestore's offline cache a few milliseconds after the
+  call returns; these also note it in localStorage at once, so an entry tapped in just before the
+  app is closed or reloaded is written when it next opens instead of being lost. Writes stay
+  fire-and-forget: the screen updates from the local cache, and errors go to a toast.
 - People, accounts, card numbers and other personal facts are data, not code: keep them in the
   app's data store (a sheet tab, Firestore), never in the repo, including test fixtures (use
   made-up values). A leak scan can't recognise most of these, so this rule is the protection.

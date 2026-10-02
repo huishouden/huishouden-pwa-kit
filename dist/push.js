@@ -1,4 +1,5 @@
-import { collection, deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc } from 'firebase/firestore';
+import { deleteDoc, setDoc } from './firestore.js';
 export const PUSH_SUBSCRIPTION_FIELDS = ['email', 'app', 'endpoint', 'keys', 'ua', 'createdAt'];
 const MESSAGES = {
     'ios-not-installed': 'On iPhone and iPad, notifications work once the app is on the Home Screen: tap Share, then "Add to Home Screen", and open it from there.',
