@@ -4,8 +4,6 @@ const signInWithCredential = mock(async () => ({ user: { uid: 'u1' } }));
 mock.module('firebase/auth', () => ({
   GoogleAuthProvider: { credential: (idToken: string) => ({ idToken }) },
   signInWithCredential,
-  // Other kit modules (calendar) import these; this file only mocks what auth.ts uses.
-  reauthenticateWithPopup: async () => ({}),
 }));
 const { signInSilently } = await import('../src/auth');
 

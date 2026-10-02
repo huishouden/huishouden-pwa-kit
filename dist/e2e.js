@@ -72,3 +72,36 @@ export async function expectHuishoudenFrame(page, { app, portalUrl, path }) {
     const font = await bar.evaluate((el) => getComputedStyle(el).fontFamily);
     expect(font, 'app bar typeface').toMatch(/^["']?Inter\b/);
 }
+/**
+ * Serves a stand-in for Google Identity Services (https://accounts.google.com/gsi/client) so
+ * `googleAccessToken` gets a token with no Google account: the token client grants every scope
+ * asked for (or fails as `fail` says), and One Tap reports "not displayed". Each request is
+ * recorded in `window.__gisTokenRequests` (`{ client_id, scope }`). Call before `page.goto`.
+ */
+export async function stubGoogleTokens(page, { token = 'test-token', fail } = {}) {
+    const script = `(() => {
+  const token = ${JSON.stringify(token)}, fail = ${JSON.stringify(fail ?? null)};
+  window.__gisTokenRequests = [];
+  window.google = { accounts: {
+    id: {
+      initialize() {},
+      prompt(listener) { if (listener) listener({ isNotDisplayed: () => true, getNotDisplayedReason: () => 'stubbed' }); },
+      disableAutoSelect() {},
+    },
+    oauth2: {
+      initTokenClient(cfg) {
+        return { requestAccessToken() {
+          window.__gisTokenRequests.push({ client_id: cfg.client_id, scope: cfg.scope });
+          setTimeout(() => {
+            if (fail === 'access_denied') cfg.callback({ error: 'access_denied' });
+            else if (fail) cfg.error_callback && cfg.error_callback({ type: fail });
+            else cfg.callback({ access_token: token, expires_in: 3599, scope: cfg.scope, token_type: 'Bearer' });
+          });
+        } };
+      },
+      hasGrantedAllScopes() { return !fail; },
+    },
+  } };
+})();`;
+    await page.route('https://accounts.google.com/gsi/client*', (route) => route.fulfill({ contentType: 'text/javascript', body: script }));
+}

@@ -1,5 +1,5 @@
 import type { Auth } from 'firebase/auth';
-import { popupBlocked, popupCancelled } from './feedback';
+import { googleAccessMessage, popupBlocked, popupCancelled } from './feedback';
 import { googleAccessToken, googleFetch } from './google-token';
 import { toYmd } from './time';
 
@@ -67,7 +67,7 @@ export function searchPhrases(text: string): string[] {
 
 /**
  * A token that can read the signed-in person's calendars. The first time, Google asks to allow
- * access in a popup (call from a tap); the token is then reused for its hour.
+ * access in a window (call from a tap); the token is then reused until it ends.
  */
 export function calendarAccessToken(auth: Auth): Promise<string> {
   return googleAccessToken(auth, CALENDAR_SCOPES, { deniedMessage: 'Google did not grant calendar access.' });
@@ -252,5 +252,7 @@ export function notImported(matches: CalendarMatch[], records: ImportedRecord[])
 export function calendarError(e: unknown): string {
   if (popupCancelled(e)) return 'Calendar access was not allowed. Try again when you are ready.';
   if (popupBlocked(e)) return 'The browser blocked the Google window. Allow pop-ups for this site and try again.';
+  const access = googleAccessMessage(e, 'Calendar');
+  if (access) return access;
   return "Couldn't search your calendar. Check the connection and try again.";
 }
