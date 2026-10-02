@@ -92,6 +92,10 @@ for entry in "${APPS[@]}"; do
     echo "repo $GITHUB_OWNER/$repo not found; skipping variables"
     continue
   fi
+  # Free on public repos; re-applied because transferring a repo turns both off.
+  gh api -X PATCH "repos/$GITHUB_OWNER/$repo" --input - >/dev/null <<'JSON'
+{"security_and_analysis": {"secret_scanning": {"status": "enabled"}, "secret_scanning_push_protection": {"status": "enabled"}}}
+JSON
   gh variable set GCP_WIF_PROVIDER --repo "$GITHUB_OWNER/$repo" --body "$WIF_PROVIDER"
   gh variable set GCP_DEPLOY_SA --repo "$GITHUB_OWNER/$repo" --body "$SA"
   # Deploys run in the production environment; only main may deploy to it.

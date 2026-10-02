@@ -22,8 +22,9 @@ judges the rest, and `expectHuishoudenFrame` checks the running app.
 - Full name (install name, page title, manifest `name`): `Huishouden <App>`, e.g. "Huishouden
   Spending". Short name (home-screen label, manifest `short_name`, app bar): `<App>`. The portal is
   just "Huishouden".
-- Repos and Hosting sites: `huishouden-<app>` (`huishouden-spending`, `huishouden-spending.web.app`);
-  the shared kit is `huishouden-pwa-kit`. The portal repo is `huishouden`.
+- Repos live in the `huishouden` GitHub org and are named for the app alone: `huishouden/<app>`
+  (`huishouden/spending`); the kit is `huishouden/pwa-kit`, the portal `huishouden/portal`. Hosting
+  site names are global, so they keep the prefix: `huishouden-<app>.web.app`.
 - Dutch appears in the suite name and small touches (the portal's greeting), never in labels a
   reader needs to understand.
 
