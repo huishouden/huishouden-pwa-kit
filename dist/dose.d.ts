@@ -1,0 +1,187 @@
+/**
+ * Medicine labels to dose schedules. A photo of a pharmacy or vet label is read on the device
+ * (`readLabel`, open-source OCR, nothing uploaded or stored), the directions are parsed with fixed
+ * rules (`parseDirections`), and the result becomes daily dose times and reminders.
+ *
+ * The parser never guesses silently: wording it does not recognise comes back in `unparsed`,
+ * and every assumption it makes (a month read as 30 days, only the first step of a taper) comes
+ * back in `assumptions`, so the app can show them next to the fields it filled in.
+ */
+/**
+ * Where the OCR engine's files come from. tesseract.js loads its worker and WebAssembly core from
+ * jsDelivr at the exact version installed (its own default), and the English language data from
+ * the pinned package below (about 2 MB, gzipped). The language data is kept in IndexedDB after the
+ * first read; with `pwaApp({ ocr: true })` the service worker also caches the worker and core, so
+ * reading labels works offline after the first use. To self-host instead, copy the files into the
+ * app's `public/` and pass their paths as `readLabel(image, { paths })`.
+ */
+export declare const OCR_LANG_PATH = "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int";
+export interface ReadLabelOptions {
+    /** Self-hosted engine files: `workerPath`, `corePath`, `langPath` (see OCR_LANG_PATH). */
+    paths?: {
+        workerPath?: string;
+        corePath?: string;
+        langPath?: string;
+    };
+    /** 0..1 while the engine loads and reads. */
+    onProgress?: (progress: number, status: string) => void;
+    /** Longest side the photo is scaled down to before reading (phone photos are slow at full size). Default 2000. */
+    maxSide?: number;
+}
+/**
+ * The text on a label photo, read on the device with tesseract.js (English). The engine is loaded
+ * on first use only, so apps that never call this don't download it; it needs `tesseract.js`
+ * (v7) installed in the app. Accuracy depends on the photo: flat, well lit and in focus.
+ */
+export declare function readLabel(image: Blob, options?: ReadLabelOptions): Promise<string>;
+/** Stops the OCR engine and frees its memory; the next `readLabel` starts it again. */
+export declare function releaseOcr(): Promise<void>;
+export type TimeOfDay = 'morning' | 'midday' | 'evening' | 'bedtime';
+export interface ParsedCourse {
+    /** Medicine name from the label's drug line ("Carprofen"). */
+    name?: string;
+    /** Strength from the drug line or the directions ("75 mg", "1.5 mg/ml"). */
+    strength?: string;
+    /** Form from the drug line ("chewable tablets", "oral suspension"). */
+    form?: string;
+    /** One dose, normalised: "1 tablet", "0.5 ml", "2 drops". */
+    dose?: string;
+    doseAmount?: number;
+    /** Singular unit: "tablet", "capsule", "ml", "drop", "mg". */
+    doseUnit?: string;
+    /** Doses per dosing day. */
+    timesPerDay?: number;
+    /** Hours between doses when the label gives an interval ("every 8 hours"; 48 = every other day). */
+    intervalHours?: number;
+    /** Times of day the label names ("in the morning and at bedtime"). */
+    timesOfDay?: TimeOfDay[];
+    /** Course length in days. */
+    days?: number;
+    /** "Until gone" / "until finished": no fixed length. */
+    untilGone?: boolean;
+    /** true: with food or after meals; false: on an empty stomach. */
+    withFood?: boolean;
+    /** "As needed" / PRN: no schedule. */
+    asNeeded?: boolean;
+    /** "by mouth", "in each eye", "in the left ear", "to the affected area". */
+    route?: string;
+    /** Who it is for, from a "Pet:" or "Patient:" line. */
+    patient?: string;
+    /** Advice lines the app can keep as notes ("Shake well", "Refrigerate"). */
+    notes: string[];
+    /** 0..1, how much of a usable schedule was found (see `confidenceOf`). */
+    confidence: number;
+    /** Text the parser did not understand, for the app to show. Never dropped silently. */
+    unparsed: string[];
+    /** Readings the parser made that the person should confirm. */
+    assumptions: string[];
+    /** Label lines recognised as pharmacy boilerplate (Rx number, quantity, refills, prescriber, address). */
+    ignored: string[];
+}
+/** "1 1/2", "1/2", "0.5", "one-half", "two" → number. */
+export declare function parseNumber(text: string): number | undefined;
+/** "0.5 ml", "1 tablet", "2 drops", "1.5 tablets". */
+export declare function formatDose(amount: number, unit: string): string;
+/**
+ * A dose schedule from a label's text or typed directions: "Give 1 tablet by mouth every 12 hours
+ * with food for 7 days". Handles once/twice/three/four times daily, every N hours, SID/BID/TID/QID,
+ * qNh, QD, QAM/QPM/QHS, every other day, weekly, morning/evening/bedtime, for N days/weeks, until
+ * gone, as needed, with food or an empty stomach, and doses in tablets, capsules, ml, drops and
+ * more. Anything else is returned in `unparsed`.
+ */
+export declare function parseDirections(text: string): ParsedCourse;
+/**
+ * How much of a usable course was found, 0..1: a schedule (0.4), a dose (0.2), a length or "until
+ * gone" (0.15), a name (0.15), nothing left unparsed (0.1); each assumption costs 0.1.
+ */
+export declare function confidenceOf(c: ParsedCourse): number;
+/** Clock times ("HH:MM", local) the household uses for each part of the day. */
+export interface DayTimes {
+    morning: string;
+    midday: string;
+    evening: string;
+    bedtime: string;
+}
+export declare const DEFAULT_DAY_TIMES: DayTimes;
+export interface DoseTimesOptions {
+    defaultTimes?: Partial<DayTimes>;
+    /** First dose of the day for interval schedules. Default: the morning time. */
+    firstDose?: string;
+}
+/**
+ * The clock times of each dosing day: the named times of day if the label gives them, evenly
+ * spaced from the first dose for an interval, otherwise spread from morning to evening
+ * (twice daily: 08:00 and 20:00; three times: 08:00, 14:00, 20:00). As needed: none.
+ */
+export declare function doseTimes(course: Pick<ParsedCourse, 'timesPerDay' | 'intervalHours' | 'timesOfDay' | 'asNeeded'>, options?: DoseTimesOptions): string[];
+/** "YYYY-MM-DD" in local time. */
+export declare function ymd(date: Date): string;
+/** The dosing dates of a course: `days` days from `start`, every `everyDays` days (2 = every other day). */
+export declare function courseDays(start: string, days: number, everyDays?: number): string[];
+/** The course model apps store (Huishouden Pet's medicine courses). */
+export interface MedCourse {
+    name: string;
+    dose: string;
+    timesPerDay: number;
+    /** "HH:MM" local, sorted. */
+    times: string[];
+    /** "YYYY-MM-DD". */
+    startDate: string;
+    /** Length in days; absent for ongoing or until-gone courses. */
+    days?: number;
+    withFood?: boolean;
+    notes: string;
+}
+/**
+ * A parsed label as the course an app stores, ready for the person to check: the name includes
+ * the strength, the times come from `doseTimes`, and everything the course fields can't hold
+ * (interval, until gone, as needed, route, the label's advice) goes into `notes`.
+ */
+export declare function toMedCourse(parsed: ParsedCourse, options: DoseTimesOptions & {
+    startDate: string;
+}): MedCourse;
+export interface DoseSlot {
+    /** "YYYY-MM-DD" local. */
+    date: string;
+    /** "HH:MM" local. */
+    time: string;
+    /** ms since epoch. */
+    at: number;
+    /** Stable id of this dose, "YYYY-MM-DDTHH:MM", for recording it as given. */
+    key: string;
+}
+export interface ScheduleCourse {
+    startDate: string;
+    days?: number;
+    times: string[];
+    /** Days between dosing days: 2 for every other day. Default 1. */
+    everyDays?: number;
+}
+/**
+ * Every dose of a course between `from` and `to` (ms, inclusive), in order. Ongoing courses (no
+ * `days`) run until `to`.
+ */
+export declare function doseSlots(course: ScheduleCourse, from: number, to: number): DoseSlot[];
+export type DoseState = 'given' | 'due' | 'missed' | 'upcoming';
+export interface DoseWindow {
+    /** A dose is due from this many minutes before its time. Default 30. */
+    earlyMinutes?: number;
+    /** ...until this many minutes after; later it is missed. Default 120. */
+    graceMinutes?: number;
+}
+/** Whether one dose has been given, is due now, was missed, or is still ahead. */
+export declare function doseState(slot: DoseSlot, given: ReadonlySet<string> | readonly string[], now: number, window?: DoseWindow): DoseState;
+export interface DoseSummary {
+    due: DoseSlot[];
+    missed: DoseSlot[];
+    next?: DoseSlot;
+}
+/**
+ * The doses due now, those missed since `since` (default: the course start), and the next one,
+ * given the keys of doses already recorded as given.
+ */
+export declare function doseSummary(course: ScheduleCourse, given: readonly string[], now: number, options?: DoseWindow & {
+    since?: number;
+}): DoseSummary;
+/** Days between dosing days for a parsed interval (48 h → 2), for `ScheduleCourse.everyDays`. */
+export declare function everyDaysOf(course: Pick<ParsedCourse, 'intervalHours'>): number;
