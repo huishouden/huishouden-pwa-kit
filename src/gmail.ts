@@ -1,5 +1,5 @@
 import type { Auth } from 'firebase/auth';
-import { popupBlocked, popupCancelled } from './feedback';
+import { googleAccessMessage, popupBlocked, popupCancelled } from './feedback';
 import { cachedGoogleToken, forgetGoogleToken, googleAccessToken } from './google-token';
 
 /**
@@ -7,9 +7,9 @@ import { cachedGoogleToken, forgetGoogleToken, googleAccessToken } from './googl
  * and turn email HTML into readable text. For apps that read the household's own statement and
  * alert emails (Bills, Spending) with the member's consent; nothing leaves the browser.
  *
- * Google asks once, in a popup opened from a tap; the token is kept for its hour in localStorage,
- * so reopening the app can check again without another popup. Nothing ever asks without a tap:
- * `storedGmailToken` never opens a popup, `requestGmailToken` does.
+ * Google asks once, in a window opened from a tap (`./google-token`); the token is kept in
+ * localStorage until it ends, so reopening the app can check again without another window. Nothing
+ * ever asks without a tap: `storedGmailToken` never opens a window, `requestGmailToken` does.
  */
 
 export const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
@@ -121,6 +121,8 @@ export function gmailMailbox(token: string): Mailbox {
 export function gmailError(e: unknown): string {
   if (popupCancelled(e)) return 'Gmail was not connected.';
   if (popupBlocked(e)) return 'The browser blocked Google’s window. Allow popups for this site and try again.';
+  const access = googleAccessMessage(e, 'Gmail');
+  if (access) return access;
   if (e instanceof GmailError) return e.message;
   if (e instanceof TypeError) return "Couldn't reach Gmail. Check the connection.";
   return (e as Error)?.message || "Couldn't check email.";

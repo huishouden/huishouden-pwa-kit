@@ -11,13 +11,40 @@ export function readError(e, prefix) {
         return `${prefix}: offline. It will retry when the connection is back.`;
     return `${prefix}.`;
 }
-/** Firebase Auth's popup codes for "the person closed or cancelled the Google window". */
-export const POPUP_CANCELLED = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/user-cancelled'];
+const codeOf = (e) => e?.code ?? '';
+/**
+ * "The person closed or cancelled the Google window": Google Identity Services' `popup_closed`
+ * (`./google-token`) and Firebase Auth's popup codes (sign-in).
+ */
+export const POPUP_CANCELLED = ['popup_closed', 'auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/user-cancelled'];
 /** Whether an error is the person closing Google's permission window rather than a failure. */
 export function popupCancelled(e) {
-    return POPUP_CANCELLED.includes(e?.code ?? '');
+    return POPUP_CANCELLED.includes(codeOf(e));
 }
 /** Whether the browser blocked Google's permission window (it was not opened from a tap). */
 export function popupBlocked(e) {
-    return e?.code === 'auth/popup-blocked';
+    const code = codeOf(e);
+    return code === 'popup_failed_to_open' || code === 'auth/popup-blocked';
+}
+/** Whether the person said no on Google's consent screen (or unticked a permission the app needs). */
+export function accessDenied(e) {
+    return codeOf(e) === 'access_denied';
+}
+/**
+ * Words for a failed `googleAccessToken`, naming what it was for ("Gmail", "Calendar"); null when
+ * the error is not about getting Google's permission, so the caller words it.
+ */
+export function googleAccessMessage(e, service = 'Google') {
+    if (popupCancelled(e))
+        return `${service} access was not allowed: Google’s window was closed. Try again when you are ready.`;
+    if (popupBlocked(e))
+        return 'The browser blocked Google’s window. Allow pop-ups for this site and try again.';
+    if (accessDenied(e))
+        return `${service} access was not allowed. Try again and allow it on Google’s page.`;
+    const code = codeOf(e);
+    if (code === 'not_configured')
+        return `${service} access is not set up for this app yet.`;
+    if (code === 'unavailable')
+        return 'Couldn’t reach Google. Check the connection and try again.';
+    return null;
 }
