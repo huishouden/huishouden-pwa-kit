@@ -178,7 +178,9 @@ birthday, Biscuit!"). It is the only place an exclamation mark or decorative col
 ## Dark and ambient modes
 
 Dark uses the forest scale, not grey: forest-900 page, forest-800 surfaces, stone-100 text,
-forest-400 primary. Ambient/dock modes are dark with larger type and no interactive chrome
+forest-400 primary. Dark is the app's setting, not the device's: an app that offers it puts `.dark`
+on `<html>`, and `@huishouden/pwa-kit/tailwind.css` makes `dark:` (and the `react/ui` components)
+follow that class, so apps without the setting stay light on a dark-mode phone. Ambient/dock modes are dark with larger type and no interactive chrome
 except an exit control.
 
 ## Enforcement
