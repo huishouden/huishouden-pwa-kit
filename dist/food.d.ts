@@ -61,7 +61,7 @@ export declare function watchFood(db: Firestore, householdId: string, onChange: 
 export declare function saveFood(db: Firestore, householdId: string, input: FoodInput, by: string): Promise<void>;
 /**
  * The list with every member in it: members not listed yet are added (named from their profile, or
- * their email's first part) with no diets, after the people already there. Nothing is saved.
+ * their email's first part, capitalised) with no diets, after the people already there. Nothing is saved.
  */
 export declare function withMembers(people: FoodPerson[], members: {
     email: string;
