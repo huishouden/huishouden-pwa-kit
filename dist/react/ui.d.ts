@@ -1,7 +1,7 @@
 /**
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
- * checkbox, section tabs and member badge every app shows.
+ * checkbox, section tabs, member badge and "Sample data" banner every app shows.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -59,6 +59,19 @@ export declare function StatusPill({ state }: {
 export declare function ErrorNotice({ message, onRetry }: {
     message: string;
     onRetry: () => void;
+}): import("react").JSX.Element;
+/**
+ * The note above a signed-out app's invented household. On phones it is one line, the "Sample data"
+ * chip and `short`, which opens `text` on a tap; from 640px up `text` sits beside the chip.
+ * `notice` (a sign-in error) takes the text's place at every width. `children` (scenario chips) follow
+ * on their own row on phones, on the same row when there is room.
+ */
+export declare function SampleBanner({ text, short, notice, children, className, }: {
+    text: string;
+    short?: string;
+    notice?: ReactNode;
+    children?: ReactNode;
+    className?: string;
 }): import("react").JSX.Element;
 export interface Tab {
     id: string;

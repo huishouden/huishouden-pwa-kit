@@ -1,4 +1,5 @@
 import { type APIRequestContext, type BrowserContext, type Page } from '@playwright/test';
+import { type DeviceFeatures } from './security-headers.js';
 /** Loads `path` and fails on any uncaught page error. Returns the errors seen for further checks. */
 export declare function expectCleanLoad(page: Page, path?: string): Promise<string[]>;
 /**
@@ -12,6 +13,17 @@ export declare function expectInstallable(page: Page, request: APIRequestContext
  * control, which is when a cached-app fallback would hijack the popup. Needs no credentials.
  */
 export declare function expectGoogleSignInPopup(page: Page, context: BrowserContext, openPopup: (page: Page) => Promise<void>, path?: string): Promise<void>;
+/**
+ * The site's security headers as served (STANDARD.md "Security headers"): `url` (default `/`) is
+ * frame-denied, sniff-proof and sends only the device permissions in `features`, while the same
+ * origin's `/__/auth/handler` is not frame-denied, so Google sign-in keeps working.
+ */
+export declare function expectSecurityHeaders(request: APIRequestContext, url?: string, features?: DeviceFeatures): Promise<void>;
+/**
+ * The "Sample data" banner (`SampleBanner` from `/react/ui`) stays one line on a 390px phone: the
+ * chip and the short text side by side. Restores the viewport afterwards.
+ */
+export declare function expectCompactSampleBanner(page: Page, path?: string): Promise<void>;
 export interface ScreenshotOptions {
     path?: string;
     /** Freeze the page clock so date-dependent screens render the same on every run. */
