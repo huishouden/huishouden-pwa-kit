@@ -337,7 +337,7 @@ function filledFields(p: ParsedPlace, hoursToNotes = true): string[] {
   ].filter((f): f is string => !!f);
 }
 
-/** What was filled in from a listing and, so nothing is dropped silently, what wasn't used. */
+/** What was filled in from a listing; the text that wasn't used stays one tap away, collapsed. */
 function FillNote({ source, place, filled }: { source: FillSource; place: ParsedPlace; filled: string[] }) {
   const from = SOURCE_WORDS[source];
   const unparsed = place.unparsed.slice(0, 8);
@@ -354,9 +354,9 @@ function FillNote({ source, place, filled }: { source: FillSource; place: Parsed
         </p>
       )}
       {unparsed.length > 0 && (
-        <div className="text-sm text-stone-600">
-          <p>Not used:</p>
-          <ul className="list-disc pl-5">
+        <details className="text-sm text-stone-500">
+          <summary className="cursor-pointer select-none py-1">Show the text that wasn't used</summary>
+          <ul className="mt-1 list-disc pl-5">
             {unparsed.map((line, i) => (
               <li key={i} className="[overflow-wrap:anywhere]">
                 {line}
@@ -364,7 +364,7 @@ function FillNote({ source, place, filled }: { source: FillSource; place: Parsed
             ))}
           </ul>
           {place.unparsed.length > unparsed.length && <p>And {place.unparsed.length - unparsed.length} more lines.</p>}
-        </div>
+        </details>
       )}
     </div>
   );
