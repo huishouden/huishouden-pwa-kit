@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { searchPhrases, toMatch } from '../src/calendar';
 import { cleanContact, toContact } from '../src/contacts';
-import { mapsSearchUrl, telHref, toPlace } from '../src/places';
+import { distanceKm, mapsSearchUrl, overpassQuery, placeKinds, searchPlaces, telHref, toPlace, viewbox } from '../src/places';
 
 describe('calendar', () => {
   test('search phrases drop chore words, most specific first', () => {
@@ -31,6 +31,35 @@ describe('places', () => {
     expect(p).toMatchObject({ name: 'Example Pediatrics', address: '1 Example Way, Springfield', phone: '+1 555 0100', website: 'https://example.com', lat: 1.5 });
     expect(p.osmUrl).toBe('https://www.openstreetmap.org/node/42');
     expect(p.mapsUrl).toBe(mapsSearchUrl('Example Pediatrics 1 Example Way, Springfield'));
+  });
+  test('near searches ask Overpass for the kind of place and come back nearest first', async () => {
+    const home = { lat: 40, lon: -75 };
+    let body = '';
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (_u: string, init?: RequestInit) => {
+      body = decodeURIComponent(String(init?.body));
+      const at = (id: number, lat: number) => ({ type: 'node', id, lat, lon: -75, tags: { name: `Cleaner ${id}`, 'addr:street': 'Main St' } });
+      return new Response(JSON.stringify({ elements: [at(1, 40.05), at(2, 40.01), at(3, 40.1), at(2, 40.01)] }));
+    }) as typeof fetch;
+    try {
+      const found = await searchPlaces('Drycleaners dropoff', { near: home, limit: 2 });
+      expect(found.map((p) => p.name)).toEqual(['Cleaner 2', 'Cleaner 1']);
+      expect(found[0].distanceKm).toBeCloseTo(1.11, 1);
+      expect(body).toContain('"shop"="dry_cleaning"');
+      expect(body).toContain('around:10000,40,-75');
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+  test('kinds come from everyday words; unknown words search names only', () => {
+    expect(placeKinds('pick up prescription')).toEqual(['amenity=pharmacy', 'shop=chemist']);
+    expect(placeKinds('Corner Grocer')).toEqual([]);
+    expect(overpassQuery('Corner Grocer', { lat: 1, lon: 2 }, 1)).toBe('[out:json][timeout:20];(nwr(around:1000,1,2)["name"~"Corner.*Grocer",i];);out center tags 40;');
+  });
+  test('viewbox spans about the radius each way', () => {
+    const [left, top, right, bottom] = viewbox({ lat: 0, lon: 0 }, 11.1).split(',').map(Number);
+    expect([left, top, right, bottom]).toEqual([-0.1, 0.1, 0.1, -0.1]);
+    expect(distanceKm({ lat: 0, lon: 0 }, { lat: 0.1, lon: 0 })).toBeCloseTo(11.12, 1);
   });
   test('tel links keep only digits and plus', () => {
     expect(telHref('+1 (555) 010-0100')).toBe('tel:+15550100100');
