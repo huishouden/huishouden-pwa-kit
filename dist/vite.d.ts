@@ -26,11 +26,18 @@ export interface PwaAppOptions {
      */
     push?: boolean;
     /**
-     * Cache the label-reading engine (@huishouden/pwa-kit/dose `readLabel`) in the service worker
-     * after first use, so reading labels works offline: the tesseract.js worker, WebAssembly core
+     * Cache the OCR engine (`readLabel` in ./dose, `readPlaceScreenshot` in ./places) in the service worker
+     * after first use, so reading works offline: tesseract.js, its worker, WebAssembly core
      * and English data from jsDelivr, all at pinned versions.
      */
     ocr?: boolean;
+    /**
+     * Show the installed app in the phone's Share menu (Android and desktop Chrome; iOS has no share
+     * targets), so Google Maps → Share → the app opens it with the place. Adds a manifest
+     * `share_target` that launches `/?share_title=…&share_text=…&share_url=…`; read it with
+     * `readSharedPlace(location)` from `@huishouden/pwa-kit/places`.
+     */
+    shareTarget?: boolean;
     /** Overrides merged last, for anything app-specific. */
     overrides?: Partial<VitePWAOptions>;
 }
@@ -60,6 +67,35 @@ export declare function pwaApp(options: PwaAppOptions): ({
         }): string;
     }): void;
 } | import("vite").Plugin<any>)[];
+/** The web app manifest `pwaApp` writes (before `overrides.manifest`). */
+export declare function webManifest(options: PwaAppOptions): {
+    icons: {
+        src: string;
+        sizes: string;
+        type: string;
+        purpose: string;
+    }[];
+    share_target?: {
+        action: string;
+        method: "GET";
+        enctype: string;
+        params: {
+            title: string;
+            text: string;
+            url: string;
+        };
+    } | undefined;
+    id: string;
+    name: string;
+    short_name: string;
+    description: string;
+    theme_color: string;
+    background_color: string;
+    display: "standalone";
+    orientation: "any";
+    start_url: string;
+    scope: string;
+};
 /**
  * What a shared link shows (Messages, WhatsApp, Slack...): the page description and Open Graph /
  * Twitter tags, written from the same name and description as the manifest so there is one source.
@@ -68,6 +104,20 @@ export declare function pwaApp(options: PwaAppOptions): ({
 export declare function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' | 'url'>): {
     name: string;
     transformIndexHtml(html: string): string;
+};
+/**
+ * GET share targets replace the action URL's query, so the parameter names carry the marker.
+ * Same names as `SHARE_PARAMS` in ./places (kept apart: this file runs in Node at build time).
+ */
+export declare const SHARE_TARGET: {
+    action: string;
+    method: "GET";
+    enctype: string;
+    params: {
+        title: string;
+        text: string;
+        url: string;
+    };
 };
 /** The OCR engine's files; their URLs carry exact versions, so a cached copy never goes stale. */
 export declare const OCR_CACHE: {

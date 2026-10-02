@@ -12,24 +12,7 @@ export function pwaApp(options) {
             registerType: 'autoUpdate',
             includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
             ...overrides,
-            manifest: {
-                id: '/',
-                name: options.name,
-                short_name: options.shortName ?? options.name,
-                description: options.description,
-                theme_color: options.themeColor,
-                background_color: options.backgroundColor,
-                display: 'standalone',
-                orientation: 'any',
-                start_url: '/',
-                scope: '/',
-                icons: options.icons ?? [
-                    { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-                    { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-                    { src: '/pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-                ],
-                ...(overrides.manifest || {}),
-            },
+            manifest: { ...webManifest(options), ...(overrides.manifest || {}) },
             workbox: {
                 globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
                 navigateFallback: '/index.html',
@@ -39,6 +22,27 @@ export function pwaApp(options) {
                 ...workboxOverrides,
             },
         })];
+}
+/** The web app manifest `pwaApp` writes (before `overrides.manifest`). */
+export function webManifest(options) {
+    return {
+        id: '/',
+        name: options.name,
+        short_name: options.shortName ?? options.name,
+        description: options.description,
+        theme_color: options.themeColor,
+        background_color: options.backgroundColor,
+        display: 'standalone',
+        orientation: 'any',
+        start_url: '/',
+        scope: '/',
+        ...(options.shareTarget ? { share_target: SHARE_TARGET } : {}),
+        icons: options.icons ?? [
+            { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: '/pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+    };
 }
 const escapeAttr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 /**
@@ -83,6 +87,16 @@ function pushServiceWorkerFile() {
         },
     };
 }
+/**
+ * GET share targets replace the action URL's query, so the parameter names carry the marker.
+ * Same names as `SHARE_PARAMS` in ./places (kept apart: this file runs in Node at build time).
+ */
+export const SHARE_TARGET = {
+    action: '/',
+    method: 'GET',
+    enctype: 'application/x-www-form-urlencoded',
+    params: { title: 'share_title', text: 'share_text', url: 'share_url' },
+};
 /** The OCR engine's files; their URLs carry exact versions, so a cached copy never goes stale. */
 export const OCR_CACHE = {
     urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/(?:tesseract\.js|tesseract\.js-core|@tesseract\.js-data\/eng)@v?\d/,

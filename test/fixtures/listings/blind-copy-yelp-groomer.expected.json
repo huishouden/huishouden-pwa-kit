@@ -1,0 +1,17 @@
+{
+  "name": "The Dapper Dog Grooming Salon",
+  "address": "4410 E Colfax Ave, Denver, CO 80220",
+  "phone": "(303) 555-0114",
+  "website": "https://dapperdoggrooming.example.com",
+  "hours": "Mon 9:00 AM - 6:00 PM; Tue 9:00 AM - 6:00 PM; Wed 9:00 AM - 6:00 PM; Thu 9:00 AM - 7:00 PM; Fri 9:00 AM - 7:00 PM; Sat 8:00 AM - 4:00 PM; Sun Closed",
+  "category": "Pet Groomers, Pet Stores",
+  "unparsed": [
+    "Aurora, CO",
+    "Bath & brush",
+    "Nail trimming",
+    "Between Garfield St & Jackson St",
+    "Park Hill",
+    "Jenna R.",
+    "They fit my doodle in on short notice and she came out looking amazing."
+  ]
+}

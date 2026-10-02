@@ -1,0 +1,11 @@
+{
+  "name": "Paws & Claws Veterinary Center",
+  "address": "4410 W Main St, Riverton, UT 84065",
+  "phone": "(801) 555-0138",
+  "website": "https://pawsandclaws.example.com",
+  "hours": "Mon 8:00 AM - 6:00 PM; Tue 8:00 AM - 6:00 PM; Wed 8:00 AM - 6:00 PM; Thu 8:00 AM - 8:00 PM; Fri 8:00 AM - 6:00 PM; Sat 9:00 AM - 1:00 PM; Sun Closed",
+  "category": "Veterinarians, Pet Groomers",
+  "unparsed": [
+    "\"Dr. Patel took such good care of our senior beagle. Highly recommend!\""
+  ]
+}

@@ -6,17 +6,18 @@ apps that each live in their own repo. Every piece exists because an app hit the
 | Piece | Path | What it does |
 |---|---|---|
 | App bar | `@huishouden/pwa-kit/app-bar`, `@huishouden/pwa-kit/react/app-bar` | `<hh-app-bar app glyph portal-url version>`: the Huishouden frame (family logo to the portal, "Huishouden" over the app name, `nav` and `actions` slots, Sign in with Google or the avatar with an account menu: name, email, All apps, Sign out, version). Raises `hh-sign-in` / `hh-sign-out`; the app sets `bar.user`. `AppBar` is the React 19 wrapper (`onSignIn`, `onSignOut`, `user`); `react` is an optional peer |
-| Vite preset | `@huishouden/pwa-kit/vite` | `pwaApp({...})`: link-preview tags (description, Open Graph, `og.png` from `pwa-icons`; pass `url`), manifest, auto-updating service worker, and a navigation fallback that leaves Firebase's `/__/` paths alone (otherwise "Sign in with Google" opens the app in the popup); `push: true` adds the notification handlers to the service worker, `ocr: true` keeps the label reader working offline |
+| Vite preset | `@huishouden/pwa-kit/vite` | `pwaApp({...})`: link-preview tags (description, Open Graph, `og.png` from `pwa-icons`; pass `url`), manifest, auto-updating service worker, and a navigation fallback that leaves Firebase's `/__/` paths alone (otherwise "Sign in with Google" opens the app in the popup); `push: true` adds the notification handlers to the service worker, `ocr: true` keeps the label and screenshot reader working offline, `shareTarget: true` puts the installed app in the Share menu (Android and desktop Chrome; iOS has no share targets) |
 | Firebase config | `@huishouden/pwa-kit/firebase` | `firebaseConfigFromEnv(import.meta.env, fallback?)` from `VITE_FIREBASE_*`; auth domain defaults to `<project>.firebaseapp.com`, the only redirect the auto-created OAuth client allows |
 | Silent sign-in | `@huishouden/pwa-kit/auth` | `signInSilently(auth, clientId)`: Google One Tap with auto-select into Firebase, so each app signs in without a click once the browser is signed in to Google; reports Google's reason when it can't |
 | Household | `@huishouden/pwa-kit/household` | `watchHousehold`, `findHousehold`, `saveMyProfile`, `watchProfiles` (members' own names and photos), `inviteMember`, `removeMember`, `markJoined`, `createHousehold`: one `households/{id}` document (members by lowercase email) shared by every app; each app keeps its data in subcollections, so one invite opens every app |
 | Design language | `DESIGN.md`, `bunx pwa-design-check` | The Huishouden look and behaviour every app follows; the check fails CI on off-palette colours, gradients, glass blur, other typefaces and emoji in UI |
 | Calendar search | `@huishouden/pwa-kit/calendar` | `findCalendarEvents(auth, query or [theme words], { seriesStart })`: read-only Google Calendar search across the person's calendars (asks for calendar access once in a popup); with `seriesStart` a repeating match also says when its series began (a yearly birthday's first year); `searchPhrases`; importing events: `plainText(description, max)`, `isImported`, `notImported` (each new event once, soonest first), `calendarError`; tests set `window.__mockCalendarEvents`. |
 | Contacts | `@huishouden/pwa-kit/contacts` | The household's shared contacts (`households/{id}/contacts`): `watchContacts(db, id, cb, { app })`, `addContact`, `updateContact`, `deleteContact`, `removeContactFromApp`, `restoreContact` (Undo); `apps` says which apps show each one. |
-| Place lookup | `@huishouden/pwa-kit/places`, `@huishouden/pwa-kit/hours` | `searchPlaces(query, { near })`: free OpenStreetMap search for a business's address, phone, website and opening hours (no key, no billing); with `near`, kinds of place nearest first; `PlaceSearchUnavailable` when the free service is busy; `formatDistance` in miles or km by region; `mapsSearchUrl`, `telHref`. `hours`: `parseOpeningHours`, `isOpenAt`, `closesAt`, `describeDay`. |
+| Place lookup | `@huishouden/pwa-kit/places`, `@huishouden/pwa-kit/hours` | `searchPlaces(query, { near })`: free OpenStreetMap search for a business's address, phone, website and opening hours (no key, no billing); with `near`, kinds of place nearest first; `PlaceSearchUnavailable` when the free service is busy; `formatDistance` in miles or km by region; `mapsSearchUrl`, `telHref`. `hours`: `parseOpeningHours`, `isOpenAt`, `closesAt`, `describeDay`. For businesses the map lacks: `parsePlaceText(text)` reads Google Maps' Share text, a listing copied from Google Maps, Apple Maps or Yelp, or OCR text into `name`, `address`, `phone`, `website`, `email`, `mapsUrl`, `hours`, `category`, with every line it couldn't place in `unparsed` and listing chrome (ratings, buttons, distances) in `ignored`; `readPlaceScreenshot(image)` does the same from a listing screenshot (on-device OCR); `readSharedPlace(location)` reads a place shared into the app (`pwaApp({ shareTarget: true })`), `clearSharedPlace()` tidies the address bar after. |
+| On-device OCR | `@huishouden/pwa-kit/ocr` | `readImageText(image, { screenshot })`: tesseract.js (English) loaded from jsDelivr at a pinned version on first use, so apps need no dependency; nothing is uploaded or stored. `screenshot: true` drops a phone's status bar, scales small text up and turns dark mode into dark-on-light. `releaseOcr`. Used by `readLabel` and `readPlaceScreenshot`. |
 | Sign-in origin check | `@huishouden/pwa-kit/oauth-origins`, bin `pwa-oauth-origins` | `originStatus(clientId, origin)`: whether a site is an Authorized JavaScript origin of the OAuth client (Chrome's sign-in prompt needs it; Google has no API to add one). CI checks every deploy; the bootstrap lists any missing. |
 | Invite email | `@huishouden/pwa-kit/invite` | `sendInviteEmail(auth, invite)`: the invitation from the inviter's own Gmail (one-time send permission); `inviteMailto` opens a prefilled draft instead. |
-| Medicine labels | `@huishouden/pwa-kit/dose` | `readLabel(photo)`: on-device OCR of a pharmacy or vet label (tesseract.js, loaded only when used; nothing uploaded or stored); `parseDirections(text)`: once/twice daily, every N hours, BID/TID/QID/SID/q12h, morning/bedtime, for N days, until gone, with food, dose and name, with anything not understood in `unparsed` and every assumption in `assumptions`; `toMedCourse`, `doseTimes`, `courseDays`, `doseSlots`, `doseState`, `doseSummary` (due, missed, next). |
+| Medicine labels | `@huishouden/pwa-kit/dose` | `readLabel(photo)`: on-device OCR of a pharmacy or vet label (`./ocr`, loaded only when used; nothing uploaded or stored); `parseDirections(text)`: once/twice daily, every N hours, BID/TID/QID/SID/q12h, morning/bedtime, for N days, until gone, with food, dose and name, with anything not understood in `unparsed` and every assumption in `assumptions`; `toMedCourse`, `doseTimes`, `courseDays`, `doseSlots`, `doseState`, `doseSummary` (due, missed, next). |
 | Reminders | `@huishouden/pwa-kit/reminders` | `households/{id}/reminders`, any app's reminders delivered as push notifications by the shared sender ([huishouden/notify](https://github.com/huishouden/notify)): `upsertReminder`, `cancelReminder`, `cancelReminders(ref)`, `replaceReminders(ref, list)`, `remindersForCourse(course)` (one per future dose, idempotent ids), `watchReminders`; `REMINDER_FIELDS` for the rules. |
 | Push notifications | `@huishouden/pwa-kit/push`, `pwaApp({ push: true })` | Web Push with VAPID, no Firebase Messaging: `pushSupport()` (with the reason and a sentence when unavailable, e.g. iPhone not added to the Home Screen), `enablePush(db, householdId, user, VITE_VAPID_PUBLIC_KEY, { app })`, `disablePush`, `pushEnabled`; `pwaApp({ push: true })` adds the service-worker handlers (show, tap to open the deep link); `PUSH_SUBSCRIPTION_FIELDS` for the rules. |
 | Time and due dates | `@huishouden/pwa-kit/time` | Calendar days (`'YYYY-MM-DD'`, exact day arithmetic) and moments (ms): `addDays`, `addMonths` (clamps 31 January + 1 month to the end of February; `day` keeps the 31st for later months), `daysBetween`, `daysUntil`, `parseYmd`, `toYmd`; words: `formatSpan` ("3 weeks", rounded down or to the nearest month), `inDays`, `daysAgo`, `dueText` ("Due in 3 weeks", "Overdue by 5 days"), `dueHeadline` ("Overdue: gutter cleaning"), `dueState`, `formatDuration` / `formatAgo` ("2h 10m ago"), `agoWords` ("2 hours ago"), `relativeDay`, `dueWords`, `shortDate`, `longDate`; device-locale `formatTime`, `formatDayShort`…; `toLocalInput` / `fromLocalInput`. Pure: everything takes `now` or `today`. |
@@ -29,7 +30,7 @@ apps that each live in their own repo. Every piece exists because an app hit the
 | UI primitives (React) | `@huishouden/pwa-kit/react/ui` | `Dialog` (bottom sheet on phones, Escape and scrim close), `Chip`, `Field`, `Checkbox`, `StatusPill`, `ErrorNotice` (Try again), `Toast` + `useToast` (Undo), `SectionTabs` (the app's tabs in the app bar's `nav` slot), `PersonBadge`; class strings `primaryButton`, `secondaryButton`, `ghostButton`, `iconButton`, `deleteButton`, `inputClass`, `selectClass`, `cardClass`, `overline`, `linkClass`. Needs Tailwind v4 with `@huishouden/pwa-kit/tailwind.css` and `lucide-react` (optional peers). |
 | Clock (React) | `@huishouden/pwa-kit/react/clock` | `<ClockProvider read>` and `useClock()`: a `now` that moves every 15 s and when the screen comes back; `read()` for a write's timestamp; demo mode passes its own clock. |
 | Calendar (React) | `@huishouden/pwa-kit/react/calendar` | `useCalendarSearch(auth, app)`, `CalendarFind` ("Find in my calendar" in a dialog), `CalendarImportDialog` (events not yet imported, Add, Add all), `LinkedEvent`, `CalendarHint`, `calendarAvailable`. With `plainText`, `isImported`, `notImported`, `calendarError` in `/calendar`. |
-| Contacts (React) | `@huishouden/pwa-kit/react/contacts` | `ContactDialog` (OpenStreetMap business search, role chips, `contactInput` on save) and `ContactCard` (tap to call, email, website, map). With `groupContacts(contacts, roles)`, `contactInput`, `CONTACT_LIMITS`, `displayWebsite` in `/contacts`. |
+| Contacts (React) | `@huishouden/pwa-kit/react/contacts` | `ContactDialog` (OpenStreetMap business search first, then "Fill from a screenshot" and "Paste listing text" for businesses the map lacks, each filling the fields for the person to check and listing what wasn't used; `prefill` starts a new contact from a shared place; role chips, `contactInput` on save) and `ContactCard` (tap to call, email, website, map). With `groupContacts(contacts, roles)`, `contactInput`, `CONTACT_LIMITS`, `displayWebsite` in `/contacts`. |
 | Tailwind theme | `@huishouden/pwa-kit/tailwind.css` | One import after `tailwindcss`: the palette as Tailwind colours, Inter, the shared page base (`body`, focus ring, reduced motion, `.safe-bottom`), and the kit's React components added to Tailwind's sources. |
 | Theme | `@huishouden/pwa-kit/theme.css` | Shared colours, radius, font, `.hh-button` and `.hh-avatar` (signed-in profile photo) as CSS variables (works with or without Tailwind) |
 | Smoke checks | `@huishouden/pwa-kit/e2e` | Playwright helpers: `expectCleanLoad`, `expectInstallable`, `expectGoogleSignInPopup` (no credentials needed), `expectHuishoudenFrame(page, { app, portalUrl })` (the app bar, its portal link and the app name), `captureScreenshot` (deterministic README screenshots, refreshed by CI after each deploy), `stubGoogleTokens(page, { token, fail })` (a stand-in for Google Identity Services so `googleAccessToken` flows run without a Google account) |
@@ -47,7 +48,7 @@ The conventions behind these are in [STANDARD.md](STANDARD.md).
 ## Install
 
 ```sh
-bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.24.0
+bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.25.0
 ```
 
 Spell out the package name: `bun add github:huishouden/pwa-kit#…` alone fails with `DependencyLoop`.
@@ -91,7 +92,7 @@ import { AppBar } from '@huishouden/pwa-kit/react/app-bar';
 ```
 
 ```ts
-// A medicine label to a course and its dose reminders (bun add tesseract.js for readLabel).
+// A medicine label to a course and its dose reminders (the OCR engine downloads on first use).
 import { parseDirections, readLabel, toMedCourse } from '@huishouden/pwa-kit/dose';
 import { remindersForCourse, replaceReminders } from '@huishouden/pwa-kit/reminders';
 import { enablePush, pushSupport } from '@huishouden/pwa-kit/push';
@@ -152,6 +153,30 @@ notify('Deleted Example Vet', () => restore(contact));
 <ContactDialog contact={null} app="pet" roles={ROLES} namePlaceholder="Example Vet Clinic" onSave={save} onClose={close} />
 dueText('2031-11-04', today); // "Due in 3 weeks"
 ```
+
+### Filling a contact when OpenStreetMap doesn't know the business
+
+OpenStreetMap often lacks local businesses (a vet hospital, a groomer). Three free ways in, all
+landing in `ContactDialog` for the person to check, with anything not understood listed under it:
+
+1. **Screenshot.** In Google Maps, open the business and take a screenshot; in the dialog, "Fill
+   from a screenshot". Read on the device (the OCR engine, a few megabytes, downloads on first use).
+2. **Paste.** Copy the listing's text (Google Maps on a computer, Apple Maps, Yelp, or Google
+   Maps' Share text) and use "Paste listing text".
+3. **Share** (Android and desktop Chrome, installed app): Google Maps → Share → the app. iOS
+   doesn't support web share targets, so on iPhone use a screenshot or paste.
+
+```tsx
+// vite.config.ts: pwaApp({ ..., shareTarget: true })
+import { clearSharedPlace, readSharedPlace } from '@huishouden/pwa-kit/places';
+const shared = readSharedPlace(window.location); // null on an ordinary launch
+if (shared) clearSharedPlace();
+<ContactDialog contact={null} app="pet" roles={ROLES} prefill={shared?.place} onSave={save} onClose={close} />
+```
+
+The share target launches `/?share_title=…&share_text=…&share_url=…`: browsers replace the query
+of a GET share target's action, so the marker is in the parameter names rather than `?share=1`
+(hand-made `?share=1&title=…&text=…&url=…` links are read too).
 
 ## Paid options
 

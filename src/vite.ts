@@ -24,11 +24,18 @@ export interface PwaAppOptions {
    */
   push?: boolean;
   /**
-   * Cache the label-reading engine (@huishouden/pwa-kit/dose `readLabel`) in the service worker
-   * after first use, so reading labels works offline: the tesseract.js worker, WebAssembly core
+   * Cache the OCR engine (`readLabel` in ./dose, `readPlaceScreenshot` in ./places) in the service worker
+   * after first use, so reading works offline: tesseract.js, its worker, WebAssembly core
    * and English data from jsDelivr, all at pinned versions.
    */
   ocr?: boolean;
+  /**
+   * Show the installed app in the phone's Share menu (Android and desktop Chrome; iOS has no share
+   * targets), so Google Maps → Share → the app opens it with the place. Adds a manifest
+   * `share_target` that launches `/?share_title=…&share_text=…&share_url=…`; read it with
+   * `readSharedPlace(location)` from `@huishouden/pwa-kit/places`.
+   */
+  shareTarget?: boolean;
   /** Overrides merged last, for anything app-specific. */
   overrides?: Partial<VitePWAOptions>;
 }
@@ -44,24 +51,7 @@ export function pwaApp(options: PwaAppOptions) {
     registerType: 'autoUpdate',
     includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
     ...overrides,
-    manifest: {
-      id: '/',
-      name: options.name,
-      short_name: options.shortName ?? options.name,
-      description: options.description,
-      theme_color: options.themeColor,
-      background_color: options.backgroundColor,
-      display: 'standalone',
-      orientation: 'any',
-      start_url: '/',
-      scope: '/',
-      icons: options.icons ?? [
-        { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-        { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-        { src: '/pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-      ],
-      ...(overrides.manifest || {}),
-    },
+    manifest: { ...webManifest(options), ...(overrides.manifest || {}) },
     workbox: {
       globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
       navigateFallback: '/index.html',
@@ -71,6 +61,28 @@ export function pwaApp(options: PwaAppOptions) {
       ...workboxOverrides,
     },
   })];
+}
+
+/** The web app manifest `pwaApp` writes (before `overrides.manifest`). */
+export function webManifest(options: PwaAppOptions) {
+  return {
+    id: '/',
+    name: options.name,
+    short_name: options.shortName ?? options.name,
+    description: options.description,
+    theme_color: options.themeColor,
+    background_color: options.backgroundColor,
+    display: 'standalone' as const,
+    orientation: 'any' as const,
+    start_url: '/',
+    scope: '/',
+    ...(options.shareTarget ? { share_target: SHARE_TARGET } : {}),
+    icons: options.icons ?? [
+      { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ],
+  };
 }
 
 const escapeAttr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -117,6 +129,17 @@ function pushServiceWorkerFile() {
     },
   };
 }
+
+/**
+ * GET share targets replace the action URL's query, so the parameter names carry the marker.
+ * Same names as `SHARE_PARAMS` in ./places (kept apart: this file runs in Node at build time).
+ */
+export const SHARE_TARGET = {
+  action: '/',
+  method: 'GET' as const,
+  enctype: 'application/x-www-form-urlencoded',
+  params: { title: 'share_title', text: 'share_text', url: 'share_url' },
+};
 
 /** The OCR engine's files; their URLs carry exact versions, so a cached copy never goes stale. */
 export const OCR_CACHE = {

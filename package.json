@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.24.1",
+  "version": "0.25.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "PolyForm-Shield-1.0.0",
   "type": "module",
@@ -72,6 +72,10 @@
     "./oauth-origins": {
       "types": "./dist/oauth-origins.d.ts",
       "default": "./dist/oauth-origins.js"
+    },
+    "./ocr": {
+      "types": "./dist/ocr.d.ts",
+      "default": "./dist/ocr.js"
     },
     "./people": {
       "types": "./dist/people.d.ts",
@@ -154,7 +158,6 @@
     "lucide-react": ">=0.400",
     "react": ">=19",
     "sharp": ">=0.33",
-    "tesseract.js": ">=7 <8",
     "vite-plugin-pwa": ">=1.0"
   },
   "peerDependenciesMeta": {
@@ -172,9 +175,6 @@
     },
     "sharp": {
       "optional": true
-    },
-    "tesseract.js": {
-      "optional": true
     }
   },
   "devDependencies": {
@@ -189,7 +189,7 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "sharp": "^0.35.5",
-    "tesseract.js": "^7",
+    "tesseract.js": "7.0.0",
     "typescript": "^5.9.0",
     "vite": "^8.3.0",
     "vite-plugin-pwa": "^1.3.0"

@@ -1,0 +1,11 @@
+{
+  "name": "Willow Creek Pediatrics",
+  "address": "3301 Willow Creek Rd Ste 210, Rockford, IL 61107",
+  "phone": "(815) 555-0146",
+  "website": "https://willowcreekpeds.example.com",
+  "category": "Pediatrician",
+  "unparsed": [
+    "O Located in: Willow Creek Medical Plaza",
+    "\"Dr. Ruiz was so patient with our toddler\""
+  ]
+}

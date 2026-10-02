@@ -1,0 +1,9 @@
+{
+  "name": "Harborview Dental Group",
+  "address": "12 High St, Belfast, ME 04915",
+  "phone": "(207) 555-0134",
+  "website": "https://harborviewdental.example.com",
+  "hours": "Mon-Thu 8:00 AM - 5:00 PM; Fri 8:00 AM - 1:00 PM",
+  "category": "Dentist",
+  "unparsed": []
+}

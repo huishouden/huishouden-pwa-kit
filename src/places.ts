@@ -302,3 +302,7 @@ export function formatDistance(km: number, locale: string = navigator.language):
 export function telHref(phone: string): string {
   return `tel:${phone.replace(/[^\d+]/g, '')}`;
 }
+
+// Places OpenStreetMap doesn't know: from Share text, a copied listing or a screenshot (see place-text.ts).
+export { SHARE_PARAMS, clearSharedPlace, parsePlaceText, readPlaceScreenshot, readSharedPlace } from './place-text';
+export type { ParsedPlace, ReadPlaceScreenshotOptions, SharedPlace } from './place-text';

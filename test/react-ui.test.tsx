@@ -179,6 +179,69 @@ describe('contacts', () => {
     expect(byText('Save')!.hasAttribute('disabled')).toBe(true);
   });
 
+  const typeInto = (el: HTMLTextAreaElement | HTMLInputElement, value: string) =>
+    act(() => {
+      // React skips the change when its value tracker already holds the new value; reset it first.
+      el.value = value;
+      (el as unknown as { _valueTracker?: { setValue(v: string): void } })._valueTracker?.setValue('');
+      // Where React was first loaded without a DOM (another test file), it watches focus and keys instead of input.
+      el.focus();
+      for (const type of ['input', 'change', 'keyup']) el.dispatchEvent(new Event(type, { bubbles: true }));
+    });
+  const field = (label: string) => Array.from(document.querySelectorAll('label')).find((l) => l.textContent?.startsWith(label))?.querySelector('input') ?? null;
+
+  test('pasted listing text fills the fields and shows what was not used', () => {
+    const onSave = mock((_: unknown) => {});
+    render(<ContactDialog contact={null} app="pet" roles={['Vet']} onSave={onSave} onClose={() => {}} />);
+    click(byText('Paste listing text'));
+    const box = document.querySelector('textarea[aria-label="Listing text"]') as HTMLTextAreaElement;
+    typeInto(box, 'Example Animal Hospital\n4.6 (512)\n1 Example Way, Springfield, IL 62704\n(217) 555-0100\nexample.com\n"Lovely staff, very kind to our dog."');
+    click(byText('Fill in'));
+    expect(document.body.textContent).toContain('Filled in the name, phone, website and address from the pasted text. Check them before saving.');
+    expect(document.body.textContent).toContain('Not used:');
+    expect(document.body.textContent).toContain('Lovely staff, very kind to our dog.');
+    click(byText('Save'));
+    expect(onSave.mock.calls[0][0]).toMatchObject({ name: 'Example Animal Hospital', phone: '(217) 555-0100', website: 'https://example.com', address: '1 Example Way, Springfield, IL 62704', apps: ['pet'] });
+  });
+
+  test('a screenshot is read and fills the fields; a failed read can be retried', async () => {
+    let fail = true;
+    const readScreenshot = mock(async () => {
+      if (fail) throw new Error('offline');
+      return { name: 'Example Vet', phone: '(217) 555-0101', confidence: 0.6, unparsed: [], ignored: [] };
+    });
+    render(<ContactDialog contact={null} app="pet" roles={[]} readScreenshot={readScreenshot} onSave={() => {}} onClose={() => {}} />);
+    expect(document.body.textContent).toContain('Take a screenshot of the business in Google Maps, then choose it here.');
+    const input = document.querySelector('input[type=file]') as HTMLInputElement;
+    const file = new File(['x'], 'shot.png', { type: 'image/png' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    await act(async () => void input.dispatchEvent(new Event('change', { bubbles: true })));
+    expect(document.querySelector('[role=alert]')!.textContent).toContain("Couldn't read the screenshot");
+    fail = false;
+    await act(async () => click(byText('Try again')));
+    expect(readScreenshot).toHaveBeenCalledTimes(2);
+    expect(field('Name')!.value).toBe('Example Vet');
+    expect(field('Phone')!.value).toBe('(217) 555-0101');
+    expect(document.body.textContent).toContain('Filled in the name and phone from the screenshot.');
+  });
+
+  test('a screenshot with nothing recognisable says so', async () => {
+    render(<ContactDialog contact={null} app="pet" roles={[]} readScreenshot={async () => ({ confidence: 0, unparsed: ['lorem'], ignored: [] })} onSave={() => {}} onClose={() => {}} />);
+    const input = document.querySelector('input[type=file]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [new File(['x'], 's.png')], configurable: true });
+    await act(async () => void input.dispatchEvent(new Event('change', { bubbles: true })));
+    expect(document.body.textContent).toContain("Couldn't find a business's details in the screenshot.");
+  });
+
+  test('a shared place starts a new contact, with its hours in the notes', () => {
+    const prefill = { name: 'Example Vet', mapsUrl: 'https://maps.app.goo.gl/x', hours: 'Mon 8 AM–6 PM', confidence: 0.55, unparsed: ['Here is the vet'], ignored: [] };
+    render(<ContactDialog contact={null} app="pet" roles={[]} prefill={prefill} onSave={() => {}} onClose={() => {}} />);
+    expect(field('Name')!.value).toBe('Example Vet');
+    expect(document.querySelector('textarea')!.value).toBe('Hours: Mon 8 AM–6 PM');
+    expect(document.body.textContent).toContain('from what was shared');
+    expect(document.body.textContent).toContain('Here is the vet');
+  });
+
   test('the card links phone, website and the map', () => {
     render(
       <ContactCard
