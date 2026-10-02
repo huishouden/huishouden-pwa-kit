@@ -13,7 +13,7 @@ apps that each live in their own repo. Every piece exists because an app hit the
 | Design language | `DESIGN.md`, `bunx pwa-design-check` | The Huishouden look and behaviour every app follows; the check fails CI on off-palette colours, gradients, glass blur, other typefaces and emoji in UI |
 | Calendar search | `@huishouden/pwa-kit/calendar` | `findCalendarEvents(auth, query or [theme words], { seriesStart })`: read-only Google Calendar search across the person's calendars (asks for calendar access once in a popup); with `seriesStart` a repeating match also says when its series began (a yearly birthday's first year); `searchPhrases`; importing events: `plainText(description, max)`, `isImported`, `notImported` (each new event once, soonest first), `calendarError`; tests set `window.__mockCalendarEvents`. |
 | Contacts | `@huishouden/pwa-kit/contacts` | The household's shared contacts (`households/{id}/contacts`): `watchContacts(db, id, cb, { app })`, `addContact`, `updateContact`, `deleteContact`, `removeContactFromApp`, `restoreContact` (Undo); `apps` says which apps show each one. |
-| Place lookup | `@huishouden/pwa-kit/places` | `searchPlaces(query)`: free OpenStreetMap search for a business's address, phone and website (no key, no billing); `mapsSearchUrl`, `telHref`. |
+| Place lookup | `@huishouden/pwa-kit/places`, `@huishouden/pwa-kit/hours` | `searchPlaces(query, { near })`: free OpenStreetMap search for a business's address, phone, website and opening hours (no key, no billing); with `near`, kinds of place nearest first; `PlaceSearchUnavailable` when the free service is busy; `formatDistance` in miles or km by region; `mapsSearchUrl`, `telHref`. `hours`: `parseOpeningHours`, `isOpenAt`, `closesAt`, `describeDay`. |
 | Sign-in origin check | `@huishouden/pwa-kit/oauth-origins`, bin `pwa-oauth-origins` | `originStatus(clientId, origin)`: whether a site is an Authorized JavaScript origin of the OAuth client (Chrome's sign-in prompt needs it; Google has no API to add one). CI checks every deploy; the bootstrap lists any missing. |
 | Invite email | `@huishouden/pwa-kit/invite` | `sendInviteEmail(auth, invite)`: the invitation from the inviter's own Gmail (one-time send permission); `inviteMailto` opens a prefilled draft instead. |
 | Medicine labels | `@huishouden/pwa-kit/dose` | `readLabel(photo)`: on-device OCR of a pharmacy or vet label (tesseract.js, loaded only when used; nothing uploaded or stored); `parseDirections(text)`: once/twice daily, every N hours, BID/TID/QID/SID/q12h, morning/bedtime, for N days, until gone, with food, dose and name, with anything not understood in `unparsed` and every assumption in `assumptions`; `toMedCourse`, `doseTimes`, `courseDays`, `doseSlots`, `doseState`, `doseSummary` (due, missed, next). |
@@ -152,3 +152,7 @@ notify('Deleted Example Vet', () => restore(contact));
 <ContactDialog contact={null} app="pet" roles={ROLES} namePlaceholder="Example Vet Clinic" onSave={save} onClose={close} />
 dueText('2031-11-04', today); // "Due in 3 weeks"
 ```
+
+## Paid options
+
+Everything here is free to run. [docs/paid-options.md](docs/paid-options.md) lists the paid services the apps would adopt if the household decides to pay (Google Places, Firebase Blaze, the Gemini paid tier), what each adds over the free option, and which features would change.
