@@ -1,0 +1,32 @@
+{
+  "stored": {
+    "people": [
+      { "id": "sam@example.com", "name": "Sam", "member": "sam@example.com", "diets": ["gerd"], "avoid": ["cilantro", " Cilantro ", "olives"], "note": "Prefers dinner before 7." },
+      { "id": "alex@example.com", "name": "Alex", "member": "ALEX@example.com", "diets": ["vegetarian", "pregnant", "paleo"], "avoid": [] },
+      { "id": "kid-1", "name": "Robin", "diets": ["nut allergy"], "avoid": ["mushrooms|peas"] },
+      { "id": "kid-1", "name": "Duplicate id", "diets": [], "avoid": [] },
+      { "id": "", "name": "No id", "diets": [], "avoid": [] },
+      "not a person"
+    ],
+    "pantryAssumed": ["salt", "black pepper", "", "salt", "cooking oil"],
+    "updatedAt": 1790000000000,
+    "by": "sam@example.com"
+  },
+  "people": [
+    { "id": "sam@example.com", "name": "Sam", "member": "sam@example.com", "diets": ["gerd"], "avoid": ["cilantro", "olives"], "note": "Prefers dinner before 7." },
+    { "id": "alex@example.com", "name": "Alex", "member": "alex@example.com", "diets": ["vegetarian", "pregnant"], "avoid": [] },
+    { "id": "kid-1", "name": "Robin", "diets": ["nut allergy"], "avoid": ["mushrooms/peas"] }
+  ],
+  "pantryAssumed": ["salt", "black pepper", "cooking oil"],
+  "rules": [
+    "Sam has GERD (reflux): avoid spicy food, citrus, tomato-heavy dishes, fried and fatty food, mint, chocolate, caffeine and carbonated drinks; no large meals late in the evening.",
+    "Sam avoids cilantro and olives.",
+    "About Sam: Prefers dinner before 7.",
+    "Alex is vegetarian: no meat, poultry, fish or seafood, including ingredients made from them (meat or fish stock, gelatin, fish sauce, anchovies).",
+    "Alex is pregnant: no raw or undercooked meat, poultry, eggs, fish or shellfish (no sushi, rare meat or runny eggs); no high-mercury fish (shark, swordfish, king mackerel, tilefish, bigeye tuna); no unpasteurised milk or soft cheese made from it; deli meats and hot dogs only heated until steaming; no alcohol; keep caffeine low.",
+    "Robin is allergic to nuts: a strict allergy: no peanuts or tree nuts (almonds, cashews, walnuts, pecans, pistachios, hazelnuts), nut oils or nut butters, or ingredients that may contain them, such as pesto, satay and some sauces.",
+    "Robin avoids mushrooms/peas.",
+    "Meals for the whole household should suit all of these at once."
+  ],
+  "pantryText": "Assume the kitchen already has salt, black pepper and cooking oil."
+}
