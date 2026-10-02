@@ -55,6 +55,20 @@ export declare function pwaApp(options: PwaAppOptions): ({
     };
 } | {
     name: string;
+    apply: "build";
+    config(): {
+        build: {
+            rollupOptions: {
+                output: {
+                    chunkFileNames: (chunk: {
+                        moduleIds: string[];
+                    }) => "assets/nr-[name]-[hash].js" | "assets/[name]-[hash].js";
+                };
+            };
+        };
+    };
+} | {
+    name: string;
     transformIndexHtml(html: string): string;
 } | {
     name: string;
@@ -104,6 +118,28 @@ export declare function webManifest(options: PwaAppOptions): {
 export declare function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' | 'url'>): {
     name: string;
     transformIndexHtml(html: string): string;
+};
+/** The New Relic agent's chunks (`./observability`), left out of the precache. */
+export declare const TELEMETRY_CHUNKS = "**/assets/nr-*.js";
+/**
+ * Names the browser agent's lazily loaded chunks `assets/nr-*.js`, so the service worker doesn't
+ * precache them: about 35 files a device would download on every update for reports that only
+ * matter online, and that slow the first install enough to miss "controlled after one reload".
+ */
+export declare function telemetryChunks(): {
+    name: string;
+    apply: "build";
+    config(): {
+        build: {
+            rollupOptions: {
+                output: {
+                    chunkFileNames: (chunk: {
+                        moduleIds: string[];
+                    }) => "assets/nr-[name]-[hash].js" | "assets/[name]-[hash].js";
+                };
+            };
+        };
+    };
 };
 /**
  * GET share targets replace the action URL's query, so the parameter names carry the marker.

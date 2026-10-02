@@ -8,13 +8,14 @@ import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
 export function pwaApp(options) {
     const { overrides = {} } = options;
     const { importScripts = [], runtimeCaching = [], ...workboxOverrides } = overrides.workbox ?? {};
-    return [buildStamp(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...VitePWA({
+    return [buildStamp(), telemetryChunks(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...VitePWA({
             registerType: 'autoUpdate',
             includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
             ...overrides,
             manifest: { ...webManifest(options), ...(overrides.manifest || {}) },
             workbox: {
                 globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+                globIgnores: [TELEMETRY_CHUNKS],
                 navigateFallback: '/index.html',
                 navigateFallbackDenylist: FIREBASE_RESERVED_PATHS,
                 importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...importScripts],
@@ -74,6 +75,30 @@ export function linkPreview(options) {
             const cleaned = html.replace(/\s*<meta\s+(?:name="description"|(?:property|name)="(?:og|twitter):[^"]*")[^>]*>/g, '');
             const meta = tags.map(([attr, key, value]) => `    <meta ${attr}="${key}" content="${escapeAttr(value)}" />`).join('\n');
             return cleaned.replace(/<\/head>/, `${meta}\n  </head>`);
+        },
+    };
+}
+/** The New Relic agent's chunks (`./observability`), left out of the precache. */
+export const TELEMETRY_CHUNKS = '**/assets/nr-*.js';
+/**
+ * Names the browser agent's lazily loaded chunks `assets/nr-*.js`, so the service worker doesn't
+ * precache them: about 35 files a device would download on every update for reports that only
+ * matter online, and that slow the first install enough to miss "controlled after one reload".
+ */
+export function telemetryChunks() {
+    return {
+        name: 'huishouden-telemetry-chunks',
+        apply: 'build',
+        config() {
+            return {
+                build: {
+                    rollupOptions: {
+                        output: {
+                            chunkFileNames: (chunk) => chunk.moduleIds.length > 0 && chunk.moduleIds.every((id) => id.includes('@newrelic/browser-agent')) ? 'assets/nr-[name]-[hash].js' : 'assets/[name]-[hash].js',
+                        },
+                    },
+                },
+            };
         },
     };
 }
