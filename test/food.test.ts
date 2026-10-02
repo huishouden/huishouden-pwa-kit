@@ -104,3 +104,19 @@ describe('strict and gentle diets', () => {
     expect(prefs[0]).toMatch(/^Sam has GERD \(reflux\): most meals, not every one, should follow this: avoid spicy food/);
   });
 });
+
+describe('spice tolerance', () => {
+  const { householdMaxHeat, householdSpiceLines, householdDietPreferences, toFood } = require('../src/food');
+  test('reads a valid tolerance and drops an unknown one', () => {
+    const food = toFood({ people: [{ id: 'a', name: 'Amanda', diets: [], avoid: [], spice: 'none' }, { id: 'b', name: 'Sam', diets: [], avoid: [], spice: 'scorching' }], pantryAssumed: [] });
+    expect(food.people[0].spice).toBe('none');
+    expect(food.people[1].spice).toBeUndefined();
+  });
+  test('a shared meal follows the lowest tolerance anyone set', () => {
+    const people = [{ id: 'a', name: 'Amanda', diets: [], avoid: [], spice: 'none' }, { id: 'b', name: 'Sam', diets: [], avoid: [], spice: 'hot' }, { id: 'c', name: 'Kid', diets: [], avoid: [] }];
+    expect(householdMaxHeat({ people })).toBe(0);
+    expect(householdMaxHeat({ people: [people[2]] })).toBeUndefined();
+    expect(householdSpiceLines({ people })[0]).toContain('Amanda: keep meals mild, heat 0 of 3; a slight touch of heat (1) is tolerable now and then but not ideal.');
+    expect(householdDietPreferences({ people })).toEqual(householdSpiceLines({ people }));
+  });
+});
