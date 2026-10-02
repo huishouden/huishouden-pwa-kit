@@ -3,5 +3,5 @@
 # Enable once per clone: git config core.hooksPath .githooks   (apps do this in "prepare").
 command -v gitleaks >/dev/null 2>&1 || { echo "pre-commit: gitleaks not installed (brew install gitleaks); skipping leak check" >&2; exit 0; }
 config=.gitleaks.toml
-[ -f "$config" ] || config=node_modules/@piekstra/huishouden-pwa-kit/actions/leak-scan/gitleaks.toml
+[ -f "$config" ] || config=node_modules/@huishouden/pwa-kit/actions/leak-scan/gitleaks.toml
 exec gitleaks git --pre-commit --staged --redact --no-banner --config "$config"

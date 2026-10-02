@@ -25,7 +25,7 @@ for (const file of files) {
   }
 }
 if (count) {
-  console.log(`\n${count} design-language violation(s). Rules: https://github.com/piekstra/huishouden-pwa-kit/blob/main/DESIGN.md`);
+  console.log(`\n${count} design-language violation(s). Rules: https://github.com/huishouden/huishouden-pwa-kit/blob/main/DESIGN.md`);
   process.exit(1);
 }
 console.log(`design check: ${files.filter((f) => kindOf(f)).length} files follow the Huishouden design language`);

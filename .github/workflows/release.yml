@@ -3,7 +3,7 @@
 # tags vX.Y.Z and publishes the release notes. Callers:
 #
 #   release:
-#     uses: piekstra/huishouden-pwa-kit/.github/workflows/release.yml@v0
+#     uses: huishouden/huishouden-pwa-kit/.github/workflows/release.yml@v0
 #     permissions: { contents: write, pull-requests: write }
 name: release
 
