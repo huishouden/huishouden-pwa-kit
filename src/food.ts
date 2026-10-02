@@ -6,7 +6,9 @@ import { doc, onSnapshot, setDoc, type Firestore, type Unsubscribe } from 'fireb
  * portal and read by any app that suggests meals (Tasks' meal ideas), so every app plans for the
  * same people. `householdDietRules` words it as plain constraints for a prompt or a filter.
  *
- * Fields match the rules exactly (see FOOD_FIELDS, FOOD_PERSON_FIELDS and FOOD_LIMITS); keep them in step.
+ * The rules check the document's shape (FOOD_FIELDS, list sizes, the pantry); they can't afford to check
+ * every person's fields, so writes go through `saveFood`, which clips each person to FOOD_PERSON_FIELDS
+ * and FOOD_LIMITS. Keep them in step.
  */
 
 export const DIETS = [
