@@ -120,10 +120,8 @@ export interface CalendarSuggestionsState {
 export declare function useCalendarSuggestions({ auth, words, isImported, app, horizonDays, limit }: CalendarSuggestionsOptions): CalendarSuggestionsState;
 /**
  * The calm one-line card for new calendar events: "New in your calendar: Vet — Biscuit · Tue 3:00 PM"
- * with Add and Not this one, and "+2 more" opening the rest as a list. Renders nothing without
- * suggestions. `onAdd` is the app's own import (the same as Import from calendar's Add); the event
- * leaves the card at once and stays gone when its record arrives (if none arrives within ten
- * seconds, the save failed and it comes back). After either button, focus stays on the card.
+ * with Add and Not this one, and "+2 more" opening the rest as a list (`SuggestionsCard`). `onAdd`
+ * is the app's own import (the same as Import from calendar's Add).
  */
 export declare function CalendarSuggestions({ suggestions, onAdd, onDismiss, now }: {
     suggestions: CalendarMatch[];
@@ -131,4 +129,4 @@ export declare function CalendarSuggestions({ suggestions, onAdd, onDismiss, now
     onDismiss: (m: CalendarMatch) => void;
     /** For the day words ("Today", "Tue"); default the current time. */
     now?: number;
-}): import("react").JSX.Element | null;
+}): import("react").JSX.Element;

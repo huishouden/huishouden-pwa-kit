@@ -2,6 +2,7 @@ import type { Auth } from 'firebase/auth';
 import { googleAccessMessage, popupBlocked, popupCancelled } from './feedback';
 import { cachedGoogleToken, googleAccessToken, googleFetch } from './google-token';
 import { formatDayShort, formatTime, startOfDay, toYmd } from './time';
+import { dismissId, dismissedIds } from './suggestions';
 
 /**
  * Finds Google Calendar events that match a piece of household data (a task, an appointment), so
@@ -275,32 +276,16 @@ export function calendarError(e: unknown): string {
 
 // ---- Suggestions: new events found when the app opens ----
 
-/** How often an open app looks again when it comes back into view. */
-export const SUGGESTION_RESCAN_MS = 30 * 60_000;
-/** Dismissed event ids kept per member and app; the oldest go first. */
-const DISMISSED_MAX = 200;
-
-const dismissedKey = (app: string, member: string) => `${app.toLowerCase()}-calendar-dismissed-${member}`;
+export { SUGGESTION_RESCAN_MS } from './suggestions';
 
 /** Event ids this household member said "Not this one" to in this app, on this device. */
 export function dismissedEvents(app: string, member: string): string[] {
-  try {
-    const list = JSON.parse(globalThis.localStorage?.getItem(dismissedKey(app, member)) ?? '[]');
-    return Array.isArray(list) ? list.filter((id): id is string => typeof id === 'string') : [];
-  } catch {
-    return [];
-  }
+  return dismissedIds(`${app}-calendar`, member);
 }
 
 /** Remembers "Not this one" for an event, so it is never suggested to this member again. */
 export function dismissEvent(app: string, member: string, eventId: string): string[] {
-  const list = [...dismissedEvents(app, member).filter((id) => id !== eventId), eventId].slice(-DISMISSED_MAX);
-  try {
-    globalThis.localStorage?.setItem(dismissedKey(app, member), JSON.stringify(list));
-  } catch {
-    // Storage full or unavailable: the dismissal still holds for this visit.
-  }
-  return list;
+  return dismissId(`${app}-calendar`, member, eventId);
 }
 
 /** Events worth suggesting: not imported, not dismissed, each once, soonest first. */
