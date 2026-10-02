@@ -152,3 +152,7 @@ notify('Deleted Example Vet', () => restore(contact));
 <ContactDialog contact={null} app="pet" roles={ROLES} namePlaceholder="Example Vet Clinic" onSave={save} onClose={close} />
 dueText('2031-11-04', today); // "Due in 3 weeks"
 ```
+
+## Paid options
+
+Everything here is free to run. [docs/paid-options.md](docs/paid-options.md) lists the paid services the apps would adopt if the household decides to pay (Google Places, Firebase Blaze, the Gemini paid tier), what each adds over the free option, and which features would change.

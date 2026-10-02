@@ -16,6 +16,8 @@ export interface Place {
     address: string;
     phone?: string;
     website?: string;
+    /** Business hours as OpenStreetMap writes them ("Mo-Fr 07:00-18:00"); see `@huishouden/pwa-kit/hours`. Often missing. */
+    openingHours?: string;
     lat: number;
     lon: number;
     /** The place on openstreetmap.org. */
@@ -67,10 +69,20 @@ export declare const PLACE_KINDS: readonly PlaceKind[];
 /** The OpenStreetMap tags the text asks for, from `PLACE_KINDS`. */
 export declare function placeKinds(text: string): string[];
 /**
+ * Thrown by a `near` search when every Overpass server failed and the fallback found nothing, so
+ * apps can say "the map service is busy" instead of "nothing nearby".
+ */
+export declare class PlaceSearchUnavailable extends Error {
+    constructor(cause: unknown);
+}
+/**
  * Up to `limit` (default 5) places matching the text, e.g. "Riverside Pediatrics Springfield", or
  * with `near`, "dry cleaner" nearest first.
  */
 export declare function searchPlaces(query: string, { limit, near, radiusKm, fetch: fetchImpl }?: SearchPlacesOptions): Promise<Place[]>;
+export declare function usesMiles(locale?: string): boolean;
+/** "0.5 mi", "12 mi" where miles are used; "650 m", "3.1 km" elsewhere. */
+export declare function formatDistance(km: number, locale?: string): string;
 /** `tel:` link for a phone number as people write it. */
 export declare function telHref(phone: string): string;
 export {};

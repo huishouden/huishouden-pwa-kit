@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { searchPhrases, toMatch } from '../src/calendar';
 import { cleanContact, toContact } from '../src/contacts';
-import { PLACE_KINDS, distanceKm, mapsSearchUrl, placeKinds, searchPlaces, telHref, toPlace } from '../src/places';
+import { PLACE_KINDS, PlaceSearchUnavailable, distanceKm, formatDistance, usesMiles, mapsSearchUrl, placeKinds, searchPlaces, telHref, toPlace } from '../src/places';
 
 describe('calendar', () => {
   test('search phrases drop chore words, most specific first', () => {
@@ -75,6 +75,17 @@ describe('places', () => {
     expect(nominatim.searchParams.get('viewbox')).toBeTruthy();
   });
 
+  test('every server down is reported, not passed off as nothing nearby', async () => {
+    const fake = (async () => new Response('busy', { status: 504 })) as unknown as typeof fetch;
+    await expect(searchPlaces('dry cleaner', { near: home, fetch: fake })).rejects.toBeInstanceOf(PlaceSearchUnavailable);
+  });
+
+  test('opening hours come along when the map has them', async () => {
+    const fake = (async (_u: string | URL) => json({ elements: [element(5, 40.01, { opening_hours: 'Mo-Fr 07:00-18:00' })] })) as typeof fetch;
+    const [p] = await searchPlaces('dry cleaner', { near: home, fetch: fake });
+    expect(p.openingHours).toBe('Mo-Fr 07:00-18:00');
+  });
+
   test('a shop without address tags has an empty address and a name-only Maps search', async () => {
     const fake = (async (_u: string | URL) => json({ elements: [element(4, 40.01, {})] })) as typeof fetch;
     const [p] = await searchPlaces('dry cleaner', { near: home, fetch: fake });
@@ -90,6 +101,17 @@ describe('places', () => {
     expect(distanceKm({ lat: 0, lon: 0 }, { lat: 0.1, lon: 0 })).toBeCloseTo(11.12, 1);
   });
 
+  test('distances follow the device region', () => {
+    expect(usesMiles('en-US')).toBe(true);
+    expect(usesMiles('en')).toBe(true);
+    expect(usesMiles('en-GB')).toBe(true);
+    expect(usesMiles('en-CA')).toBe(false);
+    expect(usesMiles('nl-NL')).toBe(false);
+    expect(usesMiles('not a locale')).toBe(false);
+    expect(formatDistance(0.8, 'en-US')).toBe('0.5 mi');
+    expect(formatDistance(0.65, 'nl-NL')).toBe('650 m');
+    expect(formatDistance(3.14, 'de-DE')).toBe('3.1 km');
+  });
   test('tel links keep only digits and plus', () => {
     expect(telHref('+1 (555) 010-0100')).toBe('tel:+15550100100');
   });

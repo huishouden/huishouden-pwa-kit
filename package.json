@@ -53,6 +53,10 @@
       "types": "./dist/household.d.ts",
       "default": "./dist/household.js"
     },
+    "./hours": {
+      "types": "./dist/hours.d.ts",
+      "default": "./dist/hours.js"
+    },
     "./invite": {
       "types": "./dist/invite.d.ts",
       "default": "./dist/invite.js"
