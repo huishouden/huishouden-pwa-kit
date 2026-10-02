@@ -303,3 +303,18 @@ test('the React components and the Tailwind theme follow the design language', (
   const findings = files.flatMap((f) => checkSource(readFileSync(f, 'utf8'), f.endsWith('.css') ? 'style' : 'script').map((x) => `${f}:${x.line} ${x.rule} ${x.text}`));
   expect(findings).toEqual([]);
 });
+
+describe('NotificationsCard', () => {
+  test('says when the app has no VAPID key, and explains an unsupported device instead of a button', async () => {
+    const { NotificationsCard } = await import('../src/react/push');
+    const props = { db: {} as never, householdId: 'h1', user: { email: 'alex@example.com' }, app: 'tasks', offText: 'Get a notification here.', onText: 'On.' };
+    const first = render(<NotificationsCard {...props} vapidKey={undefined} />);
+    expect(document.body.textContent).toContain('Notifications are not set up for this app yet.');
+    act(() => first.root.unmount());
+    const second = render(<NotificationsCard {...props} vapidKey="key" />);
+    // happy-dom has no Push API, so the device is unsupported: the reason shows, not a Turn on button.
+    expect(byText('Turn on')).toBeNull();
+    expect(document.querySelector('section[aria-label="Notifications on this device"] p')?.textContent?.length).toBeGreaterThan(10);
+    act(() => second.root.unmount());
+  });
+});
