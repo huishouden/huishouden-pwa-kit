@@ -14,6 +14,11 @@ judges the rest, and `expectHuishoudenFrame` checks the running app.
 3. **Plain words.** Short sentences that say what happens. No marketing ("sleek", "seamless",
    "powerful"), no emoji in headings, buttons or labels.
 4. **One frame.** Every app opens inside the same Huishouden app bar, so the suite feels like one place.
+5. **Quick, with detail on request.** Adding something takes one field and one tap; nobody has to
+   fill in a form to get started. Detail is easy to add when wanted but never shown as a wall:
+   fields appear only when they fit the thing (no quantity on a chore, no aisle on an errand), and
+   the rest stays folded until asked for. Where the app can infer detail from what was typed
+   ("before 6", "tomorrow"), it does, and shows what it inferred so it is easy to undo.
 
 ## Names
 
