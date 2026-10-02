@@ -198,11 +198,12 @@ nothing deployed or tested there can read or write real household data.
   run (a timestamp in a note, a budget from the run number) and looks for exactly those.
 - **Signing in**: `signInTestUser(page, { email })` from `@huishouden/pwa-kit/e2e` mints a custom
   token with the staging deploy account (IAM `signJwt`, keyless), runs `signInWithCustomToken` on the
-  site's own origin and opens the app signed in. It throws unless the build and the site both belong
-  to `huishouden-staging`, and only the staging account can sign the token, so it cannot sign
-  anyone in to production. Guard specs with `test.skip(!process.env.HH_STAGING_SA, ...)`.
+  site's own origin and opens the app signed in. It throws if the build's or the site's Firebase
+  config names any project but `huishouden-staging` (or neither names one), and only the staging
+  account can sign the token, so it cannot sign anyone in to production. Guard specs with `test.skip(!process.env.HH_STAGING_SA, ...)`.
 - **Credentials**: Workload Identity Federation to the staging project only (`STAGING_GCP_*`); its
-  provider accepts any branch of the owner's repos, its deploy account may deploy Hosting and rules,
+  provider accepts any branch of the owner's repos, but only jobs of the kit's `pwa.yml` at a
+  release tag or of the rules repo's workflows. Its deploy account may deploy Hosting and rules,
   write Firestore, manage Auth users and sign its own tokens. Production's provider still accepts
   `main` only. There is no service-account key anywhere.
 - **Rules**: `huishouden/rules` runs the emulator tests, then deploys to staging on every same-repo

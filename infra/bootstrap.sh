@@ -122,8 +122,16 @@ for owner in "$GITHUB_OWNER" ${ALSO_TRUSTED_OWNERS:-}; do
   OWNER_IDS+="${OWNER_IDS:+, }'$(gh api "users/$owner" --jq .id)'"
 done
 WIF_CONDITION="assertion.repository_owner_id in [$OWNER_IDS] && assertion.ref == 'refs/heads/main'"
-# Staging takes pull requests from any branch (GitHub gives forks' PR runs no OIDC token at all).
-$STAGING && WIF_CONDITION="assertion.repository_owner_id in [$OWNER_IDS]"
+if $STAGING; then
+  # Staging takes pull requests from any branch (GitHub gives forks' PR runs no OIDC token at all),
+  # so the workflow is pinned instead: the kit's released pwa.yml (a tag, which a branch can't
+  # rewrite), or the workflows of the DEPLOY_REPOS (the rules repo).
+  WORKFLOWS="assertion.job_workflow_ref.startsWith('$GITHUB_OWNER/pwa-kit/.github/workflows/pwa.yml@refs/tags/')"
+  for repo in "${DEPLOY_REPOS[@]}"; do
+    WORKFLOWS+=" || assertion.job_workflow_ref.startsWith('$GITHUB_OWNER/$repo/.github/workflows/')"
+  done
+  WIF_CONDITION="assertion.repository_owner_id in [$OWNER_IDS] && ($WORKFLOWS)"
+fi
 gcloud iam workload-identity-pools describe "$POOL" --project "$PROJECT" --location global >/dev/null 2>&1 \
   || gcloud iam workload-identity-pools create "$POOL" --project "$PROJECT" --location global --display-name "GitHub Actions"
 gcloud iam workload-identity-pools providers describe "$PROVIDER" --project "$PROJECT" --location global --workload-identity-pool "$POOL" >/dev/null 2>&1 \

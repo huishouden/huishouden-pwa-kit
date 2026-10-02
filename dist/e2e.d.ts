@@ -70,8 +70,8 @@ export interface SignInTestUserOptions {
 export declare const FIREBASE_WEB_SDK = "12.19.0";
 /**
  * Signs a seeded test user in on a staging site, then opens `path` signed in. Staging only: it
- * throws unless the build's Firebase project (VITE_FIREBASE_PROJECT_ID) and the site's own
- * /__/firebase/init.json both say huishouden-staging (`stagingWebConfig`), and the custom token it
+ * throws if the build's VITE_FIREBASE_PROJECT_ID or the site's /__/firebase/init.json names any
+ * project but huishouden-staging, or neither names one (`stagingWebConfig`). The custom token it
  * mints is signed by the staging service account, so Firebase would refuse it anywhere else too.
  *
  * How: on the site's /__/firebase/init.json (same origin, no app code running) it loads the Firebase
