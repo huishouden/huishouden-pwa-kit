@@ -23,7 +23,7 @@ export function RoleNote({ action, className = '' }) {
 }
 /** A member's role, for admins: a select with the four roles. */
 export function RoleSelect({ value, onChange, label, disabled }) {
-    return (_jsx("select", { className: `${selectClass} w-auto`, "aria-label": label, value: value, disabled: disabled, onChange: (e) => onChange(e.target.value), children: ROLES.map((r) => (_jsx("option", { value: r, children: ROLE_LABELS[r] }, r))) }));
+    return (_jsx("select", { className: `${selectClass.replace('w-full', 'w-auto')} shrink-0`, "aria-label": label, value: value, disabled: disabled, onChange: (e) => onChange(e.target.value), children: ROLES.map((r) => (_jsx("option", { value: r, children: ROLE_LABELS[r] }, r))) }));
 }
 /** Each role in one line, under the household's member list. */
 export function RoleList() {

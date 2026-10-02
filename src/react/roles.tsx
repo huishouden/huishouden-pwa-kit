@@ -35,7 +35,7 @@ export function RoleNote({ action, className = '' }: { action: RoleAction; class
 /** A member's role, for admins: a select with the four roles. */
 export function RoleSelect({ value, onChange, label, disabled }: { value: Role; onChange: (role: Role) => void; label: string; disabled?: boolean }) {
   return (
-    <select className={`${selectClass} w-auto`} aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value as Role)}>
+    <select className={`${selectClass.replace('w-full', 'w-auto')} shrink-0`} aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value as Role)}>
       {ROLES.map((r) => (
         <option key={r} value={r}>
           {ROLE_LABELS[r]}
