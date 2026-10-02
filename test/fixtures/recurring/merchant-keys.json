@@ -1,0 +1,21 @@
+[
+  ["NETFLIX.COM 800-555-0101 CA", "netflix"],
+  ["Netflix Subscription", "netflix"],
+  ["PAYPAL *SPOTIFY P2A5C9", "spotify"],
+  ["SPOTIFY USA 877-5550106 NY", "spotify"],
+  ["SQ *BLUE BOTTLE #123 OAKLAND CA", "blue bottle"],
+  ["Blue Bottle 123", "blue bottle"],
+  ["TST* JOES PIZZA", "joes pizza"],
+  ["GOOGLE *YouTube Premium", "youtube premium"],
+  ["AMAZON PRIME*2K3J45", "amazon prime"],
+  ["Amazon Prime Membership", "amazon prime"],
+  ["APPLE.COM/BILL 866-555-0102 CA", "apple"],
+  ["PLANET FITNESS #0412 SHELBYVILLE IL", "planet fitness"],
+  ["PLANET FITNESS SPRINGFIELD IL", "planet fitness"],
+  ["AT&T*BILL PAYMENT 800-555-0107 TX", "att"],
+  ["PURCHASE AUTHORIZED ON 05/02 HULU 877-555-0105 HULU.COM CA", "hulu"],
+  ["TRADER JOE'S #552", "trader joes"],
+  ["MSFT *E0400ABCDE", "msft"],
+  ["1PASSWORD", "1password"],
+  ["", ""]
+]
