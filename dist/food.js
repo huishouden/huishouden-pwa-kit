@@ -1,4 +1,5 @@
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { setDoc } from './firestore.js';
 /**
  * The household's food preferences: who eats at home, their diets, allergies and dislikes, and the
  * kitchen basics a recipe may assume. One document, `households/{id}/settings/food`, edited in the

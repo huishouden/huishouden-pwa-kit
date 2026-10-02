@@ -1,4 +1,5 @@
-import { doc, onSnapshot, setDoc, type Firestore, type Unsubscribe } from 'firebase/firestore';
+import { doc, onSnapshot, type Firestore, type Unsubscribe } from 'firebase/firestore';
+import { setDoc } from './firestore.js';
 
 /**
  * The household's food preferences: who eats at home, their diets, allergies and dislikes, and the

@@ -1,16 +1,5 @@
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  onSnapshot,
-  query,
-  setDoc,
-  where,
-  writeBatch,
-  type Firestore,
-  type Unsubscribe,
-} from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
+import { deleteDoc, setDoc, writeBatch } from './firestore.js';
 import { doseSlots, type MedCourse } from './dose.js';
 
 /**

@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.33.0",
+  "version": "0.34.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "MIT",
   "type": "module",
@@ -44,6 +44,10 @@
     "./firebase": {
       "types": "./dist/firebase.d.ts",
       "default": "./dist/firebase.js"
+    },
+    "./firestore": {
+      "types": "./dist/firestore.d.ts",
+      "default": "./dist/firestore.js"
     },
     "./food": {
       "types": "./dist/food.d.ts",
@@ -171,7 +175,7 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "lint": "tsc --noEmit",
-    "test": "bun test test"
+    "test": "bun test test && bun test ./test/sdk/firestore.sdk.ts"
   },
   "peerDependencies": {
     "@playwright/test": ">=1.45",

@@ -1,15 +1,5 @@
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  deleteField,
-  doc,
-  onSnapshot,
-  setDoc,
-  updateDoc,
-  type Firestore,
-  type Unsubscribe,
-} from 'firebase/firestore';
+import { collection, doc, onSnapshot, type Firestore, type Unsubscribe } from 'firebase/firestore';
+import { addDoc, deleteDoc, deleteField, setDoc, updateDoc } from './firestore.js';
 
 /**
  * The household's contacts: the people and businesses it deals with (a pediatrician, the vet, the

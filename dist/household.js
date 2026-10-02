@@ -1,4 +1,5 @@
-import { addDoc, arrayRemove, arrayUnion, collection, doc, getDocs, onSnapshot, setDoc, query, updateDoc, where, } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
+import { addDoc, arrayRemove, arrayUnion, setDoc, updateDoc } from './firestore.js';
 export const normalizeEmail = (email) => email.trim().toLowerCase();
 const COLLECTION = 'households';
 /**
