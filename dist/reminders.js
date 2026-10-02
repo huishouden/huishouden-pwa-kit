@@ -81,6 +81,51 @@ export async function replaceReminders(db, householdId, ref, inputs, by, now = D
     }
     return [...wanted.keys()];
 }
+/** A reminder as it would be sent, for telling whether a stored one needs rewriting. */
+const sameReminder = (a, b) => ['app', 'title', 'body', 'at', 'url', 'ref'].every((k) => a[k] === b[k]) &&
+    JSON.stringify(a.recipients) === JSON.stringify(b.recipients) &&
+    a.sent === false;
+/**
+ * Makes everything this app has scheduled from now on exactly `inputs` (each with its own `ref`):
+ * for apps that work out all their reminders from their data, on open and whenever it changes. Future
+ * reminders not in the list are deleted, new or changed ones written, and unchanged ones left alone,
+ * so running it often costs one read and almost no writes. Past and sent reminders are never
+ * touched, so nothing is sent twice.
+ */
+export async function syncReminders(db, householdId, app, inputs, by, now = Date.now()) {
+    const wanted = new Map(inputs
+        .filter((r) => r.at > now)
+        .map((r) => {
+        const data = reminderDoc({ ...r, app }, by, now);
+        return [r.id ?? reminderId(r.ref ?? app, data.at), data];
+    }));
+    const existing = await getDocs(query(remindersOf(db, householdId), where('app', '==', app)));
+    const have = new Map(existing.docs.map((d) => [d.id, d.data()]));
+    const ops = [];
+    for (const d of existing.docs) {
+        const data = d.data();
+        if (typeof data.at === 'number' && data.at > now && data.sent !== true && !wanted.has(d.id))
+            ops.push((b) => b.delete(d.ref));
+    }
+    const deleted = ops.length;
+    let unchanged = 0;
+    for (const [id, data] of wanted) {
+        const old = have.get(id);
+        if (old && sameReminder(old, data))
+            unchanged++;
+        else if (old?.sent === true)
+            unchanged++;
+        else
+            ops.push((b) => b.set(doc(remindersOf(db, householdId), id), data));
+    }
+    for (let i = 0; i < ops.length; i += 450) {
+        const batch = writeBatch(db);
+        for (const op of ops.slice(i, i + 450))
+            op(batch);
+        await batch.commit();
+    }
+    return { written: ops.length - deleted, deleted, unchanged };
+}
 export function toReminder(id, data) {
     return {
         id,

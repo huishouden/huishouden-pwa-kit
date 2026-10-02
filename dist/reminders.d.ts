@@ -50,6 +50,19 @@ export declare function cancelReminders(db: Firestore, householdId: string, ref:
  * sent reminder is never sent twice. Use it whenever a course or appointment is saved.
  */
 export declare function replaceReminders(db: Firestore, householdId: string, ref: string, inputs: ReminderInput[], by: string, now?: number): Promise<string[]>;
+export interface SyncRemindersResult {
+    written: number;
+    deleted: number;
+    unchanged: number;
+}
+/**
+ * Makes everything this app has scheduled from now on exactly `inputs` (each with its own `ref`):
+ * for apps that work out all their reminders from their data, on open and whenever it changes. Future
+ * reminders not in the list are deleted, new or changed ones written, and unchanged ones left alone,
+ * so running it often costs one read and almost no writes. Past and sent reminders are never
+ * touched, so nothing is sent twice.
+ */
+export declare function syncReminders(db: Firestore, householdId: string, app: string, inputs: ReminderInput[], by: string, now?: number): Promise<SyncRemindersResult>;
 export declare function toReminder(id: string, data: Record<string, unknown>): Reminder;
 /** Follows the household's reminders, optionally one app's, soonest first. */
 export declare function watchReminders(db: Firestore, householdId: string, onChange: (reminders: Reminder[]) => void, { app, onError }?: {

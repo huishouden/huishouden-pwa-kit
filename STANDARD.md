@@ -105,7 +105,8 @@ and no household sets anything up.
 
 - **Reminders are data.** An app writes them to `households/{id}/reminders` with
   `@huishouden/pwa-kit/reminders` (`upsertReminder`, or `replaceReminders(ref, remindersForCourse(...))`
-  for a medicine course) and deletes them when they no longer apply. Each has an https deep link
+  for a medicine course, or `syncReminders(app, list)` with everything an app works out from its
+  data) and deletes them when they no longer apply. Each has an https deep link
   back into the app. Ids are idempotent, so saving the same thing twice never doubles a reminder.
 - **Each person opts in per device.** A "Notify me" control calls `enablePush` from a tap; it stores
   the device's subscription in `households/{id}/pushSubscriptions`, which only that person and the
