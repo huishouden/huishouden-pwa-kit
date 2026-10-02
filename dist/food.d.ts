@@ -15,6 +15,17 @@ export type Diet = (typeof DIETS)[number];
 export declare const DIET_LABELS: Record<Diet, string>;
 /** What each diet means for a meal, from well-known guidance, in plain words. */
 export declare const DIET_GUIDANCE: Record<Diet, string>;
+/**
+ * Whether each diet is a rule (true) or a preference (false). A strict reflux or low-salt diet every
+ * day leaves only bland food (and many people manage reflux with medication), so apps rate and order
+ * meals for preferences instead of dropping them. Beliefs, allergies and pregnancy safety are rules.
+ * A Record, so adding a diet forces the choice.
+ */
+export declare const DIET_STRICT: Readonly<Record<Diet, boolean>>;
+/** Whether a meal that breaks this diet must be left out (true) or only rated and ordered (false). */
+export declare function isStrict(diet: Diet): boolean;
+/** The preference diets, in DIETS order. */
+export declare const GENTLE_DIETS: readonly Diet[];
 export interface FoodPerson {
     /** Stable within the household's list: the member's email, or an invented id for someone without an account. */
     id: string;
@@ -69,12 +80,27 @@ export declare function withMembers(people: FoodPerson[], members: {
 }[]): FoodPerson[];
 /** Every diet anyone in the household has, in the fixed order: for filtering recipes. */
 export declare function householdDiets(food: Pick<FoodPreferences, 'people'>): Diet[];
+/** Options for `householdDietRules`. */
+export interface DietRulesOptions {
+    /**
+     * Leave preference diets (GERD, low-sodium; see `isStrict`) out of the rules, for apps that word
+     * them separately with `householdDietPreferences`. Default false: every diet is worded as a rule.
+     */
+    strictOnly?: boolean;
+}
 /**
  * The household's food constraints as plain sentences, for a meal-idea prompt or to show next to a
  * suggestion: one per diet per person with what it means, one per person's avoid list and note,
  * and, when more than one person has constraints, that shared meals must suit all of them.
- * Empty when nobody has any.
+ * Empty when nobody has any. With `strictOnly`, preference diets are left out (see
+ * `householdDietPreferences`).
  */
-export declare function householdDietRules(food: Pick<FoodPreferences, 'people'>): string[];
+export declare function householdDietRules(food: Pick<FoodPreferences, 'people'>, { strictOnly }?: DietRulesOptions): string[];
+/**
+ * The household's preference diets as soft guidance, one line each: "Sam has GERD (reflux): most
+ * meals, not every one, should follow this: avoid spicy food, …". Pair with `householdDietRules(food,
+ * { strictOnly: true })`: most meals should lean this way, not every one.
+ */
+export declare function householdDietPreferences(food: Pick<FoodPreferences, 'people'>): string[];
 /** "Assume the kitchen already has salt, black pepper and cooking oil." or '' when the list is empty. */
 export declare function pantryText(food: Pick<FoodPreferences, 'pantryAssumed'>): string;

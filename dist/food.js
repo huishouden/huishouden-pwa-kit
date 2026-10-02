@@ -68,6 +68,32 @@ export const DIET_GUIDANCE = {
     halal: 'no pork or alcohol (including in cooking); meat and poultry should be halal',
     kosher: 'no pork or shellfish, and no meat and dairy in the same meal; meat should be kosher',
 };
+/**
+ * Whether each diet is a rule (true) or a preference (false). A strict reflux or low-salt diet every
+ * day leaves only bland food (and many people manage reflux with medication), so apps rate and order
+ * meals for preferences instead of dropping them. Beliefs, allergies and pregnancy safety are rules.
+ * A Record, so adding a diet forces the choice.
+ */
+export const DIET_STRICT = Object.freeze({
+    vegan: true,
+    vegetarian: true,
+    pescatarian: true,
+    'gluten-free': true,
+    'dairy-free': true,
+    'nut allergy': true,
+    'shellfish allergy': true,
+    gerd: false,
+    pregnant: true,
+    'low-sodium': false,
+    halal: true,
+    kosher: true,
+});
+/** Whether a meal that breaks this diet must be left out (true) or only rated and ordered (false). */
+export function isStrict(diet) {
+    return DIET_STRICT[diet];
+}
+/** The preference diets, in DIETS order. */
+export const GENTLE_DIETS = Object.freeze(DIETS.filter((d) => !DIET_STRICT[d]));
 export const FOOD_FIELDS = ['people', 'pantryAssumed', 'updatedAt', 'by'];
 export const FOOD_PERSON_FIELDS = ['id', 'name', 'member', 'diets', 'avoid', 'note'];
 /** The rules' limits. List entries may not contain `|` (the rules check a list as one joined string). */
@@ -171,15 +197,17 @@ const list = (items) => (items.length < 2 ? items.join('') : `${items.slice(0, -
  * The household's food constraints as plain sentences, for a meal-idea prompt or to show next to a
  * suggestion: one per diet per person with what it means, one per person's avoid list and note,
  * and, when more than one person has constraints, that shared meals must suit all of them.
- * Empty when nobody has any.
+ * Empty when nobody has any. With `strictOnly`, preference diets are left out (see
+ * `householdDietPreferences`).
  */
-export function householdDietRules(food) {
+export function householdDietRules(food, { strictOnly = false } = {}) {
     const rules = [];
     let constrained = 0;
     for (const p of food.people) {
         const before = rules.length;
         for (const d of p.diets)
-            rules.push(`${p.name} ${DIET_PHRASES[d]}: ${DIET_GUIDANCE[d]}.`);
+            if (!strictOnly || isStrict(d))
+                rules.push(`${p.name} ${DIET_PHRASES[d]}: ${DIET_GUIDANCE[d]}.`);
         if (p.avoid.length)
             rules.push(`${p.name} avoids ${list(p.avoid)}.`);
         if (p.note)
@@ -190,6 +218,14 @@ export function householdDietRules(food) {
     if (constrained > 1)
         rules.push('Meals for the whole household should suit all of these at once.');
     return rules;
+}
+/**
+ * The household's preference diets as soft guidance, one line each: "Sam has GERD (reflux): most
+ * meals, not every one, should follow this: avoid spicy food, …". Pair with `householdDietRules(food,
+ * { strictOnly: true })`: most meals should lean this way, not every one.
+ */
+export function householdDietPreferences(food) {
+    return food.people.flatMap((p) => p.diets.filter((d) => !isStrict(d)).map((d) => `${p.name} ${DIET_PHRASES[d]}: most meals, not every one, should follow this: ${DIET_GUIDANCE[d]}.`));
 }
 /** "Assume the kitchen already has salt, black pepper and cooking oil." or '' when the list is empty. */
 export function pantryText(food) {
