@@ -241,11 +241,17 @@ function forgetOnceCached(box: Outbox, key: string, path: string): void {
   getDocFromCache(doc(box.db, path)).then(forget, forget);
 }
 
+/** The notes stay for the next sign-in or open. */
+function replayFailed(e: unknown): false {
+  console.warn("Couldn't repeat the writes saved before the app closed", e);
+  return false;
+}
+
 async function replay(box: Outbox, uid: string, recheck: boolean): Promise<void> {
   // One page at a time, so two pages opening together don't both repeat a note.
   const waiting = box.locks
-    ? ((await box.locks.request(REPLAY_LOCK + box.prefix, () => replayNow(box, uid)).catch(() => false)) as boolean)
-    : await replayNow(box, uid);
+    ? ((await box.locks.request(REPLAY_LOCK + box.prefix, () => replayNow(box, uid)).catch(replayFailed)) as boolean)
+    : await replayNow(box, uid).catch(replayFailed);
   if (waiting && recheck) setTimeout(() => void replay(box, uid, false), box.recheckMs);
 }
 
@@ -283,24 +289,21 @@ async function replayNow(box: Outbox, uid: string): Promise<boolean> {
 }
 
 /**
- * The note's writes that the local cache doesn't show as done. A set whose data is already there
- * landed before the page closed (only the forgetting was cut short). A document the cache knows
- * was deleted, or whose `updatedAt` is at or after the note, was changed since: repeating the
- * write would undo someone's newer edit. A document the cache has never seen gets the write.
+ * The note's writes that the local cache doesn't show as done or overtaken. A set whose data is
+ * already there landed before the page closed (only the forgetting was cut short). A document whose
+ * `updatedAt` is at or after the note was changed since, by someone or something newer: repeating
+ * a set, update or delete would undo that. A document the cache has never seen, or knows only as
+ * missing (it may never have existed: the cache can't tell), gets a set or delete; an update to it
+ * would fail, so it is left out.
  */
 async function stillNeeded(db: Firestore, entry: OutboxEntry): Promise<Op[]> {
   const out: Op[] = [];
   for (const op of entry.ops) {
-    if (op.kind === 'delete') {
-      out.push(op);
-      continue;
-    }
     const snap = await getDocFromCache(doc(db, op.path)).catch(() => null);
-    if (!snap) {
-      out.push(op);
+    if (!snap?.exists()) {
+      if (op.kind !== 'update') out.push(op);
       continue;
     }
-    if (!snap.exists()) continue;
     const data = snap.data();
     if (typeof data.updatedAt === 'number' && data.updatedAt >= entry.at) continue;
     if (op.kind === 'set' && !op.merge && !op.mergeFields) {

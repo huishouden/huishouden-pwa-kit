@@ -165,6 +165,21 @@ describe('durable writes', () => {
     await expect(getDocFromCache(doc(db, 'c/ancient'))).rejects.toThrow();
   });
 
+  test('an old delete is not replayed over the same document written again since', async () => {
+    const storage = new MemoryStorage();
+    const at = Date.now() - 60_000;
+    leave(storage, { at, ops: [{ kind: 'delete', path: 'c/again' }, { kind: 'delete', path: 'c/gone' }] });
+    const { db, auth } = await setup(null, storage);
+    void rawSetDoc(doc(db, 'c/again'), { v: 1, updatedAt: at + 1000 });
+    void rawSetDoc(doc(db, 'c/gone'), { v: 1, updatedAt: at - 1000 });
+    await settle();
+    auth.signIn('u1');
+    await settle();
+    expect(storage.length).toBe(0);
+    expect((await getDocFromCache(doc(db, 'c/again'))).exists()).toBe(true);
+    expect((await getDocFromCache(doc(db, 'c/gone'))).exists()).toBe(false);
+  });
+
   test('signed out, writes go to Firestore without a note', async () => {
     const { db, storage } = await setup(null);
     void setDoc(doc(db, 'a/b'), { x: 1 });
