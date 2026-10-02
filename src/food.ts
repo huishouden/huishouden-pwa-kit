@@ -241,12 +241,7 @@ export function householdDiets(food: Pick<FoodPreferences, 'people'>): Diet[] {
 
 const list = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
 
-/**
- * The household's food constraints as plain sentences, for a meal-idea prompt or to show next to a
- * suggestion: one per diet per person with what it means, one per person's avoid list and note,
- * and, when more than one person has constraints, that shared meals must suit all of them.
- * Empty when nobody has any.
- */
+/** Options for `householdDietRules`. */
 export interface DietRulesOptions {
   /**
    * Leave preference diets (GERD, low-sodium; see `isStrict`) out of the rules, for apps that word
@@ -255,6 +250,13 @@ export interface DietRulesOptions {
   strictOnly?: boolean;
 }
 
+/**
+ * The household's food constraints as plain sentences, for a meal-idea prompt or to show next to a
+ * suggestion: one per diet per person with what it means, one per person's avoid list and note,
+ * and, when more than one person has constraints, that shared meals must suit all of them.
+ * Empty when nobody has any. With `strictOnly`, preference diets are left out (see
+ * `householdDietPreferences`).
+ */
 export function householdDietRules(food: Pick<FoodPreferences, 'people'>, { strictOnly = false }: DietRulesOptions = {}): string[] {
   const rules: string[] = [];
   let constrained = 0;
@@ -270,13 +272,13 @@ export function householdDietRules(food: Pick<FoodPreferences, 'people'>, { stri
 }
 
 /**
- * The household's preference diets as soft guidance, one line each: "Sam has GERD (reflux): lean
- * towards meals that go easy on spicy food, citrus, …". Pair with `householdDietRules(food,
+ * The household's preference diets as soft guidance, one line each: "Sam has GERD (reflux): most
+ * meals, not every one, should follow this: avoid spicy food, …". Pair with `householdDietRules(food,
  * { strictOnly: true })`: most meals should lean this way, not every one.
  */
 export function householdDietPreferences(food: Pick<FoodPreferences, 'people'>): string[] {
   return food.people.flatMap((p) =>
-    p.diets.filter((d) => !isStrict(d)).map((d) => `${p.name} ${DIET_PHRASES[d]}: lean towards meals that ${DIET_GUIDANCE[d].replace(/^avoid /, 'go easy on ').replace(/^keep /, 'keep ')}.`),
+    p.diets.filter((d) => !isStrict(d)).map((d) => `${p.name} ${DIET_PHRASES[d]}: most meals, not every one, should follow this: ${DIET_GUIDANCE[d]}.`),
   );
 }
 

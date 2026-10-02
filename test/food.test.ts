@@ -101,6 +101,6 @@ describe('strict and gentle diets', () => {
     expect(householdDietRules(food).some((r) => r.includes('GERD'))).toBe(true);
     const prefs = householdDietPreferences(food);
     expect(prefs).toHaveLength(1);
-    expect(prefs[0]).toMatch(/^Sam has GERD \(reflux\): lean towards meals that go easy on spicy food/);
+    expect(prefs[0]).toMatch(/^Sam has GERD \(reflux\): most meals, not every one, should follow this: avoid spicy food/);
   });
 });

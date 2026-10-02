@@ -80,12 +80,7 @@ export declare function withMembers(people: FoodPerson[], members: {
 }[]): FoodPerson[];
 /** Every diet anyone in the household has, in the fixed order: for filtering recipes. */
 export declare function householdDiets(food: Pick<FoodPreferences, 'people'>): Diet[];
-/**
- * The household's food constraints as plain sentences, for a meal-idea prompt or to show next to a
- * suggestion: one per diet per person with what it means, one per person's avoid list and note,
- * and, when more than one person has constraints, that shared meals must suit all of them.
- * Empty when nobody has any.
- */
+/** Options for `householdDietRules`. */
 export interface DietRulesOptions {
     /**
      * Leave preference diets (GERD, low-sodium; see `isStrict`) out of the rules, for apps that word
@@ -93,10 +88,17 @@ export interface DietRulesOptions {
      */
     strictOnly?: boolean;
 }
+/**
+ * The household's food constraints as plain sentences, for a meal-idea prompt or to show next to a
+ * suggestion: one per diet per person with what it means, one per person's avoid list and note,
+ * and, when more than one person has constraints, that shared meals must suit all of them.
+ * Empty when nobody has any. With `strictOnly`, preference diets are left out (see
+ * `householdDietPreferences`).
+ */
 export declare function householdDietRules(food: Pick<FoodPreferences, 'people'>, { strictOnly }?: DietRulesOptions): string[];
 /**
- * The household's preference diets as soft guidance, one line each: "Sam has GERD (reflux): lean
- * towards meals that go easy on spicy food, citrus, …". Pair with `householdDietRules(food,
+ * The household's preference diets as soft guidance, one line each: "Sam has GERD (reflux): most
+ * meals, not every one, should follow this: avoid spicy food, …". Pair with `householdDietRules(food,
  * { strictOnly: true })`: most meals should lean this way, not every one.
  */
 export declare function householdDietPreferences(food: Pick<FoodPreferences, 'people'>): string[];
