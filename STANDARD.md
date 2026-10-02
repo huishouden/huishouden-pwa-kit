@@ -49,6 +49,34 @@ user of it (dogfooding), never a special case. So:
   `/assets/**` immutable for a year (`templates/firebase.json`).
 - Tablet first: test at 1280×800 landscape; tap targets at least 44 px.
 
+## Security headers
+
+Every site sends these on its own pages (`templates/firebase.json`, values in
+`@huishouden/pwa-kit/security-headers`):
+
+| Header | Value | Stops |
+|---|---|---|
+| `X-Frame-Options` | `DENY` | another site framing the app (clickjacking) |
+| `Content-Security-Policy` | `frame-ancestors 'none'; object-src 'none'; base-uri 'self'` | the same for current browsers; plugins; a `<base>` tag redirecting relative URLs |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | paths (record ids) leaking to other sites |
+| `X-Content-Type-Options` | `nosniff` | a served file being run as another type |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | device features the app doesn't use |
+
+- **Only on app paths.** The rule is `"regex": "^/(?:[^_].*|_[^_].*|_)?$"`, every path except
+  Firebase's `/__/`: Google sign-in opens `/__/auth/handler` in a popup and frames `/__/auth/iframe`
+  on the auth domain (the portal's site), so frame-denying those breaks sign-in. Never use
+  `"source": "**"` for these headers.
+- **Per app, the features it uses:** `camera=(self)` for an app that takes photos in the page
+  (Pet's medicine labels, the contact screenshot reader), `geolocation=(self)` for one that asks
+  where you are (Tasks' nearby stores). Microphone stays off everywhere.
+- **Checked twice:** CI's `pwa-headers-check` (kit 0.43.0 and later) fails a `firebase.json`
+  whose app paths lack a header or whose `/__/` paths would be frame-denied, and each app's smoke
+  test calls `expectSecurityHeaders(request, '/', { camera, geolocation })` from `/e2e` against the
+  live and staging sites, which also checks the site's `/__/auth/handler` is not frame-denied.
+- **Sign-in on staging first:** a change to these headers goes through a staging deploy with
+  `expectGoogleSignInPopup` (the real popup reaching accounts.google.com), since signed-in staging
+  tests use custom tokens and never open the popup.
+
 ## Sign-in and data
 
 - Firebase Auth with Google. `authDomain` is the project's `<project>.firebaseapp.com`:
@@ -269,7 +297,7 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 | Job | Runs on | Does |
 |---|---|---|
 | `leak-scan` | every PR and push | gitleaks on the added commits (`actions/leak-scan`) |
-| `build` | every PR and push | `bun install --frozen-lockfile`, lint (`tsc --noEmit`), unit tests, build |
+| `build` | every PR and push | `bun install --frozen-lockfile`, lint (`tsc --noEmit`), `pwa-design-check`, `pwa-write-check`, `pwa-headers-check`, unit tests, build |
 | `deploy` | push to `main` | Keyless via Workload Identity Federation; `firebase deploy --only hosting:<target>` |
 | `smoke` | after `deploy` | Playwright against the live site |
 | `staging` | same-repo PRs that change more than docs; manual runs with `staging-ref` | Build against the staging project, deploy to the app's staging site, seed, `e2e` and `e2e:signed-in` there (see Staging) |
@@ -338,6 +366,9 @@ nothing deployed or tested there can read or write real household data.
      page after one reload.
   3. Sign-in popup lands on accounts.google.com with a `/__/auth/handler` redirect and no
      `redirect_uri_mismatch`, run on the second load (under the service worker).
+  4. Security headers on the app's pages and none that frame-deny `/__/auth/handler`
+     (`expectSecurityHeaders`).
+  5. Signed out, the "Sample data" banner is one line on a 390px phone (`expectCompactSampleBanner`).
 - **Signed-in tests** (`bun run e2e:signed-in`, `e2e/signed-in.spec.ts`) run only on staging, as
   invented test users signed in with Firebase custom tokens (`signInTestUser`), never a Google
   account: Google blocks scripted sign-in to real accounts, and staging keeps tests away from real

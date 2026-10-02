@@ -82,6 +82,9 @@ jobs:
       - name: Firestore writes go through the kit's outbox
         # Kits before v0.37.0 have no pwa-write-check.
         run: if [ -e node_modules/.bin/pwa-write-check ]; then bunx pwa-write-check; else echo "kit has no pwa-write-check"; fi
+      - name: Security headers on every app path, none on Firebase's /__/ (STANDARD.md "Security headers")
+        # Kits before v0.43.0 have no pwa-headers-check.
+        run: if [ -e node_modules/.bin/pwa-headers-check ]; then bunx pwa-headers-check; else echo "kit has no pwa-headers-check"; fi
       - name: Unit tests
         run: if jq -e '.scripts.test' package.json >/dev/null; then bun run test; else echo "no test script"; fi
       - run: bun run build

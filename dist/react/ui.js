@@ -1,8 +1,8 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 /**
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
- * checkbox, section tabs and member badge every app shows.
+ * checkbox, section tabs, member badge and "Sample data" banner every app shows.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -10,7 +10,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
  * (DESIGN.md "Dark and ambient modes") that apply only under a `.dark` class, for apps with a dark setting.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import { personColour, personInitial, personName } from '../people';
 export const inputClass = 'w-full min-h-11 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-base text-stone-800 outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:border-forest-600 dark:bg-forest-900 dark:text-stone-100 dark:focus:ring-forest-700';
 /** A select styled like the inputs. */
@@ -62,6 +62,16 @@ export function StatusPill({ state }) {
 /** A failed action in words, with Try again. */
 export function ErrorNotice({ message, onRetry }) {
     return (_jsxs("div", { role: "alert", className: "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-red-50 px-3 py-2 text-base text-red-700 dark:bg-forest-800 dark:text-red-300", children: [_jsx("span", { className: "min-w-0 flex-1", children: message }), _jsx("button", { type: "button", className: "min-h-11 rounded-xl px-3 font-semibold underline-offset-4 hover:underline", onClick: onRetry, children: "Try again" })] }));
+}
+/**
+ * The note above a signed-out app's invented household. On phones it is one line, the "Sample data"
+ * chip and `short`, which opens `text` on a tap; from 640px up `text` sits beside the chip.
+ * `notice` (a sign-in error) takes the text's place at every width. `children` (scenario chips) follow
+ * on their own row on phones, on the same row when there is room.
+ */
+export function SampleBanner({ text, short = 'Nothing is saved.', notice, children, className = '', }) {
+    const [open, setOpen] = useState(false);
+    return (_jsxs("div", { role: "note", "data-sample-banner": true, className: `${cardClass} flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1 sm:px-4 sm:py-1.5 ${className}`, children: [_jsxs("div", { "data-sample-line": true, className: "flex min-h-11 w-full min-w-0 items-center gap-3 sm:w-auto sm:flex-1 sm:gap-4", children: [_jsx("span", { "data-sample-chip": true, className: "shrink-0 rounded-full bg-terracotta-light px-3 py-1 text-sm font-semibold whitespace-nowrap text-terracotta-dark", children: "Sample data" }), notice ? (typeof notice === 'string' ? _jsx("p", { className: "min-w-0 flex-1 text-base text-stone-600 dark:text-stone-300", children: notice }) : _jsx("div", { className: "min-w-0 flex-1", children: notice })) : (_jsxs(_Fragment, { children: [_jsxs("button", { type: "button", "data-sample-short": true, "aria-expanded": open, onClick: () => setOpen((o) => !o), className: "flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-xl text-left text-sm text-stone-600 sm:hidden dark:text-stone-300", children: [_jsx("span", { className: "truncate", children: short }), _jsx(ChevronDown, { size: 16, strokeWidth: 2.2, "aria-hidden": true, className: `shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}` }), _jsx("span", { className: "sr-only", children: open ? 'Hide details' : 'Details' })] }), _jsx("p", { className: "hidden min-w-0 flex-1 text-base text-stone-600 sm:block dark:text-stone-300", children: text })] }))] }), open && !notice && _jsx("p", { className: "w-full pb-1.5 text-sm text-stone-600 sm:hidden dark:text-stone-300", children: text }), children] }));
 }
 /**
  * The app's sections as a segmented control, for the app bar's `nav` slot:

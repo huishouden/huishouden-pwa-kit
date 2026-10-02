@@ -1,7 +1,7 @@
 /**
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
- * checkbox, section tabs and member badge every app shows.
+ * checkbox, section tabs, member badge and "Sample data" banner every app shows.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -9,7 +9,7 @@
  * (DESIGN.md "Dark and ambient modes") that apply only under a `.dark` class, for apps with a dark setting.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import { personColour, personInitial, personName } from '../people';
 
 export const inputClass =
@@ -132,6 +132,57 @@ export function ErrorNotice({ message, onRetry }: { message: string; onRetry: ()
       <button type="button" className="min-h-11 rounded-xl px-3 font-semibold underline-offset-4 hover:underline" onClick={onRetry}>
         Try again
       </button>
+    </div>
+  );
+}
+
+/**
+ * The note above a signed-out app's invented household. On phones it is one line, the "Sample data"
+ * chip and `short`, which opens `text` on a tap; from 640px up `text` sits beside the chip.
+ * `notice` (a sign-in error) takes the text's place at every width. `children` (scenario chips) follow
+ * on their own row on phones, on the same row when there is room.
+ */
+export function SampleBanner({
+  text,
+  short = 'Nothing is saved.',
+  notice,
+  children,
+  className = '',
+}: {
+  text: string;
+  short?: string;
+  notice?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div role="note" data-sample-banner className={`${cardClass} flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1 sm:px-4 sm:py-1.5 ${className}`}>
+      <div data-sample-line className="flex min-h-11 w-full min-w-0 items-center gap-3 sm:w-auto sm:flex-1 sm:gap-4">
+        <span data-sample-chip className="shrink-0 rounded-full bg-terracotta-light px-3 py-1 text-sm font-semibold whitespace-nowrap text-terracotta-dark">
+          Sample data
+        </span>
+        {notice ? (
+          typeof notice === 'string' ? <p className="min-w-0 flex-1 text-base text-stone-600 dark:text-stone-300">{notice}</p> : <div className="min-w-0 flex-1">{notice}</div>
+        ) : (
+          <>
+            <button
+              type="button"
+              data-sample-short
+              aria-expanded={open}
+              onClick={() => setOpen((o) => !o)}
+              className="flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-xl text-left text-sm text-stone-600 sm:hidden dark:text-stone-300"
+            >
+              <span className="truncate">{short}</span>
+              <ChevronDown size={16} strokeWidth={2.2} aria-hidden className={`shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+              <span className="sr-only">{open ? 'Hide details' : 'Details'}</span>
+            </button>
+            <p className="hidden min-w-0 flex-1 text-base text-stone-600 sm:block dark:text-stone-300">{text}</p>
+          </>
+        )}
+      </div>
+      {open && !notice && <p className="w-full pb-1.5 text-sm text-stone-600 sm:hidden dark:text-stone-300">{text}</p>}
+      {children}
     </div>
   );
 }

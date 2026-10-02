@@ -1,0 +1,17 @@
+{
+  "hosting": {
+    "target": "tasks",
+    "public": "dist",
+    "headers": [
+      {
+        "regex": "^/(?:[^_].*|_[^_].*|_)?$",
+        "headers": [
+          { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+          { "key": "Content-Security-Policy", "value": "object-src 'none'" },
+          { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+          { "key": "Permissions-Policy", "value": "geolocation=(self)" }
+        ]
+      }
+    ]
+  }
+}
