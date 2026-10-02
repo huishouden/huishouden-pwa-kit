@@ -122,7 +122,8 @@ export declare function useCalendarSuggestions({ auth, words, isImported, app, h
  * The calm one-line card for new calendar events: "New in your calendar: Vet — Biscuit · Tue 3:00 PM"
  * with Add and Not this one, and "+2 more" opening the rest as a list. Renders nothing without
  * suggestions. `onAdd` is the app's own import (the same as Import from calendar's Add); the event
- * leaves the card at once and stays gone when its record arrives.
+ * leaves the card at once and stays gone when its record arrives (if none arrives within ten
+ * seconds, the save failed and it comes back). After either button, focus stays on the card.
  */
 export declare function CalendarSuggestions({ suggestions, onAdd, onDismiss, now }: {
     suggestions: CalendarMatch[];

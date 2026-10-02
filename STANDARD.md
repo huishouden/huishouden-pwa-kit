@@ -124,7 +124,9 @@ its own, with `useCalendarSuggestions` and `CalendarSuggestions` from `/react/ca
 - **Never asks**: it looks only with a calendar token already on the device (`cachedCalendarToken`),
   on open and on return to view at most every 30 minutes, from now to 60 days ahead. Tokens last
   an hour from the member's last calendar search or import; without one there is no card and no
-  prompt.
+  prompt. The calendar token is kept in localStorage for that hour (read-only scopes), so any script
+  on the app's origin and anyone using the device before it ends can read the calendar; sign-out
+  clears it. Keep the origin free of third-party scripts.
 - **Placement**: mount the hook once in the app's shell; show the card at the top of the main
   screen, under the frame, only when there is something new. One line, calm; never a dialog.
 - **Tests**: `stubCalendar(page, { events })` from `/e2e` (sample app, signed out) with the clock

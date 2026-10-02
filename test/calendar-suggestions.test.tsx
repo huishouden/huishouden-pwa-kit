@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, jest, mock, setSystemTime, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { act } from 'react';
 import type { Root } from 'react-dom/client';
@@ -259,5 +259,30 @@ describe('CalendarSuggestions', () => {
     expect(button('+1 more')).toBeTruthy();
     click(button('Not this one: Groomer'));
     expect(onDismiss.mock.calls[0][0].id).toBe('b');
+  });
+
+  test('the list is tied to its toggle, and focus stays on the card after a button', async () => {
+    const list = [match('a', 'Vet — Biscuit', at(20, 15)), match('b', 'Groomer', at(22, 9))];
+    render(<CalendarSuggestions suggestions={list} onAdd={() => {}} onDismiss={() => {}} now={NOW} />);
+    const more = button('+1 more')!;
+    click(more);
+    expect(document.getElementById(more.getAttribute('aria-controls')!)?.getAttribute('aria-label')).toBe('More new calendar events');
+    click(button('Not this one: Vet — Biscuit'));
+    await act(async () => void (await new Promise((r) => setTimeout(r, 5))));
+    expect(document.activeElement).toBe(card());
+  });
+
+  test('an added event whose record never arrives comes back', () => {
+    jest.useFakeTimers();
+    try {
+      const list = [match('a', 'Vet — Biscuit', at(20, 15)), match('b', 'Groomer', at(22, 9))];
+      render(<CalendarSuggestions suggestions={list} onAdd={() => {}} onDismiss={() => {}} now={NOW} />);
+      click(button('Add Vet — Biscuit'));
+      expect(card()!.querySelector('p')!.textContent).toContain('Groomer');
+      act(() => void jest.advanceTimersByTime(11_000));
+      expect(card()!.querySelector('p')!.textContent).toContain('Vet — Biscuit');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

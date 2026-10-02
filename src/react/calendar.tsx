@@ -7,7 +7,7 @@
  * `app` is the app's short name ("Baby"): it words the hint and keys whether this browser has
  * already been asked (`<app>-calendar-allowed` in localStorage).
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { Auth } from 'firebase/auth';
 import { CalendarPlus, CalendarSearch, ChevronDown, ChevronUp, ExternalLink, MapPin, Plus, X } from 'lucide-react';
 import {
@@ -338,11 +338,15 @@ export function useCalendarSuggestions({ auth, words, isImported, app, horizonDa
   return { canScan, suggestions, dismiss, scan };
 }
 
+/** How long an added event stays hidden waiting for its record; a failed save brings it back. */
+const ADDED_HIDE_MS = 10_000;
+
 /**
  * The calm one-line card for new calendar events: "New in your calendar: Vet — Biscuit · Tue 3:00 PM"
  * with Add and Not this one, and "+2 more" opening the rest as a list. Renders nothing without
  * suggestions. `onAdd` is the app's own import (the same as Import from calendar's Add); the event
- * leaves the card at once and stays gone when its record arrives.
+ * leaves the card at once and stays gone when its record arrives (if none arrives within ten
+ * seconds, the save failed and it comes back). After either button, focus stays on the card.
  */
 export function CalendarSuggestions({ suggestions, onAdd, onDismiss, now = Date.now() }: {
   suggestions: CalendarMatch[];
@@ -352,17 +356,42 @@ export function CalendarSuggestions({ suggestions, onAdd, onDismiss, now = Date.
   now?: number;
 }) {
   const [open, setOpen] = useState(false);
-  const [added, setAdded] = useState<ReadonlySet<string>>(() => new Set());
+  const [added, setAdded] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const card = useRef<HTMLElement>(null);
+  const listId = useId();
+
+  // Forget added ids once their event is gone from the suggestions (imported, or another member's
+  // list), or once the wait for the record is over.
+  const ids = suggestions.map((m) => m.id).join('\n');
+  useEffect(() => {
+    if (added.size === 0) return;
+    const present = new Set(ids.split('\n'));
+    const live = [...added].filter(([id, at]) => present.has(id) && Date.now() - at < ADDED_HIDE_MS);
+    if (live.length !== added.size) {
+      setAdded(new Map(live));
+      return;
+    }
+    const next = Math.min(...live.map(([, at]) => at + ADDED_HIDE_MS)) - Date.now();
+    const timer = setTimeout(() => setAdded((a) => new Map([...a].filter(([, at]) => Date.now() - at < ADDED_HIDE_MS))), Math.max(next, 0));
+    return () => clearTimeout(timer);
+  }, [ids, added]);
+
   const shown = suggestions.filter((m) => !added.has(m.id));
   if (shown.length === 0) return null;
   const [first, ...rest] = shown;
+  const keepFocus = () => setTimeout(() => card.current?.focus());
   const add = (m: CalendarMatch) => {
-    setAdded((s) => new Set(s).add(m.id));
+    setAdded((a) => new Map(a).set(m.id, Date.now()));
     onAdd(m);
+    keepFocus();
+  };
+  const dismiss = (m: CalendarMatch) => {
+    onDismiss(m);
+    keepFocus();
   };
   const actions = (m: CalendarMatch) => (
     <div className="flex shrink-0 gap-1">
-      <button type="button" className={ghostButton} onClick={() => onDismiss(m)} aria-label={`Not this one: ${m.title}`}>
+      <button type="button" className={ghostButton} onClick={() => dismiss(m)} aria-label={`Not this one: ${m.title}`}>
         Not this one
       </button>
       <button type="button" className={secondaryButton} onClick={() => add(m)} aria-label={`Add ${m.title}`}>
@@ -371,22 +400,22 @@ export function CalendarSuggestions({ suggestions, onAdd, onDismiss, now = Date.
     </div>
   );
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white px-4 py-2 shadow-sm" aria-label="New in your calendar" aria-live="polite">
+    <section ref={card} tabIndex={-1} className="rounded-2xl border border-stone-200 bg-white px-4 py-2 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-forest-200" aria-label="New in your calendar">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <CalendarPlus size={20} className="shrink-0 text-forest-700" aria-hidden="true" />
-        <p className="min-w-0 flex-1 text-base text-stone-700 [overflow-wrap:anywhere]">
+        <p role="status" className="min-w-0 flex-1 text-base text-stone-700 [overflow-wrap:anywhere]">
           New in your calendar: <span className="font-medium text-stone-800">{first.title}</span>
           <span className="text-stone-600"> · {suggestionWhen(first, now)}</span>
         </p>
         {rest.length > 0 && (
-          <button type="button" className={ghostButton} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <button type="button" className={ghostButton} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={listId}>
             {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />} +{rest.length} more
           </button>
         )}
         {actions(first)}
       </div>
       {open && rest.length > 0 && (
-        <ul className="mt-1 divide-y divide-stone-200 border-t border-stone-200" aria-label="More new calendar events">
+        <ul id={listId} className="mt-1 divide-y divide-stone-200 border-t border-stone-200" aria-label="More new calendar events">
           {rest.map((m) => (
             <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 pl-8">
               <p className="min-w-0 flex-1 text-base [overflow-wrap:anywhere]">
