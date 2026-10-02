@@ -23,7 +23,7 @@ The conventions behind these are in [STANDARD.md](STANDARD.md).
 ## Install
 
 ```sh
-bun add -d @piekstra/pwa-kit@github:piekstra/pwa-kit#v0.4.0
+bun add -d @piekstra/pwa-kit@github:piekstra/pwa-kit#v0.5.0
 ```
 
 Spell out the package name: `bun add github:piekstra/pwa-kit#…` alone fails with `DependencyLoop`.
@@ -52,7 +52,7 @@ test('installable', ({ page, request }) => expectInstallable(page, request));
 jobs:
   pwa:
     uses: piekstra/pwa-kit/.github/workflows/pwa.yml@v0
-    permissions: { contents: read, id-token: write }
+    permissions: { contents: write, id-token: write }
     with: { hosting-target: groceries, site-url: https://example-groceries.web.app }
 ```
 
