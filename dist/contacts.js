@@ -1,4 +1,4 @@
-import { addDoc, collection, deleteDoc, deleteField, doc, onSnapshot, updateDoc, } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, deleteField, doc, onSnapshot, setDoc, updateDoc, } from 'firebase/firestore';
 export const CONTACT_FIELDS = [
     'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'apps', 'createdAt', 'updatedAt', 'by',
 ];
@@ -56,4 +56,24 @@ export async function updateContact(db, householdId, id, input, by) {
 }
 export async function deleteContact(db, householdId, id) {
     await deleteDoc(doc(contactsOf(db, householdId), id));
+}
+/**
+ * What deleting a contact in one app means: it stops showing there, and is only deleted outright
+ * when no other app shows it (the pediatrician stays in a health app after Baby drops it).
+ */
+export async function removeContactFromApp(db, householdId, contact, app, by) {
+    const others = contact.apps.filter((a) => a !== app);
+    if (others.length === 0)
+        return deleteContact(db, householdId, contact.id);
+    await updateDoc(doc(contactsOf(db, householdId), contact.id), { apps: others, updatedAt: Date.now(), by });
+}
+/** Puts a deleted contact back under its old id (Undo), so appointments that point at it still do. */
+export async function restoreContact(db, householdId, contact) {
+    const { id, createdAt, updatedAt, by, ...input } = contact;
+    await setDoc(doc(contactsOf(db, householdId), id), {
+        ...cleanContact(input),
+        createdAt,
+        ...(updatedAt ? { updatedAt } : {}),
+        by,
+    });
 }
