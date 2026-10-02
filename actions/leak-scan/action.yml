@@ -22,6 +22,10 @@ runs:
         HEAD: ${{ github.sha }}
         DEFAULT_CONFIG: ${{ github.action_path }}/gitleaks.toml
       run: |
+        # Repo configs extend the kit's rules by their installed path; dependencies aren't installed
+        # in this job, so put the rules where that path points.
+        kit=node_modules/@piekstra/pwa-kit/actions/leak-scan
+        [ -f "$kit/gitleaks.toml" ] || { mkdir -p "$kit" && cp "$DEFAULT_CONFIG" "$kit/gitleaks.toml"; }
         config=.gitleaks.toml
         [ -f "$config" ] || config="$DEFAULT_CONFIG"
         if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ]; then
