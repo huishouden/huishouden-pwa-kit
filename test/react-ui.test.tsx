@@ -141,8 +141,11 @@ describe('calendar', () => {
         onRetry={() => {}}
         onAdd={() => {}}
         onClose={() => {}}
-      />,
+      >
+        <p id="extra">Set Biscuit's birthday</p>
+      </CalendarImportDialog>,
     );
+    expect(document.getElementById('extra')!.textContent).toBe("Set Biscuit's birthday");
     expect(document.querySelector('[role=status]')!.textContent).toBe('Every pet event is already in Pet.');
   });
 

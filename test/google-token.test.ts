@@ -133,3 +133,31 @@ describe('Gmail token and mailbox', () => {
     }
   });
 });
+
+describe('calendar search with series starts', () => {
+  test('a repeating match carries when its series began, fetched once per series', async () => {
+    const { findCalendarEvents } = await import('../src/calendar');
+    const original = globalThis.fetch;
+    const paths: string[] = [];
+    globalThis.fetch = (async (url: URL) => {
+      paths.push(url.pathname);
+      if (url.pathname.endsWith('/users/me/calendarList')) return Response.json({ items: [{ id: 'family@example.com', summary: 'Family' }] });
+      if (url.pathname.endsWith('/events/bday-series')) return Response.json({ id: 'bday-series', htmlLink: 'l', start: { date: '2027-03-14' } });
+      return Response.json({
+        items: [
+          { id: 'bday-series_20320314', recurringEventId: 'bday-series', summary: "Biscuit's birthday", htmlLink: 'l1', start: { date: '2032-03-14' } },
+          { id: 'one-off', summary: 'Biscuit birthday party', htmlLink: 'l2', start: { dateTime: '2032-03-16T15:00:00Z' } },
+        ],
+      });
+    }) as unknown as typeof fetch;
+    try {
+      const matches = await findCalendarEvents(auth(), ["biscuit's birthday", 'biscuit birthday'], { seriesStart: true });
+      const series = matches.find((m) => m.id === 'bday-series_20320314')!;
+      expect(series).toMatchObject({ calendarId: 'family@example.com', recurringEventId: 'bday-series', seriesStart: new Date(2027, 2, 14).getTime() });
+      expect(matches.find((m) => m.id === 'one-off')!.seriesStart).toBeUndefined();
+      expect(paths.filter((p) => p.endsWith('/events/bday-series'))).toHaveLength(1);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+});

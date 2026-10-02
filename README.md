@@ -11,7 +11,7 @@ apps that each live in their own repo. Every piece exists because an app hit the
 | Silent sign-in | `@huishouden/pwa-kit/auth` | `signInSilently(auth, clientId)`: Google One Tap with auto-select into Firebase, so each app signs in without a click once the browser is signed in to Google; reports Google's reason when it can't |
 | Household | `@huishouden/pwa-kit/household` | `watchHousehold`, `findHousehold`, `saveMyProfile`, `watchProfiles` (members' own names and photos), `inviteMember`, `removeMember`, `markJoined`, `createHousehold`: one `households/{id}` document (members by lowercase email) shared by every app; each app keeps its data in subcollections, so one invite opens every app |
 | Design language | `DESIGN.md`, `bunx pwa-design-check` | The Huishouden look and behaviour every app follows; the check fails CI on off-palette colours, gradients, glass blur, other typefaces and emoji in UI |
-| Calendar search | `@huishouden/pwa-kit/calendar` | `findCalendarEvents(auth, query or [theme words])`: read-only Google Calendar search across the person's calendars (asks for calendar access once in a popup); `searchPhrases`; importing events: `plainText(description, max)`, `isImported`, `notImported` (each new event once, soonest first), `calendarError`; tests set `window.__mockCalendarEvents`. |
+| Calendar search | `@huishouden/pwa-kit/calendar` | `findCalendarEvents(auth, query or [theme words], { seriesStart })`: read-only Google Calendar search across the person's calendars (asks for calendar access once in a popup); with `seriesStart` a repeating match also says when its series began (a yearly birthday's first year); `searchPhrases`; importing events: `plainText(description, max)`, `isImported`, `notImported` (each new event once, soonest first), `calendarError`; tests set `window.__mockCalendarEvents`. |
 | Contacts | `@huishouden/pwa-kit/contacts` | The household's shared contacts (`households/{id}/contacts`): `watchContacts(db, id, cb, { app })`, `addContact`, `updateContact`, `deleteContact`, `removeContactFromApp`, `restoreContact` (Undo); `apps` says which apps show each one. |
 | Place lookup | `@huishouden/pwa-kit/places` | `searchPlaces(query)`: free OpenStreetMap search for a business's address, phone and website (no key, no billing); `mapsSearchUrl`, `telHref`. |
 | Sign-in origin check | `@huishouden/pwa-kit/oauth-origins`, bin `pwa-oauth-origins` | `originStatus(clientId, origin)`: whether a site is an Authorized JavaScript origin of the OAuth client (Chrome's sign-in prompt needs it; Google has no API to add one). CI checks every deploy; the bootstrap lists any missing. |
@@ -47,7 +47,7 @@ The conventions behind these are in [STANDARD.md](STANDARD.md).
 ## Install
 
 ```sh
-bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.21.0
+bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.22.0
 ```
 
 Spell out the package name: `bun add github:huishouden/pwa-kit#…` alone fails with `DependencyLoop`.

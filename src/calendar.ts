@@ -26,6 +26,15 @@ export interface CalendarMatch {
   description: string;
   link: string;
   calendarName: string;
+  /** The calendar it is in, for fetching its series. */
+  calendarId?: string;
+  /** Set on one occurrence of a repeating event: the id of the series. */
+  recurringEventId?: string;
+  /**
+   * When the series began (ms; local midnight for all-day), with `findCalendarEvents(..., { seriesStart: true })`.
+   * A yearly birthday entered on the day itself begins on the birth date.
+   */
+  seriesStart?: number;
 }
 
 declare global {
@@ -71,13 +80,14 @@ interface GoogleEvent {
   description?: string;
   htmlLink: string;
   status?: string;
+  recurringEventId?: string;
   start: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
 }
 
 const localDay = (date: string) => (([y, m, d]) => new Date(y, m - 1, d).getTime())(date.split('-').map(Number));
 
-export function toMatch(e: GoogleEvent, calendarName: string): CalendarMatch | null {
+export function toMatch(e: GoogleEvent, calendarName: string, calendarId?: string): CalendarMatch | null {
   if (e.status === 'cancelled' || (!e.start.dateTime && !e.start.date)) return null;
   const allDay = !e.start.dateTime;
   const start = allDay ? localDay(e.start.date!) : Date.parse(e.start.dateTime!);
@@ -92,6 +102,8 @@ export function toMatch(e: GoogleEvent, calendarName: string): CalendarMatch | n
     description: e.description ?? '',
     link: e.htmlLink,
     calendarName,
+    ...(calendarId ? { calendarId } : {}),
+    ...(e.recurringEventId ? { recurringEventId: e.recurringEventId } : {}),
   };
 }
 
@@ -101,6 +113,8 @@ export interface FindEventsOptions {
   to?: number;
   /** At most this many results. Default 10. */
   limit?: number;
+  /** Also look up when each repeating match's series began (`seriesStart`): one more request per series. */
+  seriesStart?: boolean;
 }
 
 function api<T>(token: string, path: string, params: Record<string, string>): Promise<T> {
@@ -142,7 +156,7 @@ export async function findCalendarEvents(auth: Auth, queries: string | string[],
           maxResults: String(limit),
           ...window_,
         })
-          .then((r) => (r.items ?? []).map((e) => toMatch(e, c.summaryOverride ?? c.summary)))
+          .then((r) => (r.items ?? []).map((e) => toMatch(e, c.summaryOverride ?? c.summary, c.id)))
           // One unreadable calendar (a removed share, say) should not hide matches in the others.
           .catch(() => []),
       ),
@@ -151,7 +165,27 @@ export async function findCalendarEvents(auth: Auth, queries: string | string[],
     // A single free-text query stops at its most specific phrase that matches; a theme scan uses all.
     if (!Array.isArray(queries) && found.size > 0) break;
   }
-  return [...found.values()].sort((a, b) => a.start - b.start).slice(0, limit);
+  const matches = [...found.values()].sort((a, b) => a.start - b.start).slice(0, limit);
+  if (options.seriesStart) await addSeriesStarts(token, matches);
+  return matches;
+}
+
+/** The start of the series each repeating match belongs to, fetched once per series; a series that can't be read is left out. */
+async function addSeriesStarts(token: string, matches: CalendarMatch[]): Promise<void> {
+  const starts = new Map<string, Promise<number | undefined>>();
+  for (const m of matches) {
+    if (!m.recurringEventId || !m.calendarId) continue;
+    const key = `${m.calendarId}|${m.recurringEventId}`;
+    if (!starts.has(key))
+      starts.set(
+        key,
+        api<GoogleEvent>(token, `calendars/${encodeURIComponent(m.calendarId)}/events/${encodeURIComponent(m.recurringEventId)}`, {})
+          .then((master) => toMatch(master, '')?.start)
+          .catch(() => undefined),
+      );
+    const start = await starts.get(key)!;
+    if (start !== undefined) m.seriesStart = start;
+  }
 }
 
 // ---- Importing events into an app's own records ----
