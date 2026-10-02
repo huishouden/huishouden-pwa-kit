@@ -17,7 +17,7 @@ judges the rest, and `expectHuishoudenFrame` checks the running app.
 
 ## Frame
 
-- Top: the Huishouden app bar (`<hh-app-bar>` from `@piekstra/pwa-kit/app-bar` when available;
+- Top: the Huishouden app bar (`<hh-app-bar>` from `@piekstra/huishouden-pwa-kit/app-bar` when available;
   until then the same anatomy by hand): house mark that links to the portal, the app's name, the
   app switcher, and the signed-in profile photo (`.hh-avatar`) on the right.
 - Page background `--hh-cream`; content on white surfaces; max content width 1200px, centred;
@@ -26,7 +26,7 @@ judges the rest, and `expectHuishoudenFrame` checks the running app.
 
 ## Colour
 
-Only these, from `@piekstra/pwa-kit/theme.css` (Tailwind names in brackets):
+Only these, from `@piekstra/huishouden-pwa-kit/theme.css` (Tailwind names in brackets):
 
 | Role | Light | Dark |
 |---|---|---|

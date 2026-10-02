@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   pwa:
-    uses: piekstra/pwa-kit/.github/workflows/pwa.yml@v0
+    uses: piekstra/huishouden-pwa-kit/.github/workflows/pwa.yml@v0
     permissions:
       contents: write # README screenshots
       id-token: write
