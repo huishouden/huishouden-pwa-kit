@@ -1,10 +1,14 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.16.1",
+  "version": "0.17.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "PolyForm-Shield-1.0.0",
   "type": "module",
   "exports": {
+    "./app-bar": {
+      "types": "./dist/app-bar.d.ts",
+      "default": "./dist/app-bar.js"
+    },
     "./auth": {
       "types": "./dist/auth.d.ts",
       "default": "./dist/auth.js"
@@ -49,6 +53,10 @@
       "types": "./dist/places.d.ts",
       "default": "./dist/places.js"
     },
+    "./react/app-bar": {
+      "types": "./dist/react/app-bar.d.ts",
+      "default": "./dist/react/app-bar.js"
+    },
     "./theme.css": "./src/theme.css",
     "./vite": {
       "types": "./dist/vite.d.ts",
@@ -78,7 +86,8 @@
     "@playwright/test": ">=1.45",
     "sharp": ">=0.33",
     "vite-plugin-pwa": ">=1.0",
-    "firebase": ">=11"
+    "firebase": ">=11",
+    "react": ">=19"
   },
   "peerDependenciesMeta": {
     "@playwright/test": {
@@ -89,12 +98,21 @@
     },
     "firebase": {
       "optional": true
+    },
+    "react": {
+      "optional": true
     }
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.14.5",
     "@playwright/test": "^1.56.0",
     "@types/bun": "latest",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "firebase": "^12",
+    "happy-dom": "^20.14.5",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "sharp": "^0.35.5",
     "typescript": "^5.9.0",
     "vite": "^8.3.0",

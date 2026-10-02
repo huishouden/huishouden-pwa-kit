@@ -55,3 +55,20 @@ export async function captureScreenshot(page, name, options = {}) {
         await prepare(page);
     await page.screenshot({ path: `${dir}/${name}.png`, animations: 'disabled', caret: 'hide' });
 }
+/**
+ * The Huishouden frame (DESIGN.md "Frame") on the running app: an `<hh-app-bar>` with the family
+ * logo linking to the portal, the app's name, and the bar set in Inter.
+ */
+export async function expectHuishoudenFrame(page, { app, portalUrl, path }) {
+    if (path !== undefined)
+        await page.goto(path, { waitUntil: 'networkidle' });
+    const bar = page.locator('hh-app-bar');
+    await expect(bar, 'Huishouden app bar').toHaveCount(1);
+    await expect(bar).toBeVisible();
+    const home = bar.getByRole('link', { name: 'Huishouden home' });
+    await expect(home, 'logo links to the portal').toHaveAttribute('href', portalUrl ?? /^(https:\/\/|\/$)/);
+    await expect(home.locator('.logo svg'), 'family logo').toBeVisible();
+    await expect(bar.getByRole('heading', { level: 1 }), 'app name').toHaveText(app);
+    const font = await bar.evaluate((el) => getComputedStyle(el).fontFamily);
+    expect(font, 'app bar typeface').toMatch(/^["']?Inter\b/);
+}

@@ -5,6 +5,7 @@ apps that each live in their own repo. Every piece exists because an app hit the
 
 | Piece | Path | What it does |
 |---|---|---|
+| App bar | `@huishouden/pwa-kit/app-bar`, `@huishouden/pwa-kit/react/app-bar` | `<hh-app-bar app glyph portal-url version>`: the Huishouden frame (family logo to the portal, "Huishouden" over the app name, `nav` and `actions` slots, Sign in with Google or the avatar with an account menu: name, email, All apps, Sign out, version). Raises `hh-sign-in` / `hh-sign-out`; the app sets `bar.user`. `AppBar` is the React 19 wrapper (`onSignIn`, `onSignOut`, `user`); `react` is an optional peer |
 | Vite preset | `@huishouden/pwa-kit/vite` | `pwaApp({...})`: manifest, auto-updating service worker, and a navigation fallback that leaves Firebase's `/__/` paths alone (otherwise "Sign in with Google" opens the app in the popup) |
 | Firebase config | `@huishouden/pwa-kit/firebase` | `firebaseConfigFromEnv(import.meta.env, fallback?)` from `VITE_FIREBASE_*`; auth domain defaults to `<project>.firebaseapp.com`, the only redirect the auto-created OAuth client allows |
 | Silent sign-in | `@huishouden/pwa-kit/auth` | `signInSilently(auth, clientId)`: Google One Tap with auto-select into Firebase, so each app signs in without a click once the browser is signed in to Google; reports Google's reason when it can't |
@@ -16,7 +17,7 @@ apps that each live in their own repo. Every piece exists because an app hit the
 | Sign-in origin check | `@huishouden/pwa-kit/oauth-origins`, bin `pwa-oauth-origins` | `originStatus(clientId, origin)`: whether a site is an Authorized JavaScript origin of the OAuth client (Chrome's sign-in prompt needs it; Google has no API to add one). CI checks every deploy; the bootstrap lists any missing. |
 | Invite email | `@huishouden/pwa-kit/invite` | `sendInviteEmail(auth, invite)`: the invitation from the inviter's own Gmail (one-time send permission); `inviteMailto` opens a prefilled draft instead. |
 | Theme | `@huishouden/pwa-kit/theme.css` | Shared colours, radius, font, `.hh-button` and `.hh-avatar` (signed-in profile photo) as CSS variables (works with or without Tailwind) |
-| Smoke checks | `@huishouden/pwa-kit/e2e` | Playwright helpers: `expectCleanLoad`, `expectInstallable`, `expectGoogleSignInPopup` (no credentials needed), `captureScreenshot` (deterministic README screenshots, refreshed by CI after each deploy) |
+| Smoke checks | `@huishouden/pwa-kit/e2e` | Playwright helpers: `expectCleanLoad`, `expectInstallable`, `expectGoogleSignInPopup` (no credentials needed), `expectHuishoudenFrame(page, { app, portalUrl })` (the app bar, its portal link and the app name), `captureScreenshot` (deterministic README screenshots, refreshed by CI after each deploy) |
 | Reusable CI/CD | `.github/workflows/pwa.yml` | leak scan, design check, build and unit tests, before/after screenshots commented on every PR, keyless deploy to Firebase Hosting, smoke tests against the live site, README screenshots |
 | Releases | `.github/workflows/release.yml` | release-please: version bumps, `CHANGELOG.md` and tagged releases from Conventional Commit PR titles |
 | Build stamp | `pwaApp()` | `import.meta.env.VITE_APP_VERSION` and `VITE_BUILD_SHA` in every build, for showing what's running |
@@ -31,7 +32,7 @@ The conventions behind these are in [STANDARD.md](STANDARD.md).
 ## Install
 
 ```sh
-bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.12.0
+bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.17.0
 ```
 
 Spell out the package name: `bun add github:huishouden/pwa-kit#…` alone fails with `DependencyLoop`.
@@ -53,6 +54,25 @@ import { test } from '@playwright/test';
 import { expectCleanLoad, expectInstallable } from '@huishouden/pwa-kit/e2e';
 test('loads', ({ page }) => expectCleanLoad(page));
 test('installable', ({ page, request }) => expectInstallable(page, request));
+```
+
+```ts
+// Vanilla: the bar renders itself; the app owns sign-in.
+import '@huishouden/pwa-kit/app-bar';
+const bar = document.querySelector('hh-app-bar')!; // <hh-app-bar app="Groceries" glyph="cart" portal-url="https://example-portal.web.app">
+onAuthStateChanged(auth, (user) => (bar.user = user));
+bar.addEventListener('hh-sign-in', () => signInWithPopup(auth, new GoogleAuthProvider()));
+bar.addEventListener('hh-sign-out', () => signOut(auth));
+```
+
+```tsx
+// React 19
+import { AppBar } from '@huishouden/pwa-kit/react/app-bar';
+<AppBar app="Groceries" glyph="cart" portalUrl={PORTAL_URL} version={`${import.meta.env.VITE_APP_VERSION} (${import.meta.env.VITE_BUILD_SHA})`}
+        user={user} onSignIn={signIn} onSignOut={signOut}>
+  <nav slot="nav">…tabs…</nav>
+  <button slot="actions">…</button>
+</AppBar>
 ```
 
 ```yaml

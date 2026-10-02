@@ -1,6 +1,7 @@
 # Proposal: shared building blocks for the next Huishouden apps
 
-Status: draft for review. Nothing here is built yet.
+Status: draft for review. Built so far: the F3 household fix and B1's app bar (`./app-bar`,
+`./react/app-bar`, `expectHuishoudenFrame`, v0.17.0); B1's app switcher and `apps.json` loader are not.
 
 The kit today covers the outside of an app: build, install, sign-in plumbing, the household
 document, the look, CI. The inside of each app (frame, session wiring, subscriptions, undo, time
@@ -202,6 +203,10 @@ The wall tablet's ambient view, inside the portal.
 ---
 
 ### B1. App frame (`<hh-app-bar>`) and app registry
+
+Built in v0.17.0 as `@huishouden/pwa-kit/app-bar` (attribute `portal-url`, slots `nav` and
+`actions`, `theme="dark"`) with the React wrapper `./react/app-bar`; the menu has "All apps" in
+place of a switcher. Still to build: `./apps`, `loadApps` and the switcher below.
 
 One element gives every app the frame `DESIGN.md` describes: house mark linking to the portal,
 the app's name, the app switcher, a slot for the app's own navigation, and the avatar with its

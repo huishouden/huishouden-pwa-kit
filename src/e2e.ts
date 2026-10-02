@@ -71,3 +71,29 @@ export async function captureScreenshot(page: Page, name: string, options: Scree
   if (prepare) await prepare(page);
   await page.screenshot({ path: `${dir}/${name}.png`, animations: 'disabled', caret: 'hide' });
 }
+
+export interface FrameOptions {
+  /** The app's short name as the bar shows it ("Spending"); the portal's is "Huishouden". */
+  app: string;
+  /** Where the logo must lead. Defaults to any https URL (or `/` on the portal). */
+  portalUrl?: string | RegExp;
+  /** Page to load first; leave unset to check the page as it is. */
+  path?: string;
+}
+
+/**
+ * The Huishouden frame (DESIGN.md "Frame") on the running app: an `<hh-app-bar>` with the family
+ * logo linking to the portal, the app's name, and the bar set in Inter.
+ */
+export async function expectHuishoudenFrame(page: Page, { app, portalUrl, path }: FrameOptions) {
+  if (path !== undefined) await page.goto(path, { waitUntil: 'networkidle' });
+  const bar = page.locator('hh-app-bar');
+  await expect(bar, 'Huishouden app bar').toHaveCount(1);
+  await expect(bar).toBeVisible();
+  const home = bar.getByRole('link', { name: 'Huishouden home' });
+  await expect(home, 'logo links to the portal').toHaveAttribute('href', portalUrl ?? /^(https:\/\/|\/$)/);
+  await expect(home.locator('.logo svg'), 'family logo').toBeVisible();
+  await expect(bar.getByRole('heading', { level: 1 }), 'app name').toHaveText(app);
+  const font = await bar.evaluate((el) => getComputedStyle(el).fontFamily);
+  expect(font, 'app bar typeface').toMatch(/^["']?Inter\b/);
+}
