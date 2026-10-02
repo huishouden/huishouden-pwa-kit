@@ -38,3 +38,19 @@ export async function expectGoogleSignInPopup(page, context, openPopup, path = '
     await expect(popup.locator('body')).not.toContainText('redirect_uri_mismatch');
     await expect(popup.locator('body')).toContainText(/Sign in|Choose an account/);
 }
+/**
+ * Captures a README screenshot of the live app: animations and the caret off, reduced motion,
+ * optional frozen clock, so the PNG only changes when the app's look does. The reusable workflow
+ * commits docs/screenshots back to main when the bytes change.
+ */
+export async function captureScreenshot(page, name, options = {}) {
+    const { path = '/', fixedTime, dir = 'docs/screenshots', prepare } = options;
+    if (fixedTime)
+        await page.clock.setFixedTime(fixedTime);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(path, { waitUntil: 'networkidle' });
+    await page.evaluate(() => document.fonts.ready);
+    if (prepare)
+        await prepare(page);
+    await page.screenshot({ path: `${dir}/${name}.png`, animations: 'disabled', caret: 'hide' });
+}
