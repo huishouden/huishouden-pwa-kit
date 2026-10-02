@@ -1,5 +1,6 @@
 import { collection, doc, getDocs, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { writeBatch } from './firestore.js';
+import { MONEY_APPS } from './roles.js';
 import { HOUR, daysBetween, dueText, dueWords, formatTime, longDate, startOfDay, toYmd, type Ymd, ymdToTime, addDays } from './time.js';
 
 /**
@@ -8,7 +9,9 @@ import { HOUR, daysBetween, dueText, dueWords, formatTime, longDate, startOfDay,
  * any app's own collections. Each app publishes its items here (appointments, due jobs, bills,
  * renewals) and keeps them current; the portal only reads.
  *
- * Every member can read every item, so titles and details are what anyone in the household may see.
+ * Admins and members read every item; helpers and kids (`./roles`) only those with `private: false`,
+ * so an item from a private appointment, or from Spending or Bills, is published `private: true`.
+ * Every item is written with the flag: one without it counts as private to helpers and kids.
  * Fields match the rules exactly (see AGENDA_FIELDS); keep them in step.
  */
 
@@ -42,12 +45,14 @@ export interface AgendaItem {
   /** Who or what it is for: a pet, a person, a car. */
   who?: string;
   status?: AgendaStatus;
+  /** Only admins and members see it: from a private record, or about money. Stored as a boolean. */
+  private?: boolean;
   updatedAt: number;
   /** Lowercase email of the member whose app wrote it. */
   by: string;
 }
 
-export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'updatedAt', 'by'] as const;
+export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'private', 'updatedAt', 'by'] as const;
 
 /** Maximum lengths, the same as the rules. */
 export const AGENDA_LIMITS = { app: 40, ref: 200, title: 120, detail: 200, url: 2000, who: 60, by: 254 } as const;
@@ -99,6 +104,7 @@ export function agendaDoc(app: string, input: AgendaInput, by: string, now = Dat
     url: input.url.slice(0, AGENDA_LIMITS.url),
     ...(who ? { who } : {}),
     ...(input.status ? { status: input.status } : {}),
+    private: input.private === true || MONEY_APPS.includes(app),
     updatedAt: now,
     by: by.trim().toLowerCase(),
   };
@@ -123,7 +129,19 @@ const comparable = ({ updatedAt: _u, by: _b, ...rest }: Omit<AgendaItem, 'id'> &
 
 type Op = (b: ReturnType<typeof writeBatch>) => void;
 
-async function commit(db: Firestore, ops: Op[]): Promise<void> {
+const refused = (e: unknown) => (e as { code?: string })?.code === 'permission-denied';
+
+async function commit(db: Firestore, ops: Op[], restricted = false): Promise<void> {
+  if (restricted) {
+    for (const op of ops) {
+      const batch = writeBatch(db);
+      op(batch);
+      await batch.commit().catch((e) => {
+        if (!refused(e)) throw e;
+      });
+    }
+    return;
+  }
   for (let i = 0; i < ops.length; i += 450) {
     const batch = writeBatch(db);
     for (const op of ops.slice(i, i + 450)) op(batch);
@@ -134,6 +152,12 @@ async function commit(db: Firestore, ops: Op[]): Promise<void> {
 export interface AgendaWriteOptions {
   /** The signed-in member's email. */
   by: string;
+  /**
+   * A helper or kid (`isRestricted(role)`) is writing: only open items are read and written, each on
+   * its own, and one the rules refuse (an item from before the flag, until an admin or member's
+   * device rewrites it) is skipped rather than failing the rest.
+   */
+  restricted?: boolean;
   now?: number;
 }
 
@@ -150,11 +174,13 @@ async function reconcile(
   app: string,
   stored: { id: string; data: Record<string, unknown> }[],
   items: AgendaInput[],
-  { by, now = Date.now() }: AgendaWriteOptions,
+  { by, restricted = false, now = Date.now() }: AgendaWriteOptions,
 ): Promise<AgendaWriteResult> {
   const wanted = new Map<string, Omit<AgendaItem, 'id'>>();
   for (const item of items) {
     if (!inAgendaWindow(item, now)) continue;
+    // A helper's device can't see private items, so it never publishes or removes them.
+    if (restricted && item.private) continue;
     wanted.set(agendaId(app, item.ref, item.start), agendaDoc(app, item, by, now));
   }
   const col = agendaOf(db, householdId);
@@ -168,9 +194,13 @@ async function reconcile(
     if (old && comparable(toAgendaItem(id, old)) === comparable({ ...data })) unchanged++;
     else ops.push((b) => b.set(doc(col, id), data));
   }
-  await commit(db, ops);
+  await commit(db, ops, restricted);
   return { written: ops.length - deleted, deleted, unchanged };
 }
+
+/** The agenda, or for a helper or kid only its open items (what the rules let them read). */
+const visible = (db: Firestore, householdId: string, restricted: boolean | undefined, ...filters: ReturnType<typeof where>[]) =>
+  query(agendaOf(db, householdId), ...filters, ...(restricted ? [where('private', '==', false)] : []));
 
 const snapshotDocs = (snap: { docs: { id: string; data: () => Record<string, unknown> }[] }) => snap.docs.map((d) => ({ id: d.id, data: d.data() }));
 
@@ -187,14 +217,14 @@ export async function replaceAgenda(
   items: Omit<AgendaInput, 'ref'>[],
   options: AgendaWriteOptions,
 ): Promise<AgendaWriteResult> {
-  const snap = await getDocs(query(agendaOf(db, householdId), where('app', '==', app), where('ref', '==', ref)));
+  const snap = await getDocs(visible(db, householdId, options.restricted, where('app', '==', app), where('ref', '==', ref)));
   return reconcile(db, householdId, app, snapshotDocs(snap), items.map((i) => ({ ...i, ref })), options);
 }
 
 /** Deletes one source record's items (the record was deleted). */
-export async function removeAgenda(db: Firestore, householdId: string, app: string, ref: string): Promise<number> {
-  const snap = await getDocs(query(agendaOf(db, householdId), where('app', '==', app), where('ref', '==', ref)));
-  await commit(db, snap.docs.map((d) => (b: ReturnType<typeof writeBatch>) => b.delete(d.ref)));
+export async function removeAgenda(db: Firestore, householdId: string, app: string, ref: string, { restricted = false }: { restricted?: boolean } = {}): Promise<number> {
+  const snap = await getDocs(visible(db, householdId, restricted, where('app', '==', app), where('ref', '==', ref)));
+  await commit(db, snap.docs.map((d) => (b: ReturnType<typeof writeBatch>) => b.delete(d.ref)), restricted);
   return snap.docs.length;
 }
 
@@ -204,7 +234,7 @@ export async function removeAgenda(db: Firestore, householdId: string, app: stri
  * every open costs one read of the app's items and almost no writes.
  */
 export async function syncAgenda(db: Firestore, householdId: string, app: string, items: AgendaInput[], options: AgendaWriteOptions): Promise<AgendaWriteResult> {
-  const snap = await getDocs(query(agendaOf(db, householdId), where('app', '==', app)));
+  const snap = await getDocs(visible(db, householdId, options.restricted, where('app', '==', app)));
   return reconcile(db, householdId, app, snapshotDocs(snap), items, options);
 }
 
@@ -231,6 +261,8 @@ export function toAgendaItem(id: string, data: Record<string, unknown>): AgendaI
     url: str(data.url) ?? '',
     ...(who ? { who } : {}),
     ...(status ? { status } : {}),
+    // Left out when the document has no flag, so an admin's or member's sync writes one.
+    ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
     updatedAt: num(data.updatedAt) ?? 0,
     by: str(data.by) ?? '',
   };
@@ -246,14 +278,16 @@ export interface AgendaRange {
   to: number;
   /** Only these apps' items. */
   apps?: string[];
+  /** A helper or kid (`isRestricted(role)`): only items not marked private, as the rules require. */
+  restricted?: boolean;
   onError?: (error: Error) => void;
 }
 
 /** Follows the household's items overlapping `from`..`to` (and any overdue), soonest first. */
 export function watchAgenda(db: Firestore, householdId: string, range: AgendaRange, onChange: (items: AgendaItem[]) => void): Unsubscribe {
-  const { from, to, apps, onError } = range;
+  const { from, to, apps, restricted, onError } = range;
   return onSnapshot(
-    query(agendaOf(db, householdId), where('start', '<', to)),
+    visible(db, householdId, restricted, where('start', '<', to)),
     (snap) =>
       onChange(
         snap.docs

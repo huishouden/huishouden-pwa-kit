@@ -6,10 +6,10 @@
  * links the same way.
  */
 import { useRef, useState } from 'react';
-import { ClipboardPaste, ExternalLink, Globe, ImageUp, Mail, MapPin, Pencil, Phone, Search, Trash2 } from 'lucide-react';
+import { ClipboardPaste, ExternalLink, Globe, ImageUp, Lock, Mail, MapPin, Pencil, Phone, Search, Trash2 } from 'lucide-react';
 import { CONTACT_LIMITS, contactInput, displayWebsite, type Contact, type ContactInput } from '../contacts';
 import { mapsSearchUrl, parsePlaceText, readPlaceScreenshot, searchPlaces, telHref, type ParsedPlace, type Place } from '../places';
-import { Chip, Dialog, ErrorNotice, Field, cardClass, deleteButton, ghostButton, iconButton, inputClass, linkClass, overline, primaryButton, secondaryButton } from './ui';
+import { Checkbox, Chip, Dialog, ErrorNotice, Field, cardClass, deleteButton, ghostButton, iconButton, inputClass, linkClass, overline, primaryButton, secondaryButton } from './ui';
 
 type PlaceSearch = { status: 'idle' } | { status: 'searching' } | { status: 'done'; places: Place[]; query: string } | { status: 'error' };
 
@@ -46,6 +46,11 @@ export interface ContactDialogProps {
   prefill?: ParsedPlace;
   /** Reads a listing screenshot; defaults to on-device OCR (`readPlaceScreenshot`). Tests pass a stand-in. */
   readScreenshot?: (image: Blob, onProgress: (progress: number, status: string) => void) => Promise<ParsedPlace>;
+  /**
+   * Offers "Only admins and members" (`private`). Pass `can(role, 'see-private')`: helpers and kids
+   * can't mark a contact private, and what they save stays visible to them. Default true.
+   */
+  canMarkPrivate?: boolean;
   onSave: (input: ContactInput) => void;
   onDelete?: () => void;
   onClose: () => void;
@@ -61,6 +66,7 @@ export function ContactDialog({
   namePlaceholder,
   prefill,
   readScreenshot = (image, onProgress) => readPlaceScreenshot(image, { onProgress }),
+  canMarkPrivate = true,
   onSave,
   onDelete,
   onClose,
@@ -74,6 +80,7 @@ export function ContactDialog({
   const [address, setAddress] = useState(contact?.address ?? start?.address?.slice(0, CONTACT_LIMITS.address) ?? '');
   const [mapsUrl, setMapsUrl] = useState(contact?.mapsUrl ?? start?.mapsUrl ?? '');
   const [notes, setNotes] = useState(contact?.notes ?? (start?.hours ? `Hours: ${start.hours}`.slice(0, CONTACT_LIMITS.notes) : ''));
+  const [isPrivate, setPrivate] = useState(contact?.private === true);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState<PlaceSearch>({ status: 'idle' });
   const [fill, setFill] = useState<Fill>(start ? { status: 'done', source: 'share', place: start, filled: filledFields(start) } : { status: 'idle' });
@@ -85,7 +92,7 @@ export function ContactDialog({
 
   const save = () => {
     if (!valid) return;
-    onSave(contactInput({ name, role, phone, email, website, address, mapsUrl, notes }, contact?.apps ?? [app], app));
+    onSave(contactInput({ name, role, phone, email, website, address, mapsUrl, notes, private: canMarkPrivate && isPrivate }, contact?.apps ?? [app], app));
     onClose();
   };
 
@@ -319,6 +326,7 @@ export function ContactDialog({
         <Field label="Notes">
           <textarea className={`${inputClass} min-h-20`} value={notes} maxLength={CONTACT_LIMITS.notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
+        {canMarkPrivate && <PrivateCheckbox checked={isPrivate} onChange={setPrivate} />}
         <button type="submit" hidden />
       </form>
     </Dialog>
@@ -370,8 +378,36 @@ function FillNote({ source, place, filled }: { source: FillSource; place: Parsed
   );
 }
 
-/** One contact: role, name, edit and delete, then tap-to-call, email, website, address with a map link, and notes. */
-export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: Contact; role: string; onEdit: () => void; onDelete: () => void }) {
+/**
+ * "Only admins and members": the private flag on a contact or appointment (`./roles`), with its
+ * one-line explanation. Show it only to those who may set it (`can(role, 'see-private')`).
+ */
+export function PrivateCheckbox({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <div>
+      <Checkbox checked={checked} onChange={onChange}>
+        Only admins and members
+      </Checkbox>
+      <p className="ml-9 text-sm text-stone-600 dark:text-stone-300">Helpers and kids won’t see it.</p>
+    </div>
+  );
+}
+
+/** The quiet "Private" marker on a record only admins and members see. */
+export function PrivateMark() {
+  return (
+    <span className="inline-flex items-center gap-1 text-sm font-medium text-stone-600 dark:text-stone-300">
+      <Lock size={14} aria-hidden="true" /> Private
+    </span>
+  );
+}
+
+/**
+ * One contact: role, name, edit and delete, then tap-to-call, email, website, address with a map
+ * link, and notes. Leave out `onEdit` or `onDelete` where the person may not (a helper on a contact
+ * someone else added).
+ */
+export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: Contact; role: string; onEdit?: () => void; onDelete?: () => void }) {
   const maps = c.mapsUrl || (c.address ? mapsSearchUrl(`${c.name}, ${c.address}`) : null);
   return (
     <section className={`${cardClass} p-5`} aria-label={c.name}>
@@ -379,13 +415,18 @@ export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: C
         <div className="min-w-0 flex-1">
           <p className={overline}>{role}</p>
           <h3 className="mt-0.5 text-xl font-semibold text-stone-800 [overflow-wrap:anywhere]">{c.name}</h3>
+          {c.private && <PrivateMark />}
         </div>
-        <button type="button" className={iconButton} onClick={onEdit} aria-label={`Edit ${c.name}`}>
-          <Pencil size={18} />
-        </button>
-        <button type="button" className={iconButton} onClick={onDelete} aria-label={`Delete ${c.name}`}>
-          <Trash2 size={18} />
-        </button>
+        {onEdit && (
+          <button type="button" className={iconButton} onClick={onEdit} aria-label={`Edit ${c.name}`}>
+            <Pencil size={18} />
+          </button>
+        )}
+        {onDelete && (
+          <button type="button" className={iconButton} onClick={onDelete} aria-label={`Delete ${c.name}`}>
+            <Trash2 size={18} />
+          </button>
+        )}
       </div>
       <div className="mt-2 flex flex-col items-start">
         {c.phone && (

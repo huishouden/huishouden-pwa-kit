@@ -153,6 +153,9 @@ rather than copying the class strings; the shapes are:
 
 - Transitions 120–200ms, ease-out, opacity/transform only; none when `prefers-reduced-motion`.
 - Confirm destructive actions in words ("Remove Sam? They lose access to every household app.").
+- What a role can't do is left out, not greyed out; where someone would look for it, one line in
+  secondary text says who can: "Only admins and members can change settings." (`RoleNote`). The
+  same sentence answers a refused write.
 - Undo over confirm where the action is cheap to reverse.
 
 ## Celebrations

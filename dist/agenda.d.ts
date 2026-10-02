@@ -6,7 +6,9 @@ import { type Ymd } from './time.js';
  * any app's own collections. Each app publishes its items here (appointments, due jobs, bills,
  * renewals) and keeps them current; the portal only reads.
  *
- * Every member can read every item, so titles and details are what anyone in the household may see.
+ * Admins and members read every item; helpers and kids (`./roles`) only those with `private: false`,
+ * so an item from a private appointment, or from Spending or Bills, is published `private: true`.
+ * Every item is written with the flag: one without it counts as private to helpers and kids.
  * Fields match the rules exactly (see AGENDA_FIELDS); keep them in step.
  */
 export type AgendaKind = 'appointment' | 'due' | 'renewal' | 'bill' | 'birthday' | 'medicine' | 'feeding' | 'task' | 'other';
@@ -37,11 +39,13 @@ export interface AgendaItem {
     /** Who or what it is for: a pet, a person, a car. */
     who?: string;
     status?: AgendaStatus;
+    /** Only admins and members see it: from a private record, or about money. Stored as a boolean. */
+    private?: boolean;
     updatedAt: number;
     /** Lowercase email of the member whose app wrote it. */
     by: string;
 }
-export declare const AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "updatedAt", "by"];
+export declare const AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "updatedAt", "by"];
 /** Maximum lengths, the same as the rules. */
 export declare const AGENDA_LIMITS: {
     readonly app: 40;
@@ -74,6 +78,12 @@ export declare function inAgendaWindow(item: Pick<AgendaItem, 'start' | 'end' | 
 export interface AgendaWriteOptions {
     /** The signed-in member's email. */
     by: string;
+    /**
+     * A helper or kid (`isRestricted(role)`) is writing: only open items are read and written, each on
+     * its own, and one the rules refuse (an item from before the flag, until an admin or member's
+     * device rewrites it) is skipped rather than failing the rest.
+     */
+    restricted?: boolean;
     now?: number;
 }
 export interface AgendaWriteResult {
@@ -88,7 +98,9 @@ export interface AgendaWriteResult {
  */
 export declare function replaceAgenda(db: Firestore, householdId: string, app: string, ref: string, items: Omit<AgendaInput, 'ref'>[], options: AgendaWriteOptions): Promise<AgendaWriteResult>;
 /** Deletes one source record's items (the record was deleted). */
-export declare function removeAgenda(db: Firestore, householdId: string, app: string, ref: string): Promise<number>;
+export declare function removeAgenda(db: Firestore, householdId: string, app: string, ref: string, { restricted }?: {
+    restricted?: boolean;
+}): Promise<number>;
 /**
  * Makes everything this app has published exactly `items`: for apps that work out all their dates
  * when they open. Writes only what changed and deletes what is no longer there, so running it on
@@ -104,6 +116,8 @@ export interface AgendaRange {
     to: number;
     /** Only these apps' items. */
     apps?: string[];
+    /** A helper or kid (`isRestricted(role)`): only items not marked private, as the rules require. */
+    restricted?: boolean;
     onError?: (error: Error) => void;
 }
 /** Follows the household's items overlapping `from`..`to` (and any overdue), soonest first. */

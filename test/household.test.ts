@@ -8,7 +8,7 @@ describe('household helpers', () => {
 
   test('toHousehold tolerates missing fields from older documents', () => {
     expect(toHousehold('h1', { members: ['a@example.com'] })).toEqual({
-      id: 'h1', name: 'Household', members: ['a@example.com'], joined: [], createdAt: 0,
+      id: 'h1', name: 'Household', members: ['a@example.com'], joined: [], roles: {}, createdAt: 0,
     });
   });
 

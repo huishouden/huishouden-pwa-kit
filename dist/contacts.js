@@ -1,10 +1,10 @@
-import { collection, doc, onSnapshot } from 'firebase/firestore';
-import { addDoc, deleteDoc, deleteField, setDoc, updateDoc } from './firestore.js';
+import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
+import { addDoc, deleteDoc, deleteField, setDoc, updateDoc, writeBatch } from './firestore.js';
 export const CONTACT_FIELDS = [
-    'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'apps', 'createdAt', 'updatedAt', 'by',
+    'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'apps', 'private', 'createdAt', 'updatedAt', 'by',
 ];
 const contactsOf = (db, householdId) => collection(db, 'households', householdId, 'contacts');
-/** Drops empty optional fields so documents only carry what was filled in. */
+/** Drops empty optional fields so documents only carry what was filled in; `private` is always written. */
 export function cleanContact(input) {
     const out = {};
     for (const [k, v] of Object.entries(input)) {
@@ -15,6 +15,7 @@ export function cleanContact(input) {
         else if (v !== undefined)
             out[k] = v;
     }
+    out.private = input.private === true;
     return out;
 }
 export function toContact(id, data) {
@@ -30,14 +31,19 @@ export function toContact(id, data) {
         mapsUrl: str('mapsUrl'),
         notes: str('notes'),
         apps: Array.isArray(data.apps) ? data.apps.map(String) : [],
+        ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
         createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
         updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : undefined,
         by: str('by') ?? '',
     };
 }
-/** Follows the household's contacts, optionally only those shown in one app, sorted by name. */
-export function watchContacts(db, householdId, onChange, { app, onError } = {}) {
-    return onSnapshot(contactsOf(db, householdId), (snap) => onChange(snap.docs
+/**
+ * Follows the household's contacts, optionally only those shown in one app, sorted by name. Pass
+ * `restricted` for helpers and kids: the rules refuse them a list that could include private ones.
+ */
+export function watchContacts(db, householdId, onChange, { app, restricted, onError } = {}) {
+    const all = contactsOf(db, householdId);
+    return onSnapshot(restricted ? query(all, where('private', '==', false)) : all, (snap) => onChange(snap.docs
         .map((d) => toContact(d.id, d.data()))
         .filter((c) => !app || c.apps.includes(app))
         .sort((a, b) => a.name.localeCompare(b.name))), (error) => onError?.(error));
@@ -67,6 +73,22 @@ export async function removeContactFromApp(db, householdId, contact, app, by) {
     if (others.length === 0)
         return deleteContact(db, householdId, contact.id);
     await updateDoc(doc(contactsOf(db, householdId), contact.id), { apps: others, updatedAt: Date.now(), by });
+}
+/**
+ * Writes `private: false` on records saved before the flag existed, which helpers and kids can't
+ * read until then. Admins and members only (`can(role, 'see-private')`), for any private-capable
+ * collection (contacts, an app's appointments); cheap to run whenever the list loads, since it
+ * writes only records without the flag.
+ */
+export async function markUnflaggedOpen(db, householdId, collectionName, records) {
+    const unflagged = records.filter((r) => typeof r.private !== 'boolean');
+    for (let i = 0; i < unflagged.length; i += 450) {
+        const batch = writeBatch(db);
+        for (const r of unflagged.slice(i, i + 450))
+            batch.update(doc(db, 'households', householdId, collectionName, r.id), { private: false });
+        await batch.commit();
+    }
+    return unflagged.length;
 }
 /** Puts a deleted contact back under its old id (Undo), so appointments that point at it still do. */
 export async function restoreContact(db, householdId, contact) {
@@ -126,5 +148,6 @@ export function contactInput(fields, apps, app) {
         mapsUrl: fields.mapsUrl?.trim() || undefined,
         notes: cut(fields.notes, CONTACT_LIMITS.notes),
         apps: apps.includes(app) ? apps : [...apps, app],
+        private: fields.private === true,
     };
 }

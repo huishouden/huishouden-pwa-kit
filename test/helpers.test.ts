@@ -78,7 +78,7 @@ describe('contacts', () => {
 
 describe('feedback', () => {
   test('Firestore codes in words', () => {
-    expect(readError({ code: 'permission-denied' }, "Couldn't save")).toBe("Couldn't save: this household doesn't allow it yet.");
+    expect(readError({ code: 'permission-denied' }, "Couldn't save")).toBe("Couldn't save: only admins and members can do that.");
     expect(readError({ code: 'unavailable' }, "Couldn't load the log")).toBe("Couldn't load the log: offline. It will retry when the connection is back.");
     expect(readError(new Error('boom'), "Couldn't save")).toBe("Couldn't save.");
     expect(readError(undefined, "Couldn't save")).toBe("Couldn't save.");
