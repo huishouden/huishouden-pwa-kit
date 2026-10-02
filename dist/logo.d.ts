@@ -8,6 +8,12 @@ export declare const GLYPHS: {
     readonly card: "<rect x=\"166\" y=\"282\" width=\"180\" height=\"116\" rx=\"16\" fill=\"none\" stroke=\"#2d6a4f\" stroke-width=\"24\"/><path d=\"M166 322 h180\" stroke=\"#2d6a4f\" stroke-width=\"22\"/><path d=\"M196 364 h44\" stroke=\"#2d6a4f\" stroke-width=\"18\" stroke-linecap=\"round\"/>";
     /** Baby: a feeding bottle. */
     readonly bottle: "<path d=\"M240 272 v-16 a16 16 0 0 1 32 0 v16\" fill=\"none\" stroke=\"#2d6a4f\" stroke-width=\"20\" stroke-linecap=\"round\"/><rect x=\"216\" y=\"272\" width=\"80\" height=\"140\" rx=\"26\" fill=\"none\" stroke=\"#2d6a4f\" stroke-width=\"22\"/><path d=\"M228 318 h56 M228 352 h56\" stroke=\"#2d6a4f\" stroke-width=\"16\" stroke-linecap=\"round\"/>";
+    /** Pet: a paw print. */
+    readonly paw: "<ellipse cx=\"256\" cy=\"362\" rx=\"46\" ry=\"38\" fill=\"#2d6a4f\"/><circle cx=\"204\" cy=\"306\" r=\"17\" fill=\"#2d6a4f\"/><circle cx=\"236\" cy=\"278\" r=\"17\" fill=\"#2d6a4f\"/><circle cx=\"276\" cy=\"278\" r=\"17\" fill=\"#2d6a4f\"/><circle cx=\"308\" cy=\"306\" r=\"17\" fill=\"#2d6a4f\"/>";
+    /** Home upkeep: a wrench. */
+    readonly wrench: "<path d=\"M200 398 l84 -84\" stroke=\"#2d6a4f\" stroke-width=\"32\" stroke-linecap=\"round\"/><path d=\"M286 268 a40 40 0 1 0 40 40 l-26 2 l-14 -14 z\" fill=\"#2d6a4f\"/>";
+    /** Car: a small car. */
+    readonly car: "<path d=\"M210 322 l16 -34 h60 l16 34\" fill=\"none\" stroke=\"#2d6a4f\" stroke-width=\"20\" stroke-linejoin=\"round\"/><rect x=\"176\" y=\"318\" width=\"160\" height=\"58\" rx=\"18\" fill=\"#2d6a4f\"/><circle cx=\"216\" cy=\"380\" r=\"18\" fill=\"#2d6a4f\" stroke=\"#faf9f5\" stroke-width=\"8\"/><circle cx=\"296\" cy=\"380\" r=\"18\" fill=\"#2d6a4f\" stroke=\"#faf9f5\" stroke-width=\"8\"/>";
     /** Lists: three lines. */
     readonly list: "<path d=\"M184 290 h144 M184 334 h144 M184 378 h96\" stroke=\"#2d6a4f\" stroke-width=\"26\" stroke-linecap=\"round\"/>";
     /** Shopping: a cart. */
