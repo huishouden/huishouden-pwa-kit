@@ -1,0 +1,10 @@
+{
+  "parsed": {
+    "name": "Gabapentin", "strength": "100 mg", "form": "capsules", "dose": "1 capsule",
+    "timesPerDay": 3, "intervalHours": 8, "unparsed": ["pain @@%& lorem"]
+  },
+  "course": {
+    "name": "Gabapentin 100 mg", "dose": "1 capsule", "timesPerDay": 3, "times": ["00:00", "08:00", "16:00"],
+    "startDate": "2026-03-14", "notes": "Every 8 hours"
+  }
+}

@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { VitePWA } from 'vite-plugin-pwa';
+import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
 /**
  * Vite PWA plugin with the conventions every app here shares: auto-updating service worker,
  * standalone manifest with 192/512/maskable icons from public/, and Firebase-safe navigation.
  */
 export function pwaApp(options) {
     const { overrides = {} } = options;
-    return [buildStamp(), linkPreview(options), ...VitePWA({
+    const { importScripts = [], runtimeCaching = [], ...workboxOverrides } = overrides.workbox ?? {};
+    return [buildStamp(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...VitePWA({
             registerType: 'autoUpdate',
             includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
             ...overrides,
@@ -32,7 +34,9 @@ export function pwaApp(options) {
                 globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
                 navigateFallback: '/index.html',
                 navigateFallbackDenylist: FIREBASE_RESERVED_PATHS,
-                ...(overrides.workbox || {}),
+                importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...importScripts],
+                runtimeCaching: [...(options.ocr ? [OCR_CACHE] : []), ...runtimeCaching],
+                ...workboxOverrides,
             },
         })];
 }
@@ -69,6 +73,26 @@ export function linkPreview(options) {
         },
     };
 }
+/** Emits the push handlers next to the service worker (see push-sw.ts). */
+function pushServiceWorkerFile() {
+    return {
+        name: 'huishouden-push-sw',
+        apply: 'build',
+        generateBundle() {
+            this.emitFile({ type: 'asset', fileName: PUSH_SW_FILE, source: pushServiceWorkerSource() });
+        },
+    };
+}
+/** The OCR engine's files; their URLs carry exact versions, so a cached copy never goes stale. */
+export const OCR_CACHE = {
+    urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/(?:tesseract\.js|tesseract\.js-core|@tesseract\.js-data\/eng)@v?\d/,
+    handler: 'CacheFirst',
+    options: {
+        cacheName: 'hh-ocr',
+        expiration: { maxEntries: 20, maxAgeSeconds: 365 * 86_400 },
+        cacheableResponse: { statuses: [0, 200] },
+    },
+};
 /**
  * Firebase Hosting serves its own pages under /__/ (the sign-in popup at /__/auth/handler, SDK
  * config at /__/firebase/init.json). A service worker that answers those navigations with the

@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "MIT",
   "type": "module",
@@ -24,6 +24,10 @@
     "./design-check": {
       "types": "./dist/design-check.d.ts",
       "default": "./dist/design-check.js"
+    },
+    "./dose": {
+      "types": "./dist/dose.d.ts",
+      "default": "./dist/dose.js"
     },
     "./e2e": {
       "types": "./dist/e2e.d.ts",
@@ -53,9 +57,21 @@
       "types": "./dist/places.d.ts",
       "default": "./dist/places.js"
     },
+    "./push": {
+      "types": "./dist/push.d.ts",
+      "default": "./dist/push.js"
+    },
+    "./push-sw": {
+      "types": "./dist/push-sw.d.ts",
+      "default": "./dist/push-sw.js"
+    },
     "./react/app-bar": {
       "types": "./dist/react/app-bar.d.ts",
       "default": "./dist/react/app-bar.js"
+    },
+    "./reminders": {
+      "types": "./dist/reminders.d.ts",
+      "default": "./dist/reminders.js"
     },
     "./theme.css": "./src/theme.css",
     "./vite": {
@@ -87,7 +103,8 @@
     "sharp": ">=0.33",
     "vite-plugin-pwa": ">=1.0",
     "firebase": ">=11",
-    "react": ">=19"
+    "react": ">=19",
+    "tesseract.js": ">=7 <8"
   },
   "peerDependenciesMeta": {
     "@playwright/test": {
@@ -100,6 +117,9 @@
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "tesseract.js": {
       "optional": true
     }
   },

@@ -11,6 +11,8 @@
 # Optional: POOL, PROVIDER, SA_NAME (defaults: github, github, github-deploy);
 #   ALSO_TRUSTED_OWNERS="<user or org> ..." — other owners whose repos may also deploy (each repo is
 #   still allowed separately), e.g. while repos move between a user and an org.
+#   VAPID_PUBLIC_KEY=<key> — the push sender's public key (huishouden/notify `bun run vapid`); set on
+#   every app as VITE_VAPID_PUBLIC_KEY for @huishouden/pwa-kit/push. Public, like the web config.
 #
 # Prerequisites (once per machine), all as the same Google account:
 #   npx firebase-tools login ; gcloud auth login ; gh auth login
@@ -137,6 +139,9 @@ JSON
     client_id=$(curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "x-goog-user-project: $PROJECT" \
       "https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/defaultSupportedIdpConfigs/google.com" | jq -r '.clientId // empty')
     [[ -n "$client_id" ]] && gh variable set VITE_GOOGLE_CLIENT_ID --repo "$GITHUB_OWNER/$repo" --body "$client_id"
+  fi
+  if [[ -n "${VAPID_PUBLIC_KEY:-}" ]]; then
+    gh variable set VITE_VAPID_PUBLIC_KEY --repo "$GITHUB_OWNER/$repo" --body "$VAPID_PUBLIC_KEY"
   fi
 done
 

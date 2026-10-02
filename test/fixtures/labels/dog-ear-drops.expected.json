@@ -1,0 +1,11 @@
+{
+  "parsed": {
+    "name": "Otic", "form": "suspension", "patient": "Rufus", "dose": "4 drops", "timesPerDay": 2,
+    "days": 10, "route": "in the left ear", "notes": ["Shake well. For external use only"],
+    "unparsed": [], "assumptions": []
+  },
+  "course": {
+    "name": "Otic", "dose": "4 drops", "timesPerDay": 2, "times": ["08:00", "20:00"],
+    "startDate": "2026-03-14", "days": 10, "notes": "In the left ear. Shake well. For external use only"
+  }
+}
