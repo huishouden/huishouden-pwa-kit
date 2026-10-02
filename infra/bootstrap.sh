@@ -94,6 +94,9 @@ for entry in "${APPS[@]}"; do
 {"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
 JSON
   gh api -X POST "repos/$GITHUB_OWNER/$repo/environments/production/deployment-branch-policies" -f name=main -f type=branch >/dev/null 2>&1 || true
+  # release-please opens release PRs with GITHUB_TOKEN; the default token stays read-only.
+  gh api -X PUT "repos/$GITHUB_OWNER/$repo/actions/permissions/workflow" \
+    -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true >/dev/null
 
   if [[ -n "$app_name" ]]; then
     app_id=$(firebase apps:list WEB --project "$PROJECT" --json | jq -r --arg n "$app_name" '.result[] | select(.displayName == $n) | .appId' | head -1)
