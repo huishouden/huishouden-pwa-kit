@@ -6,7 +6,7 @@
  * `app` is the app's short name ("Baby"): it words the hint and keys whether this browser has
  * already been asked (`<app>-calendar-allowed` in localStorage).
  */
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import type { Auth } from 'firebase/auth';
 import { CalendarSearch, ExternalLink, MapPin, Plus, X } from 'lucide-react';
 import { calendarError, findCalendarEvents, notImported, type CalendarMatch, type FindEventsOptions, type ImportedRecord } from '../calendar';
@@ -146,7 +146,7 @@ export function LinkedEvent({ link, onUnlink }: { link?: string; onUnlink: () =>
  * Add all. `records` are the app's own (appointments, log entries); an added event leaves the
  * list as soon as its record arrives.
  */
-export function CalendarImportDialog({ state, records, intro, noneFound, allImported, onRetry, onAdd, onClose }: {
+export function CalendarImportDialog({ state, records, intro, noneFound, allImported, onRetry, onAdd, onClose, children }: {
   state: CalendarSearchState;
   records: ImportedRecord[];
   /** What the scan looks for: "Prenatal, midwife, ultrasound and other baby events from last week to a year ahead." */
@@ -158,6 +158,8 @@ export function CalendarImportDialog({ state, records, intro, noneFound, allImpo
   onRetry: () => void;
   onAdd: (matches: CalendarMatch[]) => void;
   onClose: () => void;
+  /** Shown above the events: an app's own suggestions from the same scan (Pet's birthdays). */
+  children?: ReactNode;
 }) {
   const fresh = state.status === 'done' ? notImported(state.matches, records) : [];
   return (
@@ -185,6 +187,7 @@ export function CalendarImportDialog({ state, records, intro, noneFound, allImpo
       }
     >
       <p className="text-base text-stone-600">{intro}</p>
+      {children}
       <div className="mt-4">
         {(state.status === 'searching' || state.status === 'idle') && (
           <p role="status" className="text-base text-stone-600">

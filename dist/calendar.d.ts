@@ -17,6 +17,15 @@ export interface CalendarMatch {
     description: string;
     link: string;
     calendarName: string;
+    /** The calendar it is in, for fetching its series. */
+    calendarId?: string;
+    /** Set on one occurrence of a repeating event: the id of the series. */
+    recurringEventId?: string;
+    /**
+     * When the series began (ms; local midnight for all-day), with `findCalendarEvents(..., { seriesStart: true })`.
+     * A yearly birthday entered on the day itself begins on the birth date.
+     */
+    seriesStart?: number;
 }
 declare global {
     interface Window {
@@ -38,6 +47,7 @@ interface GoogleEvent {
     description?: string;
     htmlLink: string;
     status?: string;
+    recurringEventId?: string;
     start: {
         dateTime?: string;
         date?: string;
@@ -47,13 +57,15 @@ interface GoogleEvent {
         date?: string;
     };
 }
-export declare function toMatch(e: GoogleEvent, calendarName: string): CalendarMatch | null;
+export declare function toMatch(e: GoogleEvent, calendarName: string, calendarId?: string): CalendarMatch | null;
 export interface FindEventsOptions {
     /** Window searched, ms since epoch. Default: a week ago to a year ahead. */
     from?: number;
     to?: number;
     /** At most this many results. Default 10. */
     limit?: number;
+    /** Also look up when each repeating match's series began (`seriesStart`): one more request per series. */
+    seriesStart?: boolean;
 }
 /**
  * Events in any of the person's calendars matching one of the queries, soonest first. Each query
