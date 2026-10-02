@@ -17,8 +17,15 @@ jobs:
   pwa:
     uses: piekstra/huishouden-pwa-kit/.github/workflows/pwa.yml@v0
     permissions:
-      contents: write # README screenshots
+      contents: write # README screenshots, PR evidence branch
       id-token: write
+      pull-requests: write # before/after comment on PRs
     with:
       hosting-target: APP_TARGET
       site-url: https://APP_SITE.web.app
+
+  release:
+    uses: piekstra/huishouden-pwa-kit/.github/workflows/release.yml@v0
+    permissions:
+      contents: write
+      pull-requests: write

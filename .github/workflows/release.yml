@@ -1,0 +1,26 @@
+# Reusable: versions and changelog from Conventional Commit PR titles (release-please). On each push
+# to main it opens or updates a release PR that bumps package.json and CHANGELOG.md; merging that PR
+# tags vX.Y.Z and publishes the release notes. Callers:
+#
+#   release:
+#     uses: piekstra/huishouden-pwa-kit/.github/workflows/release.yml@v0
+#     permissions: { contents: write, pull-requests: write }
+name: release
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+        with:
+          release-type: node

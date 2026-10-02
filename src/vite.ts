@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { VitePWA, type VitePWAOptions } from 'vite-plugin-pwa';
 
 export interface PwaAppOptions {
@@ -20,7 +21,7 @@ export interface PwaAppOptions {
  */
 export function pwaApp(options: PwaAppOptions) {
   const { overrides = {} } = options;
-  return VitePWA({
+  return [buildStamp(), ...VitePWA({
     registerType: 'autoUpdate',
     includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png'],
     ...overrides,
@@ -48,7 +49,7 @@ export function pwaApp(options: PwaAppOptions) {
       navigateFallbackDenylist: FIREBASE_RESERVED_PATHS,
       ...(overrides.workbox || {}),
     },
-  });
+  })];
 }
 
 /**
@@ -57,3 +58,27 @@ export function pwaApp(options: PwaAppOptions) {
  * cached app turns "Sign in with Google" into a popup showing the app itself.
  */
 export const FIREBASE_RESERVED_PATHS = [/^\/__\//];
+
+/**
+ * Stamps the build with `import.meta.env.VITE_APP_VERSION` (package.json version, set by the release
+ * process) and `VITE_BUILD_SHA` (short commit, from CI's GITHUB_SHA), so a running app can say exactly
+ * what it is. Apps show them in their account menu or settings.
+ */
+export function buildStamp() {
+  let version = process.env.npm_package_version;
+  if (!version) {
+    try {
+      version = JSON.parse(readFileSync('package.json', 'utf8')).version;
+    } catch {}
+  }
+  const sha = (process.env.GITHUB_SHA ?? '').slice(0, 7) || 'local';
+  return {
+    name: 'huishouden-build-stamp',
+    config: () => ({
+      define: {
+        'import.meta.env.VITE_APP_VERSION': JSON.stringify(version ?? '0.0.0'),
+        'import.meta.env.VITE_BUILD_SHA': JSON.stringify(sha),
+      },
+    }),
+  };
+}
