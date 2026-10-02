@@ -14,10 +14,25 @@ describe('opening hours', () => {
     expect(isOpenAt(shop, at(0, 12))).toBe(false);
   });
 
-  test('closing time is the end of the period still open that day', () => {
+  test('closing time is the end of the period it is open in', () => {
     expect(closesAt(shop, at(1, 9))!.getHours()).toBe(18);
     expect(closesAt(shop, at(1, 19))).toBeNull();
     expect(closesAt(shop, at(0, 9))).toBeNull();
+    // Open past midnight: Saturday 1 AM is still Friday night's period, closing at 2 AM.
+    const late = parseOpeningHours('Mo-Su 09:00-17:00; Fr 18:00-02:00; Sa off')!;
+    const close = closesAt(late, at(6, 1))!;
+    expect([close.getDate(), close.getHours()]).toEqual([11, 2]);
+  });
+
+  test('days in a range do not share data', () => {
+    const h = parseOpeningHours('Mo-Fr 09:00-17:00')!;
+    expect(h[1]).not.toBe(h[5]);
+    expect(h[1]).toEqual(h[5]);
+  });
+
+  test('times follow the given locale', () => {
+    expect(describeDay(shop, at(1, 9), 'en-US')).toMatch(/^7:00\sAM – 6:00\sPM$/);
+    expect(describeDay(shop, at(1, 9), 'en-GB')).toBe('07:00 – 18:00');
   });
 
   test('later rules override earlier days; split days; past midnight; 24/7', () => {
@@ -26,8 +41,8 @@ describe('opening hours', () => {
     expect(isOpenAt(h, at(5, 23))).toBe(true);
     expect(isOpenAt(h, at(6, 1))).toBe(true); // Friday night into Saturday
     expect(isOpenAt(parseOpeningHours('24/7')!, at(0, 3))).toBe(true);
-    expect(describeDay(parseOpeningHours('24/7')!, at(2, 3))).toBe('Open 24 hours');
-    expect(describeDay(shop, at(0, 9))).toBe('Closed');
+    expect(describeDay(parseOpeningHours('24/7')!, at(2, 3), 'en-US')).toBe('Open 24 hours');
+    expect(describeDay(shop, at(0, 9), 'en-US')).toBe('Closed');
   });
 
   test('unsupported forms are not guessed at', () => {

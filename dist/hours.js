@@ -62,7 +62,7 @@ export function parseOpeningHours(text) {
         if (!days || !times)
             return null;
         for (const d of days)
-            week[d] = times;
+            week[d] = times.map((p) => [p[0], p[1]]);
     }
     return week;
 }
@@ -77,25 +77,27 @@ export function isOpenAt(hours, date) {
     return yesterday.some(([, close]) => close > 24 * 60 && now < close - 24 * 60);
 }
 /**
- * When the place closes on that date's day, as a Date, for the last period that is still open at
- * or after `date`'s time; null when it is closed for the rest of the day.
+ * When the place closes, if it is open at `date`: the end of the period it is in, including one
+ * that started the evening before and runs past midnight. Null when it is closed at `date`.
  */
 export function closesAt(hours, date) {
+    const day = date.getDay();
     const now = minutesOf(date);
-    const period = hours[date.getDay()].filter(([, close]) => close > now).sort((a, b) => a[1] - b[1])[0];
-    if (!period)
-        return null;
-    const at = new Date(date);
-    at.setHours(0, 0, 0, 0);
-    at.setMinutes(period[1]);
-    return at;
+    const midnight = new Date(date);
+    midnight.setHours(0, 0, 0, 0);
+    const at = (minutes) => new Date(midnight.getTime() + minutes * 60_000);
+    const yesterday = hours[(day + 6) % 7].find(([, close]) => close > 24 * 60 && now < close - 24 * 60);
+    if (yesterday)
+        return at(yesterday[1] - 24 * 60);
+    const today = hours[day].find(([open, close]) => now >= open && now < close);
+    return today ? at(today[1]) : null;
 }
-/** "7:00 AM – 6:00 PM", "Closed" for that date's day, in the device's locale. */
-export function describeDay(hours, date) {
+/** "7:00 AM – 6:00 PM", "Closed" or "Open 24 hours" for that date's day; times in `locale`. */
+export function describeDay(hours, date, locale = navigator.language) {
     const periods = hours[date.getDay()];
     if (periods.length === 0)
         return 'Closed';
-    const time = (m) => new Date(2000, 0, 1, Math.floor(m / 60) % 24, m % 60).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const time = (m) => new Date(2000, 0, 1, Math.floor(m / 60) % 24, m % 60).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
     if (periods.length === 1 && periods[0][0] === 0 && periods[0][1] === 24 * 60)
         return 'Open 24 hours';
     return periods.map(([o, c]) => `${time(o)} – ${time(c)}`).join(', ');

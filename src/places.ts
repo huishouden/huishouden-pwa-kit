@@ -188,7 +188,7 @@ const OVERPASS_SERVERS = [
 ];
 
 /** A hung server counts as a failure, so the next fallback runs instead of waiting forever. */
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 10_000;
 
 async function searchOverpass(text: string, near: NearPoint, radiusKm: number, fetchImpl: typeof fetch): Promise<Place[]> {
   const body = new URLSearchParams({ data: overpassQuery(text, near, radiusKm) }).toString();
@@ -215,14 +215,20 @@ async function searchNominatim(q: string, limit: number, fetchImpl: typeof fetch
   const params: Record<string, string> = { q, format: 'jsonv2', extratags: '1', limit: String(limit) };
   if (near) Object.assign(params, { viewbox: viewbox(near, radiusKm), bounded: '1' });
   url.search = new URLSearchParams(params).toString();
-  const res = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`[${res.status}] Place search failed`);
+  let res: Response;
+  try {
+    res = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  } catch (e) {
+    throw new PlaceSearchUnavailable(e);
+  }
+  if (!res.ok) throw new PlaceSearchUnavailable(new Error(`[${res.status}] Place search failed`));
   return ((await res.json()) as NominatimResult[]).map(toPlace);
 }
 
 /**
- * Thrown by a `near` search when every Overpass server failed and the fallback found nothing, so
- * apps can say "the map service is busy" instead of "nothing nearby".
+ * The free map service is busy or unreachable (rate limits, timeouts, server errors), so apps can
+ * say so instead of "nothing nearby". A `near` search throws it when every Overpass server failed
+ * and the Nominatim fallback failed or found nothing; a name search when Nominatim fails.
  */
 export class PlaceSearchUnavailable extends Error {
   constructor(cause: unknown) {
@@ -245,8 +251,16 @@ export async function searchPlaces(query: string, { limit = 5, near, radiusKm = 
     overpassError = e;
     return [] as Place[];
   });
-  if (places.length === 0) places = await searchNominatim(q, Math.max(limit, 10), fetchImpl, near, radiusKm).catch(() => []);
-  if (places.length === 0 && overpassError) throw new PlaceSearchUnavailable(overpassError);
+  let nominatimError: unknown = null;
+  if (places.length === 0) {
+    places = await searchNominatim(q, Math.max(limit, 10), fetchImpl, near, radiusKm).catch((e: unknown) => {
+      nominatimError = e;
+      return [] as Place[];
+    });
+  }
+  // Both down: busy. Overpass down but Nominatim answered empty: also busy, since only Overpass
+  // finds places by kind. Overpass answered empty: nothing there.
+  if (places.length === 0 && overpassError) throw new PlaceSearchUnavailable(nominatimError ? [overpassError, nominatimError] : overpassError);
   const seen = new Set<string>();
   return places
     .map((p) => ({ ...p, distanceKm: distanceKm(near, p) }))

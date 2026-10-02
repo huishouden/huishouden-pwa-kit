@@ -13,8 +13,8 @@ approval and a billing account.
 
 **What the free option misses:**
 
-- Coverage. Many suburban US businesses are not in OpenStreetMap at all. Near one household, Google
-  Maps shows several dry cleaners within a mile; OpenStreetMap had no dry cleaners or laundries mapped within 3 miles.
+- Coverage. Many suburban businesses are not in OpenStreetMap at all; a search for a common errand
+  (dry cleaning) can return nothing where Google Maps lists several nearby.
 - Hours. OpenStreetMap rarely has `opening_hours` outside city centres, and never holiday hours or
   "open now" from the business itself.
 - Reliability. The public Overpass servers rate-limit and time out under load (HTTP 429 and 504), so

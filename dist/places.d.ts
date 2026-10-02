@@ -69,8 +69,9 @@ export declare const PLACE_KINDS: readonly PlaceKind[];
 /** The OpenStreetMap tags the text asks for, from `PLACE_KINDS`. */
 export declare function placeKinds(text: string): string[];
 /**
- * Thrown by a `near` search when every Overpass server failed and the fallback found nothing, so
- * apps can say "the map service is busy" instead of "nothing nearby".
+ * The free map service is busy or unreachable (rate limits, timeouts, server errors), so apps can
+ * say so instead of "nothing nearby". A `near` search throws it when every Overpass server failed
+ * and the Nominatim fallback failed or found nothing; a name search when Nominatim fails.
  */
 export declare class PlaceSearchUnavailable extends Error {
     constructor(cause: unknown);
