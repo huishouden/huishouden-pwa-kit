@@ -100,8 +100,18 @@ for entry in "${APPS[@]}"; do
 JSON
   gh api -X POST "repos/$GITHUB_OWNER/$repo/environments/production/deployment-branch-policies" -f name=main -f type=branch >/dev/null 2>&1 || true
   # release-please opens release PRs with GITHUB_TOKEN; the default token stays read-only.
-  gh api -X PUT "repos/$GITHUB_OWNER/$repo/actions/permissions/workflow" \
-    -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true >/dev/null
+  # An organization must allow this first (org admin): Settings > Actions > Workflow permissions.
+  if ! gh api -X PUT "repos/$GITHUB_OWNER/$repo/actions/permissions/workflow" \
+    -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true >/dev/null 2>/tmp/bootstrap-gh.err; then
+    if grep -q "organization does not allow" /tmp/bootstrap-gh.err; then
+      echo "The $GITHUB_OWNER organization blocks Actions from opening pull requests (release-please needs it)." >&2
+      echo "Allow it at https://github.com/organizations/$GITHUB_OWNER/settings/actions" >&2
+      echo "(Workflow permissions > Allow GitHub Actions to create and approve pull requests), then re-run." >&2
+    else
+      cat /tmp/bootstrap-gh.err >&2
+    fi
+    exit 1
+  fi
 
   if [[ -n "$app_name" ]]; then
     app_id=$(firebase apps:list WEB --project "$PROJECT" --json | jq -r --arg n "$app_name" '.result[] | select(.displayName == $n) | .appId' | head -1)
