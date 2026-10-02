@@ -30,7 +30,7 @@ mock.module('firebase/firestore', () => ({
   },
 }));
 
-const { REMINDER_FIELDS, cancelReminders, reminderDoc, reminderId, remindersForCourse, replaceReminders, toReminder, upsertReminder } = await import('../src/reminders');
+const { REMINDER_FIELDS, cancelReminders, reminderDoc, reminderId, remindersForCourse, replaceReminders, syncReminders, toReminder, upsertReminder } = await import('../src/reminders');
 
 const db = {} as real.Firestore;
 const NOW = new Date(2026, 2, 14, 12, 0).getTime();
@@ -125,5 +125,37 @@ describe('writing reminders', () => {
     const n = await cancelReminders(db, 'h1', 'pet:course:c1');
     expect(n).toBe(6);
     expect([...store.keys()]).toEqual(['households/h1/reminders/other']);
+  });
+});
+
+describe('syncReminders', () => {
+  const H = 'households/h1/reminders';
+  const input = (ref: string, when: number, title = 'Drop off dry cleaning') => ({ app: 'tasks', title, at: when, url: 'https://tasks.example.com/?item=1', ref });
+
+  test('writes new reminders, leaves unchanged ones, deletes future ones no longer wanted', async () => {
+    store.clear();
+    const first = await syncReminders(db, 'h1', 'tasks', [input('tasks:item:a', at(15, 9)), input('tasks:item:b', at(16, 9))], 'alex@example.com', NOW);
+    expect(first).toEqual({ written: 2, deleted: 0, unchanged: 0 });
+    const again = await syncReminders(db, 'h1', 'tasks', [input('tasks:item:a', at(15, 9)), input('tasks:item:b', at(16, 9))], 'sam@example.com', NOW);
+    expect(again).toEqual({ written: 0, deleted: 0, unchanged: 2 });
+    const moved = await syncReminders(db, 'h1', 'tasks', [input('tasks:item:a', at(15, 9), 'Pick up dry cleaning')], 'alex@example.com', NOW);
+    expect(moved).toEqual({ written: 1, deleted: 1, unchanged: 0 });
+    expect([...store.keys()]).toEqual([`${H}/${reminderId('tasks:item:a', at(15, 9))}`]);
+    expect(store.get(`${H}/${reminderId('tasks:item:a', at(15, 9))}`)?.title).toBe('Pick up dry cleaning');
+  });
+
+  test('never touches past or sent reminders, or another app\'s', async () => {
+    store.clear();
+    store.set(`${H}/past`, { app: 'tasks', at: at(13, 9), sent: true, ref: 'tasks:item:old' });
+    store.set(`${H}/sent`, { app: 'tasks', at: at(15, 9), sent: true, ref: 'tasks:item:s' });
+    store.set(`${H}/pet`, { app: 'pet', at: at(15, 9), sent: false, ref: 'pet:course:c1' });
+    const result = await syncReminders(db, 'h1', 'tasks', [], 'alex@example.com', NOW);
+    expect(result).toEqual({ written: 0, deleted: 0, unchanged: 0 });
+    expect([...store.keys()].sort()).toEqual([`${H}/past`, `${H}/pet`, `${H}/sent`]);
+  });
+
+  test('past times in the list are skipped', async () => {
+    store.clear();
+    expect(await syncReminders(db, 'h1', 'tasks', [input('tasks:item:a', at(14, 8))], 'alex@example.com', NOW)).toEqual({ written: 0, deleted: 0, unchanged: 0 });
   });
 });
