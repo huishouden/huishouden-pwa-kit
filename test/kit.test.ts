@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { firebaseConfigFromEnv } from '../src/firebase';
-import { FIREBASE_RESERVED_PATHS, linkPreview, pwaApp } from '../src/vite';
+import { FIREBASE_RESERVED_PATHS, linkPreview, pwaApp, telemetryChunks } from '../src/vite';
 
 describe('firebaseConfigFromEnv', () => {
   const env = {
@@ -38,6 +38,15 @@ describe('pwaApp', () => {
     const plugins = pwaApp({ name: 'Demo', description: 'd', themeColor: '#000', backgroundColor: '#fff' });
     expect(Array.isArray(plugins)).toBe(true);
     expect(plugins.length).toBeGreaterThan(0);
+  });
+});
+
+describe('telemetryChunks', () => {
+  const name = telemetryChunks().config().build.rollupOptions.output.chunkFileNames;
+  test('names chunks made only of the New Relic agent nr-*, which the precache skips', () => {
+    expect(name({ moduleIds: ['/app/node_modules/@newrelic/browser-agent/src/features/jserrors/index.js'] })).toBe('assets/nr-[name]-[hash].js');
+    expect(name({ moduleIds: ['/app/src/App.tsx', '/app/node_modules/@newrelic/browser-agent/src/x.js'] })).toBe('assets/[name]-[hash].js');
+    expect(name({ moduleIds: [] })).toBe('assets/[name]-[hash].js');
   });
 });
 
