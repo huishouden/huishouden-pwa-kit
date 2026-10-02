@@ -26,7 +26,32 @@ judges the rest, and `expectHuishoudenFrame` checks the running app.
   (`huishouden/spending`); the kit is `huishouden/pwa-kit`, the portal `huishouden/portal`. Hosting
   site names are global, so they keep the prefix: `huishouden-<app>.web.app`.
 - Dutch appears in the suite name and small touches (the portal's greeting), never in labels a
-  reader needs to understand.
+  reader needs to understand. A Dutch word on screen explains itself on hover or tap (`<hh-word>`).
+
+## Describing an app
+
+How an app introduces itself (manifest and link-preview description, the portal tile, READMEs, the
+org page) is **holistic, not a feature list**. Say what part of household life it looks after, in
+a few plain words; the app shows the details. Feature lists go stale as apps grow and make each app
+read like a spec.
+
+- One short line, no colons or lists: "Where the household's money goes", not "Card spending by
+  month, category and card".
+- Never name data sources, devices or services ("synced with Google Sheets", "for Pixel Tablet",
+  "read from your statement emails").
+- The same line everywhere: it is written once, in the app's `pwaApp({ description })`, and the
+  portal registry repeats it.
+
+| App | Description |
+|---|---|
+| Huishouden (portal) | Your household's apps, together in one place |
+| Spending | Where the household's money goes |
+| Tasks | Shared lists and chores |
+| Baby | Looking after the little one, together |
+| Pet | Looking after the pets, together |
+| Home | Keeping the house in good shape |
+| Car | Keeping the cars on the road |
+| Bills | What's due, and when |
 
 ## Logos
 
@@ -37,9 +62,14 @@ forest-600. Only the glyph changes between apps: portal `home` (a door), Tasks `
 
 ## Frame
 
-- Top: the Huishouden app bar (`<hh-app-bar>` from `@huishouden/pwa-kit/app-bar` when available;
-  until then the same anatomy by hand): house mark that links to the portal, the app's name, the
-  app switcher, and the signed-in profile photo (`.hh-avatar`) on the right.
+- Top: the Huishouden app bar, `<hh-app-bar>` from `@huishouden/pwa-kit/app-bar` (React:
+  `AppBar` from `@huishouden/pwa-kit/react/app-bar`). Never hand-build it. It holds the family logo
+  linking to the portal, "Huishouden" over the app's short name (the portal shows "Huishouden"
+  alone), the app's own tabs or switchers in the `nav` slot (beside the name on tablets, a second
+  row on phones), app buttons in the `actions` slot, and on the right "Sign in with Google" or the
+  signed-in profile photo (`.hh-avatar`) opening the account menu: name, email, All apps, Sign out,
+  and the running version. `theme="dark"` for dark screens. Sticky, cream, a stone-200 rule below,
+  content width 1200px.
 - Page background `--hh-cream`; content on white surfaces; max content width 1200px, centred;
   24px page padding (16px on phones), honouring safe-area insets.
 - Tablet landscape (1280×800) first, then phone portrait. Nothing important below the fold on the tablet.
@@ -124,5 +154,5 @@ except an exit control.
 | Check | Where | Catches |
 |---|---|---|
 | `pwa-design-check` | CI build job, every PR | Off-palette Tailwind colours, gradients, raw hex, `backdrop-blur`, other fonts, emoji in UI text |
-| `expectHuishoudenFrame` | Smoke tests against the live site | Cream page, Inter font, app bar present |
+| `expectHuishoudenFrame` | Smoke tests against the live site | App bar present, logo links to the portal, the app's name, Inter |
 | `huishouden/design-language` reviewer | `cr review` on every PR | Everything above that needs judgment: hierarchy, copy tone, component shapes, consistency with the other apps |

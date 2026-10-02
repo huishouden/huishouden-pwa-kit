@@ -5,7 +5,8 @@ apps that each live in their own repo. Every piece exists because an app hit the
 
 | Piece | Path | What it does |
 |---|---|---|
-| Vite preset | `@huishouden/pwa-kit/vite` | `pwaApp({...})`: manifest, auto-updating service worker, and a navigation fallback that leaves Firebase's `/__/` paths alone (otherwise "Sign in with Google" opens the app in the popup) |
+| App bar | `@huishouden/pwa-kit/app-bar`, `@huishouden/pwa-kit/react/app-bar` | `<hh-app-bar app glyph portal-url version>`: the Huishouden frame (family logo to the portal, "Huishouden" over the app name, `nav` and `actions` slots, Sign in with Google or the avatar with an account menu: name, email, All apps, Sign out, version). Raises `hh-sign-in` / `hh-sign-out`; the app sets `bar.user`. `AppBar` is the React 19 wrapper (`onSignIn`, `onSignOut`, `user`); `react` is an optional peer |
+| Vite preset | `@huishouden/pwa-kit/vite` | `pwaApp({...})`: link-preview tags (description, Open Graph, `og.png` from `pwa-icons`; pass `url`), manifest, auto-updating service worker, and a navigation fallback that leaves Firebase's `/__/` paths alone (otherwise "Sign in with Google" opens the app in the popup); `push: true` adds the notification handlers to the service worker, `ocr: true` keeps the label reader working offline |
 | Firebase config | `@huishouden/pwa-kit/firebase` | `firebaseConfigFromEnv(import.meta.env, fallback?)` from `VITE_FIREBASE_*`; auth domain defaults to `<project>.firebaseapp.com`, the only redirect the auto-created OAuth client allows |
 | Silent sign-in | `@huishouden/pwa-kit/auth` | `signInSilently(auth, clientId)`: Google One Tap with auto-select into Firebase, so each app signs in without a click once the browser is signed in to Google; reports Google's reason when it can't |
 | Household | `@huishouden/pwa-kit/household` | `watchHousehold`, `findHousehold`, `saveMyProfile`, `watchProfiles` (members' own names and photos), `inviteMember`, `removeMember`, `markJoined`, `createHousehold`: one `households/{id}` document (members by lowercase email) shared by every app; each app keeps its data in subcollections, so one invite opens every app |
@@ -15,8 +16,11 @@ apps that each live in their own repo. Every piece exists because an app hit the
 | Place lookup | `@huishouden/pwa-kit/places` | `searchPlaces(query)`: free OpenStreetMap search for a business's address, phone and website (no key, no billing); `mapsSearchUrl`, `telHref`. |
 | Sign-in origin check | `@huishouden/pwa-kit/oauth-origins`, bin `pwa-oauth-origins` | `originStatus(clientId, origin)`: whether a site is an Authorized JavaScript origin of the OAuth client (Chrome's sign-in prompt needs it; Google has no API to add one). CI checks every deploy; the bootstrap lists any missing. |
 | Invite email | `@huishouden/pwa-kit/invite` | `sendInviteEmail(auth, invite)`: the invitation from the inviter's own Gmail (one-time send permission); `inviteMailto` opens a prefilled draft instead. |
+| Medicine labels | `@huishouden/pwa-kit/dose` | `readLabel(photo)`: on-device OCR of a pharmacy or vet label (tesseract.js, loaded only when used; nothing uploaded or stored); `parseDirections(text)`: once/twice daily, every N hours, BID/TID/QID/SID/q12h, morning/bedtime, for N days, until gone, with food, dose and name, with anything not understood in `unparsed` and every assumption in `assumptions`; `toMedCourse`, `doseTimes`, `courseDays`, `doseSlots`, `doseState`, `doseSummary` (due, missed, next). |
+| Reminders | `@huishouden/pwa-kit/reminders` | `households/{id}/reminders`, any app's reminders delivered as push notifications by the shared sender ([huishouden/notify](https://github.com/huishouden/notify)): `upsertReminder`, `cancelReminder`, `cancelReminders(ref)`, `replaceReminders(ref, list)`, `remindersForCourse(course)` (one per future dose, idempotent ids), `watchReminders`; `REMINDER_FIELDS` for the rules. |
+| Push notifications | `@huishouden/pwa-kit/push`, `pwaApp({ push: true })` | Web Push with VAPID, no Firebase Messaging: `pushSupport()` (with the reason and a sentence when unavailable, e.g. iPhone not added to the Home Screen), `enablePush(db, householdId, user, VITE_VAPID_PUBLIC_KEY, { app })`, `disablePush`, `pushEnabled`; `pwaApp({ push: true })` adds the service-worker handlers (show, tap to open the deep link); `PUSH_SUBSCRIPTION_FIELDS` for the rules. |
 | Theme | `@huishouden/pwa-kit/theme.css` | Shared colours, radius, font, `.hh-button` and `.hh-avatar` (signed-in profile photo) as CSS variables (works with or without Tailwind) |
-| Smoke checks | `@huishouden/pwa-kit/e2e` | Playwright helpers: `expectCleanLoad`, `expectInstallable`, `expectGoogleSignInPopup` (no credentials needed), `captureScreenshot` (deterministic README screenshots, refreshed by CI after each deploy) |
+| Smoke checks | `@huishouden/pwa-kit/e2e` | Playwright helpers: `expectCleanLoad`, `expectInstallable`, `expectGoogleSignInPopup` (no credentials needed), `expectHuishoudenFrame(page, { app, portalUrl })` (the app bar, its portal link and the app name), `captureScreenshot` (deterministic README screenshots, refreshed by CI after each deploy) |
 | Reusable CI/CD | `.github/workflows/pwa.yml` | leak scan, design check, build and unit tests, before/after screenshots commented on every PR, keyless deploy to Firebase Hosting, smoke tests against the live site, README screenshots |
 | Releases | `.github/workflows/release.yml` | release-please: version bumps, `CHANGELOG.md` and tagged releases from Conventional Commit PR titles |
 | Build stamp | `pwaApp()` | `import.meta.env.VITE_APP_VERSION` and `VITE_BUILD_SHA` in every build, for showing what's running |
@@ -31,7 +35,7 @@ The conventions behind these are in [STANDARD.md](STANDARD.md).
 ## Install
 
 ```sh
-bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.12.0
+bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.19.0
 ```
 
 Spell out the package name: `bun add github:huishouden/pwa-kit#…` alone fails with `DependencyLoop`.
@@ -53,6 +57,39 @@ import { test } from '@playwright/test';
 import { expectCleanLoad, expectInstallable } from '@huishouden/pwa-kit/e2e';
 test('loads', ({ page }) => expectCleanLoad(page));
 test('installable', ({ page, request }) => expectInstallable(page, request));
+```
+
+```ts
+// Vanilla: the bar renders itself; the app owns sign-in.
+import '@huishouden/pwa-kit/app-bar';
+const bar = document.querySelector('hh-app-bar')!; // <hh-app-bar app="Groceries" glyph="cart" portal-url="https://example-portal.web.app">
+onAuthStateChanged(auth, (user) => (bar.user = user));
+bar.addEventListener('hh-sign-in', () => signInWithPopup(auth, new GoogleAuthProvider()));
+bar.addEventListener('hh-sign-out', () => signOut(auth));
+```
+
+```tsx
+// React 19
+import { AppBar } from '@huishouden/pwa-kit/react/app-bar';
+<AppBar app="Groceries" glyph="cart" portalUrl={PORTAL_URL} version={`${import.meta.env.VITE_APP_VERSION} (${import.meta.env.VITE_BUILD_SHA})`}
+        user={user} onSignIn={signIn} onSignOut={signOut}>
+  <nav slot="nav">…tabs…</nav>
+  <button slot="actions">…</button>
+</AppBar>
+```
+
+```ts
+// A medicine label to a course and its dose reminders (bun add tesseract.js for readLabel).
+import { parseDirections, readLabel, toMedCourse } from '@huishouden/pwa-kit/dose';
+import { remindersForCourse, replaceReminders } from '@huishouden/pwa-kit/reminders';
+import { enablePush, pushSupport } from '@huishouden/pwa-kit/push';
+const parsed = parseDirections(await readLabel(photo)); // show parsed.unparsed and parsed.assumptions for checking
+const course = { id, ...toMedCourse(parsed, { startDate: '2026-03-14' }) };
+await replaceReminders(db, householdId, `pet:course:${id}`,
+  remindersForCourse(course, { app: 'pet', url: `https://example-pet.web.app/meds/${id}` }), user.email);
+// Settings: a "Notify me" button (pwaApp({ push: true }) in vite.config.ts)
+const support = pushSupport(); // { supported: false, message } explains iPhone Home Screen etc.
+await enablePush(db, householdId, user, import.meta.env.VITE_VAPID_PUBLIC_KEY, { app: 'pet' });
 ```
 
 ```yaml

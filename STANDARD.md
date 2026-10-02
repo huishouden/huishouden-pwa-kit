@@ -4,6 +4,28 @@ Every app built on pwa-kit follows this.
 Each rule is here because skipping it broke something; the reason is given so the rule can be
 judged rather than copied.
 
+## Who it's for
+
+**Built for any household, free.** Anyone can open an app, sign in with Google, create a household
+and use everything without us setting anything up for them. The maintainers' own household is one
+user of it (dogfooding), never a special case. So:
+
+- **Self-serve only.** Every feature works from the app for a new household: no per-household
+  Sheets, scripts, config files, IDs or console steps done by a maintainer.
+- **No single-machine or single-account dependencies.** Nothing may need a particular laptop to be
+  on, a maintainer's GitHub account or secrets, or their personal CLIs. Connectivity to outside
+  services runs as the household's own Google account (in the browser, with permissions the member
+  grants), or in shared infrastructure that serves every household the same way.
+- **Free for households and for us.** Free tiers only (Firebase Spark, GitHub public repos, free
+  APIs). A feature that needs a paid plan or a billing account is a decision for the user, raised
+  with its cost, not a default.
+- **Their data, their account.** Household data lives in the household's Firestore documents;
+  external data is fetched with the member's own consent and never through maintainers' credentials.
+- **Know the limits we accept by staying free**: no scheduled server code on Spark (sync runs when
+  someone opens an app, and the shared tablet keeps one open; the one exception is the shared
+  notification sender on Cloudflare's free plan, see Notifications); Google's restricted scopes (reading
+  email) work unverified for up to 100 users with a warning screen.
+
 ## Shape
 
 - **One repo per app**. Its own CI, its own deploys.
@@ -40,6 +62,30 @@ judged rather than copied.
 - People, accounts, card numbers and other personal facts are data, not code: keep them in the
   app's data store (a sheet tab, Firestore), never in the repo, including test fixtures (use
   made-up values). A leak scan can't recognise most of these, so this rule is the protection.
+
+## Notifications
+
+Reminders reach people as push notifications through one shared sender,
+[huishouden/notify](https://github.com/huishouden/notify): a Cloudflare Worker (free plan) that runs
+every five minutes for every household in the project, the same way. No app sends anything itself
+and no household sets anything up.
+
+- **Reminders are data.** An app writes them to `households/{id}/reminders` with
+  `@huishouden/pwa-kit/reminders` (`upsertReminder`, or `replaceReminders(ref, remindersForCourse(...))`
+  for a medicine course) and deletes them when they no longer apply. Each has an https deep link
+  back into the app. Ids are idempotent, so saving the same thing twice never doubles a reminder.
+- **Each person opts in per device.** A "Notify me" control calls `enablePush` from a tap; it stores
+  the device's subscription in `households/{id}/pushSubscriptions`, which only that person and the
+  sender can read. Build with `pwaApp({ push: true })` and the `VITE_VAPID_PUBLIC_KEY` repo variable
+  (the bootstrap sets it when `apps.conf` has `VAPID_PUBLIC_KEY`).
+- **Say why when it can't.** `pushSupport()` gives the reason and a sentence to show. iPhone and iPad
+  get notifications only from an app added to the Home Screen, on iOS/iPadOS 16.4 or later; in a
+  Safari tab the app explains how to add it rather than showing a button that does nothing.
+- **Timing**: up to five minutes late; reminders more than 12 hours overdue (the sender was down)
+  are dropped rather than sent. Anything that must not be missed also shows in the app itself.
+- **Rules**: the `reminders` and `pushSubscriptions` blocks live in the project's rules file (fields
+  match `REMINDER_FIELDS` and `PUSH_SUBSCRIPTION_FIELDS`), with the collection-group index on
+  `reminders` (`sent`, `at`) the sender's query needs.
 
 ## CI/CD
 

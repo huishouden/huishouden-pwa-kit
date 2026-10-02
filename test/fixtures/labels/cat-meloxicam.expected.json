@@ -1,0 +1,11 @@
+{
+  "parsed": {
+    "name": "Meloxicam", "strength": "1.5 mg/ml", "form": "oral suspension", "patient": "Pepper",
+    "dose": "0.1 ml", "timesPerDay": 1, "untilGone": true, "withFood": true,
+    "notes": ["Shake well before use"], "unparsed": [], "assumptions": []
+  },
+  "course": {
+    "name": "Meloxicam 1.5 mg/ml", "dose": "0.1 ml", "timesPerDay": 1, "times": ["08:00"],
+    "startDate": "2026-03-14", "withFood": true, "notes": "Until gone. Shake well before use"
+  }
+}

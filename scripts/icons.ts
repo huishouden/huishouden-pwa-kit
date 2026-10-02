@@ -14,3 +14,9 @@ await sharp({ create: { width: 512, height: 512, channels: 4, background: proces
   .composite([{ input: await sharp(src).resize(410, 410).png().toBuffer(), gravity: 'center' }])
   .png()
   .toFile('public/pwa-maskable-512.png');
+// Link preview image (Open Graph, 1200×630): the logo on the cream page colour. pwaApp() points
+// og:image at it; messaging apps show it when someone shares the link.
+await sharp({ create: { width: 1200, height: 630, channels: 4, background: '#faf9f5' } })
+  .composite([{ input: await sharp(src).resize(320, 320).png().toBuffer(), gravity: 'center' }])
+  .png()
+  .toFile('public/og.png');

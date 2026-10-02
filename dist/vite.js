@@ -1,14 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { VitePWA } from 'vite-plugin-pwa';
+import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
 /**
  * Vite PWA plugin with the conventions every app here shares: auto-updating service worker,
  * standalone manifest with 192/512/maskable icons from public/, and Firebase-safe navigation.
  */
 export function pwaApp(options) {
     const { overrides = {} } = options;
-    return [buildStamp(), ...VitePWA({
+    const { importScripts = [], runtimeCaching = [], ...workboxOverrides } = overrides.workbox ?? {};
+    return [buildStamp(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...VitePWA({
             registerType: 'autoUpdate',
-            includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png'],
+            includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
             ...overrides,
             manifest: {
                 id: '/',
@@ -32,10 +34,65 @@ export function pwaApp(options) {
                 globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
                 navigateFallback: '/index.html',
                 navigateFallbackDenylist: FIREBASE_RESERVED_PATHS,
-                ...(overrides.workbox || {}),
+                importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...importScripts],
+                runtimeCaching: [...(options.ocr ? [OCR_CACHE] : []), ...runtimeCaching],
+                ...workboxOverrides,
             },
         })];
 }
+const escapeAttr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+/**
+ * What a shared link shows (Messages, WhatsApp, Slack...): the page description and Open Graph /
+ * Twitter tags, written from the same name and description as the manifest so there is one source.
+ * Any description or og:/twitter: tags already in index.html are replaced.
+ */
+export function linkPreview(options) {
+    const base = options.url?.replace(/\/$/, '') ?? '';
+    const tags = [
+        ['name', 'description', options.description],
+        ['property', 'og:type', 'website'],
+        ['property', 'og:site_name', 'Huishouden'],
+        ['property', 'og:title', options.name],
+        ['property', 'og:description', options.description],
+        ['property', 'og:image', `${base}/og.png`],
+        ['property', 'og:image:width', '1200'],
+        ['property', 'og:image:height', '630'],
+        ['name', 'twitter:card', 'summary_large_image'],
+        ['name', 'twitter:title', options.name],
+        ['name', 'twitter:description', options.description],
+        ['name', 'twitter:image', `${base}/og.png`],
+    ];
+    if (base)
+        tags.push(['property', 'og:url', `${base}/`]);
+    return {
+        name: 'huishouden-link-preview',
+        transformIndexHtml(html) {
+            const cleaned = html.replace(/\s*<meta\s+(?:name="description"|(?:property|name)="(?:og|twitter):[^"]*")[^>]*>/g, '');
+            const meta = tags.map(([attr, key, value]) => `    <meta ${attr}="${key}" content="${escapeAttr(value)}" />`).join('\n');
+            return cleaned.replace(/<\/head>/, `${meta}\n  </head>`);
+        },
+    };
+}
+/** Emits the push handlers next to the service worker (see push-sw.ts). */
+function pushServiceWorkerFile() {
+    return {
+        name: 'huishouden-push-sw',
+        apply: 'build',
+        generateBundle() {
+            this.emitFile({ type: 'asset', fileName: PUSH_SW_FILE, source: pushServiceWorkerSource() });
+        },
+    };
+}
+/** The OCR engine's files; their URLs carry exact versions, so a cached copy never goes stale. */
+export const OCR_CACHE = {
+    urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/(?:tesseract\.js|tesseract\.js-core|@tesseract\.js-data\/eng)@v?\d/,
+    handler: 'CacheFirst',
+    options: {
+        cacheName: 'hh-ocr',
+        expiration: { maxEntries: 20, maxAgeSeconds: 365 * 86_400 },
+        cacheableResponse: { statuses: [0, 200] },
+    },
+};
 /**
  * Firebase Hosting serves its own pages under /__/ (the sign-in popup at /__/auth/handler, SDK
  * config at /__/firebase/init.json). A service worker that answers those navigations with the
