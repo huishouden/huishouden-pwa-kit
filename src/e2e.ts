@@ -62,7 +62,8 @@ export interface ScreenshotOptions {
  * commits docs/screenshots back to main when the bytes change.
  */
 export async function captureScreenshot(page: Page, name: string, options: ScreenshotOptions = {}) {
-  const { path = '/', fixedTime, dir = 'docs/screenshots', prepare } = options;
+  // SCREENSHOT_DIR lets CI shoot the same scenes into before/ and after/ folders for PR evidence.
+  const { path = '/', fixedTime, dir = process.env.SCREENSHOT_DIR || 'docs/screenshots', prepare } = options;
   if (fixedTime) await page.clock.setFixedTime(fixedTime);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(path, { waitUntil: 'networkidle' });
