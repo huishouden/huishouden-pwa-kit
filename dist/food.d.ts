@@ -26,6 +26,15 @@ export declare const DIET_STRICT: Readonly<Record<Diet, boolean>>;
 export declare function isStrict(diet: Diet): boolean;
 /** The preference diets, in DIETS order. */
 export declare const GENTLE_DIETS: readonly Diet[];
+/**
+ * How much heat (chili spice) someone enjoys. Matches the 0–3 heat scale meal ideas use:
+ * none = 0 (a slight touch now and then is tolerable, not ideal), mild = 1, medium = 2, hot = 3.
+ */
+export declare const SPICE_LEVELS: readonly ["none", "mild", "medium", "hot"];
+export type SpiceTolerance = (typeof SPICE_LEVELS)[number];
+export declare const SPICE_LABELS: Record<SpiceTolerance, string>;
+/** The highest heat (0–3) that suits someone most of the time. */
+export declare const SPICE_MAX_HEAT: Record<SpiceTolerance, number>;
 export interface FoodPerson {
     /** Stable within the household's list: the member's email, or an invented id for someone without an account. */
     id: string;
@@ -35,6 +44,8 @@ export interface FoodPerson {
     diets: Diet[];
     /** Ingredients they avoid or dislike: "cilantro", "olives". */
     avoid: string[];
+    /** Heat tolerance; absent means no preference. */
+    spice?: SpiceTolerance;
     note?: string;
 }
 export interface FoodPreferences {
@@ -47,7 +58,7 @@ export interface FoodPreferences {
 }
 export type FoodInput = Pick<FoodPreferences, 'people' | 'pantryAssumed'>;
 export declare const FOOD_FIELDS: readonly ["people", "pantryAssumed", "updatedAt", "by"];
-export declare const FOOD_PERSON_FIELDS: readonly ["id", "name", "member", "diets", "avoid", "note"];
+export declare const FOOD_PERSON_FIELDS: readonly ["id", "name", "member", "diets", "avoid", "spice", "note"];
 /** The rules' limits. List entries may not contain `|` (the rules check a list as one joined string). */
 export declare const FOOD_LIMITS: {
     readonly people: 20;
@@ -78,6 +89,13 @@ export declare function withMembers(people: FoodPerson[], members: {
     email: string;
     name?: string;
 }[]): FoodPerson[];
+/**
+ * The most heat (0–3) a shared meal should usually have: the lowest tolerance anyone has set, or
+ * undefined when nobody has set one.
+ */
+export declare function householdMaxHeat(food: Pick<FoodPreferences, 'people'>): number | undefined;
+/** "Amanda: keep meals mild, heat 0 of 3; …", one line per person who set a tolerance. */
+export declare function householdSpiceLines(food: Pick<FoodPreferences, 'people'>): string[];
 /** Every diet anyone in the household has, in the fixed order: for filtering recipes. */
 export declare function householdDiets(food: Pick<FoodPreferences, 'people'>): Diet[];
 /** Options for `householdDietRules`. */
