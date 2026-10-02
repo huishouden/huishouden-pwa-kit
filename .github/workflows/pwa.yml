@@ -214,6 +214,16 @@ jobs:
         run: bun run e2e
         env:
           BASE_URL: ${{ inputs.site-url }}
+      # Chrome's sign-in prompt needs the site registered on the OAuth client, which no API can do.
+      - name: Check the site is an authorized sign-in origin
+        if: steps.has-e2e.outputs.present == 'true' && vars.VITE_GOOGLE_CLIENT_ID != ''
+        run: |
+          if [ ! -e node_modules/.bin/pwa-oauth-origins ]; then echo "::notice::Kit older than 0.16; origin check skipped"; exit 0; fi
+          bunx pwa-oauth-origins "$CLIENT_ID" "$SITE" --project="$PROJECT"
+        env:
+          CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+          SITE: ${{ inputs.site-url }}
+          PROJECT: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
       - name: Take README screenshots
         id: shots
         if: steps.has-e2e.outputs.present == 'true'

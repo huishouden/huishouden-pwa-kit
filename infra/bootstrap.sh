@@ -140,6 +140,13 @@ JSON
   fi
 done
 
+if [[ -n "${client_id:-}" ]]; then
+  step "Sign-in origins on the OAuth web client"
+  sites=$(for entry in "${APPS[@]}"; do IFS=: read -r _ site _ <<<"$entry"; echo "https://$site.web.app"; done)
+  # shellcheck disable=SC2086
+  bun "$(dirname "${BASH_SOURCE[0]}")/../scripts/oauth-origins.ts" "$client_id" $sites --project="$PROJECT" || true
+fi
+
 step "Auth authorized domains"
 # Firebase Auth only accepts sign-ins from listed domains. Needs Auth initialised (console step 1).
 AUTH_API="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config"
@@ -161,5 +168,6 @@ Manual steps the APIs don't cover (project $PROJECT):
      (initialises Auth on the free plan and creates the OAuth web client; no supported API does either)
   2. Google Cloud console > Google Auth Platform > Clients > the "Web client (auto created by Google
      Service)" > Authorized JavaScript origins: add https://<site>.web.app for each app using silent
-     sign-in (@huishouden/pwa-kit/auth). Then re-run this script so apps get VITE_GOOGLE_CLIENT_ID.
+     sign-in (@huishouden/pwa-kit/auth); the origins step above lists any still missing. Then re-run
+     this script so apps get VITE_GOOGLE_CLIENT_ID.
 EOF
