@@ -1,0 +1,26 @@
+{
+  "description": "Invented GET calendars/{id}/events?q=vet answer: an event an assistant added (Tue 2031-05-20 15:00 local, given as UTC here), and one already imported.",
+  "body": {
+    "kind": "calendar#events",
+    "items": [
+      {
+        "kind": "calendar#event",
+        "id": "evt-vet-biscuit",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=evt-vet-biscuit",
+        "summary": "Vet — Biscuit",
+        "start": { "dateTime": "2031-05-20T15:00:00Z" },
+        "end": { "dateTime": "2031-05-20T15:30:00Z" }
+      },
+      {
+        "kind": "calendar#event",
+        "id": "evt-vet-old",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=evt-vet-old",
+        "summary": "Vet — Pepper",
+        "start": { "dateTime": "2031-05-22T09:00:00Z" },
+        "end": { "dateTime": "2031-05-22T09:30:00Z" }
+      }
+    ]
+  }
+}

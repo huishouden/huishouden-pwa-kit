@@ -1,7 +1,7 @@
 import type { Auth } from 'firebase/auth';
 import { googleAccessMessage, popupBlocked, popupCancelled } from './feedback';
-import { googleAccessToken, googleFetch } from './google-token';
-import { toYmd } from './time';
+import { cachedGoogleToken, googleAccessToken, googleFetch } from './google-token';
+import { formatDayShort, formatTime, startOfDay, toYmd } from './time';
 
 /**
  * Finds Google Calendar events that match a piece of household data (a task, an appointment), so
@@ -41,6 +41,8 @@ declare global {
   interface Window {
     /** Browser tests set this to stand in for Google Calendar, which has no emulator. */
     __mockCalendarEvents?: CalendarMatch[];
+    /** Browser tests set this to stand in for a calendar token already granted on this device. */
+    __mockCalendarToken?: string;
   }
 }
 
@@ -67,10 +69,22 @@ export function searchPhrases(text: string): string[] {
 
 /**
  * A token that can read the signed-in person's calendars. The first time, Google asks to allow
- * access in a window (call from a tap); the token is then reused until it ends.
+ * access in a window (call from a tap); the token is then reused until it ends. It is kept in
+ * localStorage until then, so reopening the app within the hour can look for new events
+ * (`cachedCalendarToken`) without asking again.
  */
 export function calendarAccessToken(auth: Auth): Promise<string> {
-  return googleAccessToken(auth, CALENDAR_SCOPES, { deniedMessage: 'Google did not grant calendar access.' });
+  return googleAccessToken(auth, CALENDAR_SCOPES, { persist: true, deniedMessage: 'Google did not grant calendar access.' });
+}
+
+/**
+ * The calendar token this device already has, without asking anyone; null when there is none.
+ * Code that runs on its own (when the app opens) uses this and does nothing without one. Browser
+ * tests stand in for it with `window.__mockCalendarToken`.
+ */
+export function cachedCalendarToken(auth: Auth): string | null {
+  if (typeof window !== 'undefined' && typeof window.__mockCalendarToken === 'string') return window.__mockCalendarToken;
+  return cachedGoogleToken(auth, CALENDAR_SCOPES);
 }
 
 interface GoogleEvent {
@@ -115,6 +129,8 @@ export interface FindEventsOptions {
   limit?: number;
   /** Also look up when each repeating match's series began (`seriesStart`): one more request per series. */
   seriesStart?: boolean;
+  /** Use this token (from `cachedCalendarToken`) instead of asking for one, so the search never opens a window. */
+  token?: string;
 }
 
 function api<T>(token: string, path: string, params: Record<string, string>): Promise<T> {
@@ -134,7 +150,7 @@ export async function findCalendarEvents(auth: Auth, queries: string | string[],
   const list = Array.isArray(queries) ? queries : [queries];
   const phrases = [...new Set(list.flatMap((q) => (Array.isArray(queries) ? [q.trim().toLowerCase()] : searchPhrases(q))))].filter(Boolean);
   if (phrases.length === 0) return [];
-  const token = await calendarAccessToken(auth);
+  const token = options.token ?? (await calendarAccessToken(auth));
   const { items: calendars = [] } = await api<{ items?: { id: string; summary: string; summaryOverride?: string }[] }>(
     token,
     'users/me/calendarList',
@@ -255,4 +271,60 @@ export function calendarError(e: unknown): string {
   const access = googleAccessMessage(e, 'Calendar');
   if (access) return access;
   return "Couldn't search your calendar. Check the connection and try again.";
+}
+
+// ---- Suggestions: new events found when the app opens ----
+
+/** How often an open app looks again when it comes back into view. */
+export const SUGGESTION_RESCAN_MS = 30 * 60_000;
+/** Dismissed event ids kept per member and app; the oldest go first. */
+const DISMISSED_MAX = 200;
+
+const dismissedKey = (app: string, member: string) => `${app.toLowerCase()}-calendar-dismissed-${member}`;
+
+/** Event ids this household member said "Not this one" to in this app, on this device. */
+export function dismissedEvents(app: string, member: string): string[] {
+  try {
+    const list = JSON.parse(globalThis.localStorage?.getItem(dismissedKey(app, member)) ?? '[]');
+    return Array.isArray(list) ? list.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Remembers "Not this one" for an event, so it is never suggested to this member again. */
+export function dismissEvent(app: string, member: string, eventId: string): string[] {
+  const list = [...dismissedEvents(app, member).filter((id) => id !== eventId), eventId].slice(-DISMISSED_MAX);
+  try {
+    globalThis.localStorage?.setItem(dismissedKey(app, member), JSON.stringify(list));
+  } catch {
+    // Storage full or unavailable: the dismissal still holds for this visit.
+  }
+  return list;
+}
+
+/** Events worth suggesting: not imported, not dismissed, each once, soonest first. */
+export function newSuggestions(matches: CalendarMatch[], { isImported, dismissed }: { isImported: (m: CalendarMatch) => boolean; dismissed: readonly string[] }): CalendarMatch[] {
+  const skip = new Set(dismissed);
+  const seen = new Set<string>();
+  return matches
+    .filter((m) => {
+      if (seen.has(m.id) || skip.has(m.id) || isImported(m)) return false;
+      seen.add(m.id);
+      return true;
+    })
+    .sort((a, b) => a.start - b.start);
+}
+
+/**
+ * When a suggested event is, short enough for one line: "Today 3:00 PM", "Tomorrow 9:30 AM",
+ * "Tue 3:00 PM" within the week, then "Tue, Oct 14, 3:00 PM"; all-day events drop the time.
+ */
+export function suggestionWhen(m: CalendarMatch, now: number): string {
+  const days = Math.round((startOfDay(m.start) - startOfDay(now)) / 86_400_000);
+  const thisWeek = days >= 0 && days < 7;
+  const day =
+    days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : thisWeek ? new Date(m.start).toLocaleDateString(undefined, { weekday: 'short' }) : formatDayShort(m.start);
+  if (m.allDay) return thisWeek ? `${day}, all day` : day;
+  return thisWeek ? `${day} ${formatTime(m.start)}` : `${day}, ${formatTime(m.start)}`;
 }

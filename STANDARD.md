@@ -112,6 +112,24 @@ and no household sets anything up.
   match `REMINDER_FIELDS` and `PUSH_SUBSCRIPTION_FIELDS`), with the collection-group index on
   `reminders` (`sent`, `at`) the sender's query needs.
 
+## Calendar suggestions
+
+An assistant that writes to Google Calendar ("add a vet appointment for Biscuit Tuesday at 3") is a
+way to add things to an app. Every app with Import from calendar also offers what is new there on
+its own, with `useCalendarSuggestions` and `CalendarSuggestions` from `/react/calendar`:
+
+- **Same words, same import**: pass the app's Import from calendar word list and its `isImported`
+  check, and call the same handler Add uses in the import dialog. An event is offered until it is
+  added or the member says Not this one (kept per member on the device).
+- **Never asks**: it looks only with a calendar token already on the device (`cachedCalendarToken`),
+  on open and on return to view at most every 30 minutes, from now to 60 days ahead. Tokens last
+  an hour from the member's last calendar search or import; without one there is no card and no
+  prompt.
+- **Placement**: mount the hook once in the app's shell; show the card at the top of the main
+  screen, under the frame, only when there is something new. One line, calm; never a dialog.
+- **Tests**: `stubCalendar(page, { events })` from `/e2e` (sample app, signed out) with the clock
+  set to the sample's day.
+
 ## Agenda
 
 The portal shows one household calendar and a Today view built from every app's dates, without

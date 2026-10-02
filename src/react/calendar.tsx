@@ -1,15 +1,29 @@
 /**
  * Calendar search in React: the one-search-at-a-time hook, "Find in my calendar" inside a dialog,
- * the import dialog that lists events not yet in the app, the linked-event row and the one-line
- * hint before Google's first permission window. Built on `findCalendarEvents` in `../calendar`.
+ * the import dialog that lists events not yet in the app, the linked-event row, the one-line
+ * hint before Google's first permission window, and suggestions of new events found when the app
+ * opens. Built on `findCalendarEvents` in `../calendar`.
  *
  * `app` is the app's short name ("Baby"): it words the hint and keys whether this browser has
  * already been asked (`<app>-calendar-allowed` in localStorage).
  */
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Auth } from 'firebase/auth';
-import { CalendarSearch, ExternalLink, MapPin, Plus, X } from 'lucide-react';
-import { calendarError, findCalendarEvents, notImported, type CalendarMatch, type FindEventsOptions, type ImportedRecord } from '../calendar';
+import { CalendarPlus, CalendarSearch, ChevronDown, ChevronUp, ExternalLink, MapPin, Plus, X } from 'lucide-react';
+import {
+  cachedCalendarToken,
+  calendarError,
+  dismissedEvents,
+  dismissEvent,
+  findCalendarEvents,
+  newSuggestions,
+  notImported,
+  SUGGESTION_RESCAN_MS,
+  suggestionWhen,
+  type CalendarMatch,
+  type FindEventsOptions,
+  type ImportedRecord,
+} from '../calendar';
 import { formatDayShort, formatTime } from '../time';
 import { Dialog, ErrorNotice, ghostButton, iconButton, linkClass, primaryButton, secondaryButton } from './ui';
 
@@ -218,5 +232,169 @@ export function CalendarImportDialog({ state, records, intro, noneFound, allImpo
         )}
       </div>
     </Dialog>
+  );
+}
+
+// ---- Suggestions: new events found when the app opens ----
+
+export interface CalendarSuggestionsOptions {
+  /** The app's one `Auth` (a new object each render would look again each render). */
+  auth: Auth;
+  /** The theme words Import from calendar scans for (the app's own list). */
+  words: readonly string[];
+  /** Whether the app already has a record for this event, e.g. `(m) => isImported(m, appointments)`. */
+  isImported: (m: CalendarMatch) => boolean;
+  /** The app's short name ("Pet"): keys the dismissals. */
+  app: string;
+  /** How far ahead to look, in days (default 60). */
+  horizonDays?: number;
+  /** Most events per scan (default 25). */
+  limit?: number;
+}
+
+export interface CalendarSuggestionsState {
+  /** This device has a calendar token, so a scan can run without asking. False: no suggestions. */
+  canScan: boolean;
+  /** New events, soonest first: not in the app, not dismissed by this member. */
+  suggestions: CalendarMatch[];
+  /** "Not this one": never suggest this event to this member again, on this device. */
+  dismiss: (m: CalendarMatch) => void;
+  /** Look again now (it also looks on its own; see `useCalendarSuggestions`). */
+  scan: () => Promise<void>;
+}
+
+const GUEST = 'guest';
+
+/**
+ * New calendar events that belong in the app, so "add a vet appointment for Biscuit Tuesday at 3"
+ * told to an assistant that writes to Google Calendar turns up in Pet without anyone importing it.
+ *
+ * Looks when the app opens (and when the signed-in member changes), and again when it comes back
+ * into view, at most every 30 minutes, for `words` from now to `horizonDays` ahead. Only with a
+ * calendar token this device already has (`cachedCalendarToken`): it never opens Google's window,
+ * so without one `canScan` is false and there are no suggestions until the member next uses Import
+ * from calendar or Find in my calendar. A failed look is silent; the next one tries again.
+ *
+ * Mount it once in the app's shell, not in a screen that comes and goes, so switching tabs does not
+ * look again. Dismissals are kept per member in localStorage (`<app>-calendar-dismissed-<uid>`).
+ */
+export function useCalendarSuggestions({ auth, words, isImported, app, horizonDays = 60, limit = 25 }: CalendarSuggestionsOptions): CalendarSuggestionsState {
+  const [member, setMember] = useState(() => auth.currentUser?.uid ?? GUEST);
+  const [canScan, setCanScan] = useState(false);
+  const [matches, setMatches] = useState<CalendarMatch[]>([]);
+  const [dismissed, setDismissed] = useState<string[]>(() => dismissedEvents(app, member));
+  const lastScan = useRef(0);
+  const seq = useRef(0);
+  const settings = useRef({ words, horizonDays, limit });
+  settings.current = { words, horizonDays, limit };
+
+  const scan = useCallback(async () => {
+    const token = cachedCalendarToken(auth);
+    setCanScan(!!token);
+    const mine = ++seq.current;
+    if (!token) {
+      setMatches([]);
+      return;
+    }
+    lastScan.current = Date.now();
+    const { words, horizonDays, limit } = settings.current;
+    const from = Date.now();
+    const to = from + horizonDays * 86_400_000;
+    try {
+      const found = await findCalendarEvents(auth, [...words], { token, from, to, limit });
+      // The real search keeps to the window already; the browser-test stand-in does not.
+      if (mine === seq.current) setMatches(found.filter((m) => (m.end ?? m.start) >= from && m.start <= to));
+    } catch {
+      // A revoked or expired token is forgotten by the search; the next look starts over.
+      if (mine === seq.current) setCanScan(!!cachedCalendarToken(auth));
+    }
+  }, [auth]);
+
+  useEffect(
+    () =>
+      auth.onAuthStateChanged((user) => {
+        const who = user?.uid ?? GUEST;
+        setMember(who);
+        setDismissed(dismissedEvents(app, who));
+        setMatches([]);
+        void scan();
+      }),
+    [auth, app, scan],
+  );
+
+  useEffect(() => {
+    const onShow = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastScan.current >= SUGGESTION_RESCAN_MS) void scan();
+    };
+    document.addEventListener('visibilitychange', onShow);
+    return () => document.removeEventListener('visibilitychange', onShow);
+  }, [scan]);
+
+  const dismiss = useCallback((m: CalendarMatch) => setDismissed(dismissEvent(app, member, m.id)), [app, member]);
+  const suggestions = canScan ? newSuggestions(matches, { isImported, dismissed }) : [];
+  return { canScan, suggestions, dismiss, scan };
+}
+
+/**
+ * The calm one-line card for new calendar events: "New in your calendar: Vet — Biscuit · Tue 3:00 PM"
+ * with Add and Not this one, and "+2 more" opening the rest as a list. Renders nothing without
+ * suggestions. `onAdd` is the app's own import (the same as Import from calendar's Add); the event
+ * leaves the card at once and stays gone when its record arrives.
+ */
+export function CalendarSuggestions({ suggestions, onAdd, onDismiss, now = Date.now() }: {
+  suggestions: CalendarMatch[];
+  onAdd: (m: CalendarMatch) => void;
+  onDismiss: (m: CalendarMatch) => void;
+  /** For the day words ("Today", "Tue"); default the current time. */
+  now?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [added, setAdded] = useState<ReadonlySet<string>>(() => new Set());
+  const shown = suggestions.filter((m) => !added.has(m.id));
+  if (shown.length === 0) return null;
+  const [first, ...rest] = shown;
+  const add = (m: CalendarMatch) => {
+    setAdded((s) => new Set(s).add(m.id));
+    onAdd(m);
+  };
+  const actions = (m: CalendarMatch) => (
+    <div className="flex shrink-0 gap-1">
+      <button type="button" className={ghostButton} onClick={() => onDismiss(m)} aria-label={`Not this one: ${m.title}`}>
+        Not this one
+      </button>
+      <button type="button" className={secondaryButton} onClick={() => add(m)} aria-label={`Add ${m.title}`}>
+        <Plus size={18} /> Add
+      </button>
+    </div>
+  );
+  return (
+    <section className="rounded-2xl border border-stone-200 bg-white px-4 py-2 shadow-sm" aria-label="New in your calendar" aria-live="polite">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <CalendarPlus size={20} className="shrink-0 text-forest-700" aria-hidden="true" />
+        <p className="min-w-0 flex-1 text-base text-stone-700 [overflow-wrap:anywhere]">
+          New in your calendar: <span className="font-medium text-stone-800">{first.title}</span>
+          <span className="text-stone-600"> · {suggestionWhen(first, now)}</span>
+        </p>
+        {rest.length > 0 && (
+          <button type="button" className={ghostButton} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+            {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />} +{rest.length} more
+          </button>
+        )}
+        {actions(first)}
+      </div>
+      {open && rest.length > 0 && (
+        <ul className="mt-1 divide-y divide-stone-200 border-t border-stone-200" aria-label="More new calendar events">
+          {rest.map((m) => (
+            <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 pl-8">
+              <p className="min-w-0 flex-1 text-base [overflow-wrap:anywhere]">
+                <span className="font-medium text-stone-800">{m.title}</span>
+                <span className="text-stone-600"> · {suggestionWhen(m, now)}</span>
+              </p>
+              {actions(m)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

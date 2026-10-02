@@ -1,0 +1,17 @@
+{
+  "description": "Invented GET calendars/{id}/events?q=groomer answer: one all-day event.",
+  "body": {
+    "kind": "calendar#events",
+    "items": [
+      {
+        "kind": "calendar#event",
+        "id": "evt-groomer",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=evt-groomer",
+        "summary": "Groomer",
+        "start": { "date": "2031-06-02" },
+        "end": { "date": "2031-06-03" }
+      }
+    ]
+  }
+}

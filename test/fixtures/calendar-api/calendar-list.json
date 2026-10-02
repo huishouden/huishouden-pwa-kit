@@ -1,0 +1,7 @@
+{
+  "description": "Invented GET users/me/calendarList answer: one shared family calendar.",
+  "body": {
+    "kind": "calendar#calendarList",
+    "items": [{ "kind": "calendar#calendarListEntry", "id": "family@group.calendar.google.com", "summary": "Family", "accessRole": "owner" }]
+  }
+}
