@@ -64,6 +64,11 @@ user of it (dogfooding), never a special case. So:
 - People, accounts, card numbers and other personal facts are data, not code: keep them in the
   app's data store (a sheet tab, Firestore), never in the repo, including test fixtures (use
   made-up values). A leak scan can't recognise most of these, so this rule is the protection.
+- Sample data should feel real: well-known national chains and services (a big grocery chain, a
+  streaming service) make screenshots recognisable and are not sensitive. What stays invented is
+  whatever could point at a real household: people's names, emails, addresses, account and card
+  numbers, local or regional businesses, store numbers, and real amounts or dates copied from
+  real records.
 
 ## Shared code
 
