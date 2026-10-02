@@ -53,3 +53,22 @@ export declare function removeMember(db: Firestore, householdId: string, email: 
 export declare function markJoined(db: Firestore, household: Household, email: string): Promise<void>;
 /** Members who were invited but have not signed in yet. */
 export declare function pendingMembers(household: Household): string[];
+/**
+ * A member's name and photo as their own Google account reports them. Google has no public lookup
+ * from an email to a profile, so each member records their own on sign-in
+ * (`households/{id}/profiles/{email}`, writable only by that member).
+ */
+export interface Profile {
+    email: string;
+    name?: string;
+    photoURL?: string;
+    updatedAt: number;
+}
+/** Records the signed-in member's name and photo; cheap to call on every sign-in. */
+export declare function saveMyProfile(db: Firestore, householdId: string, user: {
+    email: string | null;
+    displayName: string | null;
+    photoURL: string | null;
+}): Promise<void>;
+/** Follows the profiles members have recorded, keyed by email. */
+export declare function watchProfiles(db: Firestore, householdId: string, onChange: (profiles: Map<string, Profile>) => void, onError?: (error: Error) => void): Unsubscribe;
