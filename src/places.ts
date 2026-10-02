@@ -215,14 +215,14 @@ async function searchNominatim(q: string, limit: number, fetchImpl: typeof fetch
   const params: Record<string, string> = { q, format: 'jsonv2', extratags: '1', limit: String(limit) };
   if (near) Object.assign(params, { viewbox: viewbox(near, radiusKm), bounded: '1' });
   url.search = new URLSearchParams(params).toString();
-  let res: Response;
   try {
-    res = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    const res = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    if (!res.ok) throw new Error(`[${res.status}] Place search failed`);
+    // A rate-limit or captive-portal page can arrive as 200 with HTML: treat it as busy too.
+    return ((await res.json()) as NominatimResult[]).map(toPlace);
   } catch (e) {
     throw new PlaceSearchUnavailable(e);
   }
-  if (!res.ok) throw new PlaceSearchUnavailable(new Error(`[${res.status}] Place search failed`));
-  return ((await res.json()) as NominatimResult[]).map(toPlace);
 }
 
 /**
@@ -231,6 +231,7 @@ async function searchNominatim(q: string, limit: number, fetchImpl: typeof fetch
  * and the Nominatim fallback failed or found nothing; a name search when Nominatim fails.
  */
 export class PlaceSearchUnavailable extends Error {
+  /** `cause` is the underlying error, or an `AggregateError` of both when Overpass and Nominatim failed. */
   constructor(cause: unknown) {
     super('The free map service is busy or unreachable', { cause });
     this.name = 'PlaceSearchUnavailable';
@@ -260,7 +261,10 @@ export async function searchPlaces(query: string, { limit = 5, near, radiusKm = 
   }
   // Both down: busy. Overpass down but Nominatim answered empty: also busy, since only Overpass
   // finds places by kind. Overpass answered empty: nothing there.
-  if (places.length === 0 && overpassError) throw new PlaceSearchUnavailable(nominatimError ? [overpassError, nominatimError] : overpassError);
+  if (places.length === 0 && overpassError) {
+    const nominatimCause = nominatimError instanceof PlaceSearchUnavailable ? nominatimError.cause : nominatimError;
+    throw new PlaceSearchUnavailable(nominatimError ? new AggregateError([overpassError, nominatimCause], 'Overpass and Nominatim both failed') : overpassError);
+  }
   const seen = new Set<string>();
   return places
     .map((p) => ({ ...p, distanceKm: distanceKm(near, p) }))

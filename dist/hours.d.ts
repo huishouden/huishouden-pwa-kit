@@ -6,7 +6,7 @@
  * and "24/7". Anything else (public holidays, months, sunrise) makes `parseOpeningHours` return
  * null, and apps show the text as written rather than guess.
  */
-/** Opening periods per weekday (0 = Sunday), in minutes after midnight; empty = closed. Read-only: days in a range share data. */
+/** Opening periods per weekday (0 = Sunday), in minutes after midnight; empty = closed. Read-only; each day is its own array. */
 export type WeeklyHours = readonly (readonly (readonly [number, number])[])[];
 export declare function parseOpeningHours(text: string | undefined): WeeklyHours | null;
 /** Open at that moment, counting a period that started the evening before and runs past midnight. */

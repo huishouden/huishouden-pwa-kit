@@ -7,7 +7,7 @@
  * null, and apps show the text as written rather than guess.
  */
 
-/** Opening periods per weekday (0 = Sunday), in minutes after midnight; empty = closed. Read-only: days in a range share data. */
+/** Opening periods per weekday (0 = Sunday), in minutes after midnight; empty = closed. Read-only; each day is its own array. */
 export type WeeklyHours = readonly (readonly (readonly [number, number])[])[];
 
 const DAY_CODES = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];

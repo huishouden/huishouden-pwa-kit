@@ -74,6 +74,7 @@ export declare function placeKinds(text: string): string[];
  * and the Nominatim fallback failed or found nothing; a name search when Nominatim fails.
  */
 export declare class PlaceSearchUnavailable extends Error {
+    /** `cause` is the underlying error, or an `AggregateError` of both when Overpass and Nominatim failed. */
     constructor(cause: unknown);
 }
 /**

@@ -80,6 +80,23 @@ describe('places', () => {
     await expect(searchPlaces('dry cleaner', { near: home, fetch: fake })).rejects.toBeInstanceOf(PlaceSearchUnavailable);
   });
 
+  test('a name search reports a busy or garbled service as unavailable', async () => {
+    const down = (async () => new Response('busy', { status: 429 })) as unknown as typeof fetch;
+    await expect(searchPlaces('Example Cleaners', { fetch: down })).rejects.toBeInstanceOf(PlaceSearchUnavailable);
+    const html = (async () => new Response('<html>please wait</html>', { status: 200 })) as unknown as typeof fetch;
+    await expect(searchPlaces('Example Cleaners', { fetch: html })).rejects.toBeInstanceOf(PlaceSearchUnavailable);
+  });
+
+  test('with both services down, the cause holds both failures once', async () => {
+    const fake = (async () => new Response('busy', { status: 504 })) as unknown as typeof fetch;
+    const err = await searchPlaces('dry cleaner', { near: home, fetch: fake }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlaceSearchUnavailable);
+    const cause = (err as PlaceSearchUnavailable).cause as AggregateError;
+    expect(cause).toBeInstanceOf(AggregateError);
+    expect(cause.errors).toHaveLength(2);
+    expect(cause.errors.some((e) => e instanceof PlaceSearchUnavailable)).toBe(false);
+  });
+
   test('opening hours come along when the map has them', async () => {
     const fake = (async (_u: string | URL) => json({ elements: [element(5, 40.01, { opening_hours: 'Mo-Fr 07:00-18:00' })] })) as typeof fetch;
     const [p] = await searchPlaces('dry cleaner', { near: home, fetch: fake });
