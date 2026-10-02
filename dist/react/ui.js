@@ -91,7 +91,7 @@ export function Toast({ toast, onDone }) {
         const id = setTimeout(onDone, toast.tone === 'error' ? 9000 : 6000);
         return () => clearTimeout(id);
     }, [toast, onDone]);
-    return (_jsx("div", { "aria-live": "polite", className: "pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]", children: toast && (_jsxs("div", { className: `pointer-events-auto flex min-h-14 max-w-xl items-center gap-4 rounded-2xl px-5 py-2 text-base font-medium text-white shadow-lg ${toast.tone === 'error' ? 'bg-red-700' : 'bg-stone-800'}`, children: [_jsx("span", { children: toast.message }), toast.undo && (_jsx("button", { type: "button", onClick: () => {
+    return (_jsx("div", { "aria-live": "polite", className: "pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]", children: toast && (_jsxs("div", { className: `pointer-events-auto flex min-h-14 max-w-xl items-center gap-4 rounded-2xl px-5 py-2 text-base font-medium text-white shadow-lg ${toast.tone === 'error' ? 'bg-red-700' : 'bg-stone-800'}`, children: [_jsx("span", { children: toast.message }), toast.undo && (_jsx("button", { type: "button", onClick: () => {
                         toast.undo?.();
                         onDone();
                     }, className: "min-h-11 rounded-xl px-3 font-semibold text-forest-200 underline-offset-4 hover:underline", children: "Undo" }))] })) }));
