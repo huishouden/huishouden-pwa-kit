@@ -164,6 +164,7 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 | `build` | every PR and push | `bun install --frozen-lockfile`, lint (`tsc --noEmit`), unit tests, build |
 | `deploy` | push to `main` | Keyless via Workload Identity Federation; `firebase deploy --only hosting:<target>` |
 | `smoke` | after `deploy` | Playwright against the live site |
+| `staging` | same-repo PRs that change more than docs; manual runs with `staging-ref` | Build against the staging project, deploy to the app's staging site, seed, `e2e` and `e2e:signed-in` there (see Staging) |
 
 - Repo variables (not secrets; the Firebase web config is public by design): `GCP_WIF_PROVIDER`,
   `GCP_DEPLOY_SA`, `VITE_FIREBASE_*`. The bootstrap sets them.
@@ -173,6 +174,48 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
   fails it with no jobs when nobody approves. The release commit still runs everything on main.
 - Real secrets (test account passwords, API tokens) go in GitHub Actions secrets and are read
   only in the jobs that need them. Never in argv, logs, or the repo.
+
+## Staging
+
+Risky changes are tried live, signed in, before they reach a household. Staging is a second
+Firebase project, `huishouden-staging` (Spark, free), with its own Firestore, rules and Auth, so
+nothing deployed or tested there can read or write real household data.
+
+- **Sites**: each app has `huishouden-staging-<app>.web.app`; the portal is
+  `huishouden-staging.web.app`. One site per app: a PR deploy replaces the previous one, and the
+  PR comment says which commit is there.
+- **When it deploys**: every pull request from a branch of the same repo (never a fork's) that
+  changes more than `docs/`, `*.md` or `LICENSE`. The PR gets a comment with the URL and the result,
+  and the `staging` environment links the deployment. A manual run of the app's `ci` workflow with
+  `staging-ref` (a branch, tag or SHA) deploys that ref to staging instead of production. Main still
+  deploys to production only.
+- **What runs there**: the build with the `STAGING_VITE_FIREBASE_*` variables, the deploy, the seed
+  (`pwa-staging seed`), then `e2e` and `e2e:signed-in` against the staging site. A failure fails the
+  PR's checks.
+- **Test users**: `test-a@example.com` and `test-b@example.com` (uids `test-a`, `test-b`, emails
+  verified), both members of `households/test-household`. The seed rewrites the users and the
+  household document on every run and leaves app data alone, so a test writes values unique to its
+  run (a timestamp in a note, a budget from the run number) and looks for exactly those.
+- **Signing in**: `signInTestUser(page, { email })` from `@huishouden/pwa-kit/e2e` mints a custom
+  token with the staging deploy account (IAM `signJwt`, keyless), runs `signInWithCustomToken` on the
+  site's own origin and opens the app signed in. It throws if the build's or the site's Firebase
+  config names any project but `huishouden-staging` (or neither names one), and only the staging
+  account can sign the token, so it cannot sign anyone in to production. Guard specs with `test.skip(!process.env.HH_STAGING_SA, ...)`.
+- **Credentials**: Workload Identity Federation to the staging project only (`STAGING_GCP_*`); its
+  provider accepts any branch of the owner's repos, but only jobs of the kit's `pwa.yml` at a
+  release tag or of the rules repo's workflows. Its deploy account may deploy Hosting and rules,
+  write Firestore, manage Auth users and sign its own tokens. Production's provider still accepts
+  `main` only. There is no service-account key anywhere.
+- **Rules**: `huishouden/rules` runs the emulator tests, then deploys to staging on every same-repo
+  PR and on `main`, and to production on `main`. Staging carries whichever rules were deployed last.
+- **By hand**: sign in with Google on a staging site to click through anything; a person starts
+  with no household there and creates one on the staging portal. Flows that need Google's consent
+  for an API (Gmail, Calendar, Contacts) stay manual: test users have no Google account, and the
+  automated suites stub those APIs (`stubGoogleTokens`, `page.route`).
+- **Not on staging**: push notifications (the sender reads production only) and Apps Script.
+- **Setup**: `infra/bootstrap.sh --staging <apps.conf>` (with `STAGING_PROJECT` in the conf)
+  creates the sites, web apps, Firestore, authorized domains, WIF and the `STAGING_*` variables.
+  Until those variables exist the staging jobs skip, so apps can adopt this kit before staging does.
 
 ## Tests
 
@@ -185,8 +228,10 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
      page after one reload.
   3. Sign-in popup lands on accounts.google.com with a `/__/auth/handler` redirect and no
      `redirect_uri_mismatch`, run on the second load (under the service worker).
-- Signed-in flows use a dedicated test account in GitHub secrets, not a household member's
-  Google account: Google blocks scripted sign-in to real accounts.
+- **Signed-in tests** (`bun run e2e:signed-in`, `e2e/signed-in.spec.ts`) run only on staging, as
+  invented test users signed in with Firebase custom tokens (`signInTestUser`), never a Google
+  account: Google blocks scripted sign-in to real accounts, and staging keeps tests away from real
+  households. Cover the app's key flows end to end against real Firestore and the real rules.
 
 ## Leaks
 

@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.28.1",
+  "version": "0.29.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "PolyForm-Shield-1.0.0",
   "type": "module",
@@ -137,6 +137,10 @@
       "types": "./dist/schedule.d.ts",
       "default": "./dist/schedule.js"
     },
+    "./staging": {
+      "types": "./dist/staging.d.ts",
+      "default": "./dist/staging.js"
+    },
     "./tailwind.css": "./src/tailwind.css",
     "./theme.css": "./src/theme.css",
     "./time": {
@@ -152,7 +156,8 @@
     "pwa-icons": "./scripts/icons.ts",
     "pwa-design-check": "./scripts/design-check.ts",
     "pwa-logo": "./scripts/logo.ts",
-    "pwa-oauth-origins": "./scripts/oauth-origins.ts"
+    "pwa-oauth-origins": "./scripts/oauth-origins.ts",
+    "pwa-staging": "./scripts/staging.ts"
   },
   "files": [
     "DESIGN.md",
