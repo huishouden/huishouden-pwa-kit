@@ -12,7 +12,8 @@ import { reportError } from './observability';
 export function readError(e: unknown, prefix: string): string {
   const code = (e as { code?: string })?.code;
   if (code !== 'unavailable') reportError(e, { where: prefix });
-  if (code === 'permission-denied') return `${prefix}: this household doesn't allow it yet.`;
+  // In a household, a refusal is a role's (./roles): say who can.
+  if (code === 'permission-denied') return `${prefix}: only admins and members can do that.`;
   if (code === 'unavailable') return `${prefix}: offline. It will retry when the connection is back.`;
   return `${prefix}.`;
 }

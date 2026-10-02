@@ -4,6 +4,8 @@ import * as real from 'firebase/firestore';
 // An in-memory stand-in for the few Firestore calls reminders.ts makes (no emulator in this repo;
 // the rules themselves are tested in the repo that owns them).
 const store = new Map<string, Record<string, unknown>>();
+// Paths the stand-in refuses like the rules would (a helper writing over a reminder without the flag).
+const refuse = new Set<string>();
 type Ref = { path: string; id: string };
 const ref = (path: string): Ref => ({ path, id: path.split('/').pop()! });
 mock.module('firebase/firestore', () => ({
@@ -11,21 +13,25 @@ mock.module('firebase/firestore', () => ({
   collection: (_db: unknown, ...parts: string[]) => ({ path: parts.join('/') }),
   doc: (col: { path: string }, id: string) => ref(`${col.path}/${id}`),
   where: (field: string, _op: string, value: unknown) => ({ field, value }),
-  query: (col: { path: string }, w: { field: string; value: unknown }) => ({ ...col, w }),
+  query: (col: { path: string }, ...ws: { field: string; value: unknown }[]) => ({ ...col, ws }),
   setDoc: async (r: Ref, data: Record<string, unknown>) => void store.set(r.path, data),
   deleteDoc: async (r: Ref) => void store.delete(r.path),
-  getDocs: async (q: { path: string; w: { field: string; value: unknown } }) => {
+  getDocs: async (q: { path: string; ws: { field: string; value: unknown }[] }) => {
     const docs = [...store.entries()]
-      .filter(([p, d]) => p.startsWith(`${q.path}/`) && d[q.w.field] === q.w.value)
+      .filter(([p, d]) => p.startsWith(`${q.path}/`) && q.ws.every((w) => d[w.field] === w.value))
       .map(([p, d]) => ({ id: p.split('/').pop()!, ref: ref(p), data: () => d }));
     return { docs, size: docs.length };
   },
   writeBatch: () => {
     const ops: (() => void)[] = [];
+    const paths: string[] = [];
     return {
-      set: (r: Ref, d: Record<string, unknown>) => ops.push(() => store.set(r.path, d)),
-      delete: (r: Ref) => ops.push(() => store.delete(r.path)),
-      commit: async () => ops.forEach((op) => op()),
+      set: (r: Ref, d: Record<string, unknown>) => (paths.push(r.path), ops.push(() => store.set(r.path, d))),
+      delete: (r: Ref) => (paths.push(r.path), ops.push(() => store.delete(r.path))),
+      commit: async () => {
+        if (paths.some((p) => refuse.has(p))) throw Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
+        ops.forEach((op) => op());
+      },
     };
   },
 }));
@@ -49,7 +55,7 @@ describe('reminder documents', () => {
 
   test('the stored document has exactly the rules fields, unsent, with lowercased recipients', () => {
     const d = reminderDoc({ app: 'pet', title: ' Dose ', at: 5.2, url: 'https://pet.example.com/', recipients: ['Sam@Example.com', 'sam@example.com'], ref: 'r' }, 'alex@example.com', 100);
-    expect(d).toEqual({ app: 'pet', title: 'Dose', body: '', at: 5, url: 'https://pet.example.com/', recipients: ['sam@example.com'], ref: 'r', sent: false, createdAt: 100, by: 'alex@example.com' });
+    expect(d).toEqual({ app: 'pet', title: 'Dose', body: '', at: 5, url: 'https://pet.example.com/', recipients: ['sam@example.com'], ref: 'r', private: false, sent: false, createdAt: 100, by: 'alex@example.com' });
     for (const k of Object.keys(d)) expect(REMINDER_FIELDS as readonly string[]).toContain(k);
   });
 
@@ -157,5 +163,33 @@ describe('syncReminders', () => {
   test('past times in the list are skipped', async () => {
     store.clear();
     expect(await syncReminders(db, 'h1', 'tasks', [input('tasks:item:a', at(14, 8))], 'alex@example.com', NOW)).toEqual({ written: 0, deleted: 0, unchanged: 0 });
+  });
+});
+
+describe('private reminders', () => {
+  const path = (id: string) => `households/h1/reminders/${id}`;
+  const input = (title: string, at: number, extra: Record<string, unknown> = {}) => ({ app: 'pet', title, at, url: 'https://pet.example.com/', ref: title, ...extra });
+
+  test('are written with the flag, and a course can be private', () => {
+    expect(reminderDoc(input('Dose', 5), 'a@example.com').private).toBe(false);
+    expect(reminderDoc(input('Vet', 5, { private: true }), 'a@example.com').private).toBe(true);
+    expect(reminderDoc({ ...input('Electric bill', 5), app: 'bills' }, 'a@example.com').private).toBe(true);
+    expect(remindersForCourse(course, { app: 'pet', url: 'https://pet.example.com/', private: true, now: NOW }).every((r) => r.private)).toBe(true);
+  });
+
+  test("a helper's sync touches only open reminders, and one refused write doesn't stop the rest", async () => {
+    store.clear();
+    refuse.clear();
+    const later = NOW + 3_600_000;
+    await syncReminders(db, 'h1', 'pet', [input('Vet visit', later, { id: 'vet', private: true }), input('Dose 1', later, { id: 'd1' }), input('Dose 2', later, { id: 'd2' })], 'a@example.com', NOW);
+    const { private: _p, ...legacy } = store.get(path('d2'))!;
+    store.set(path('d3'), { ...legacy, title: 'Dose 3' });
+    refuse.add(path('d3'));
+    // Dose 2 was given on the helper's device: its reminder goes; the private vet visit stays.
+    const result = await syncReminders(db, 'h1', 'pet', [input('Dose 1', later, { id: 'd1' }), input('Dose 3', later, { id: 'd3' })], 'h@example.com', NOW, { restricted: true });
+    expect(result.deleted).toBe(1);
+    expect(store.has(path('vet'))).toBe(true);
+    expect(store.has(path('d2'))).toBe(false);
+    expect(store.get(path('d3'))?.private).toBeUndefined();
   });
 });

@@ -1,6 +1,7 @@
 import { collection, doc, getDocs, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { addDoc, arrayRemove, arrayUnion, setDoc, updateDoc } from './firestore.js';
 import { observeHousehold } from './observability.js';
+import { effectiveRoles, toRoles, type Role } from './roles.js';
 
 /**
  * A household shared by every app in the family: one document per household in
@@ -9,7 +10,7 @@ import { observeHousehold } from './observability.js';
  * access to members of the parent document — so adding someone here gives them every app at once.
  *
  * Shape matches the rules every app shares:
- *   { name: string, members: string[], joined?: string[], createdAt: number }
+ *   { name: string, members: string[], joined?: string[], roles?: { [email]: Role }, createdAt: number }
  */
 export interface Household {
   id: string;
@@ -18,6 +19,8 @@ export interface Household {
   members: string[];
   /** Members who have signed in at least once (each member records their own). */
   joined: string[];
+  /** Roles written out (`./roles`); anyone missing is a member, except the creator (first), an admin. */
+  roles?: Record<string, Role>;
   createdAt: number;
 }
 
@@ -83,25 +86,54 @@ export function toHousehold(id: string, data: Record<string, unknown>): Househol
     name: String(data.name ?? 'Household'),
     members: Array.isArray(data.members) ? data.members.map(String) : [],
     joined: Array.isArray(data.joined) ? data.joined.map(String) : [],
+    roles: toRoles(data.roles),
     createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
   };
 }
 
-/** Starts a household with only its creator; others are invited from inside. */
+/** Starts a household with only its creator, its admin; others are invited from inside. */
 export async function createHousehold(db: Firestore, email: string, name: string): Promise<string> {
-  const ref = await addDoc(collection(db, COLLECTION), { name: name.trim(), members: [normalizeEmail(email)], createdAt: Date.now() });
+  const me = normalizeEmail(email);
+  const ref = await addDoc(collection(db, COLLECTION), { name: name.trim(), members: [me], roles: { [me]: 'admin' }, createdAt: Date.now() });
   return ref.id;
 }
 
-/** Invites by email: they get every app the next time they sign in with that Google account. */
-export async function inviteMember(db: Firestore, householdId: string, email: string): Promise<void> {
+type People = Pick<Household, 'id' | 'members' | 'roles'>;
+
+/**
+ * Invites by email (admins only): they get every app the next time they sign in with that Google
+ * account, as a member unless `role` says otherwise. Pass the household to give a role.
+ */
+export async function inviteMember(db: Firestore, household: string | People, email: string, role: Role = 'member'): Promise<void> {
   const address = normalizeEmail(email);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) throw new Error(`Not an email address: ${email}`);
-  await updateDoc(doc(db, COLLECTION, householdId), { members: arrayUnion(address) });
+  const id = typeof household === 'string' ? household : household.id;
+  if (role === 'member') {
+    await updateDoc(doc(db, COLLECTION, id), { members: arrayUnion(address) });
+    return;
+  }
+  if (typeof household === 'string') throw new Error('Pass the household to invite someone with a role.');
+  if (household.members.includes(address)) throw new Error(`${address} is already in the household.`);
+  await updateDoc(doc(db, COLLECTION, id), {
+    members: arrayUnion(address),
+    roles: { ...effectiveRoles(household), [address]: role },
+  });
 }
 
-export async function removeMember(db: Firestore, householdId: string, email: string): Promise<void> {
-  await updateDoc(doc(db, COLLECTION, householdId), { members: arrayRemove(normalizeEmail(email)) });
+/**
+ * Removes someone (admins only, never themselves). With the household, their role goes too and
+ * everyone else's is written out, so removing the creator never makes the next person an admin by
+ * position; the rules refuse a removal that would leave a role behind.
+ */
+export async function removeMember(db: Firestore, household: string | People, email: string): Promise<void> {
+  const address = normalizeEmail(email);
+  if (typeof household === 'string') {
+    await updateDoc(doc(db, COLLECTION, household), { members: arrayRemove(address) });
+    return;
+  }
+  const rest = household.members.filter((m) => m !== address);
+  const { [address]: _gone, ...roles } = effectiveRoles(household);
+  await updateDoc(doc(db, COLLECTION, household.id), { members: rest, roles: Object.fromEntries(rest.map((m) => [m, roles[m]!])) });
 }
 
 /** Records the signed-in member's first visit; harmless to call on every sign-in. */

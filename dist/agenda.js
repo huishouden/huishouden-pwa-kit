@@ -1,9 +1,10 @@
 import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { writeBatch } from './firestore.js';
+import { MONEY_APPS } from './roles.js';
 import { HOUR, daysBetween, dueText, dueWords, formatTime, longDate, startOfDay, toYmd, ymdToTime, addDays } from './time.js';
 export const AGENDA_KINDS = ['appointment', 'due', 'renewal', 'bill', 'birthday', 'medicine', 'feeding', 'task', 'other'];
 export const AGENDA_STATUSES = ['upcoming', 'overdue', 'done'];
-export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'updatedAt', 'by'];
+export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'private', 'updatedAt', 'by'];
 /** Maximum lengths, the same as the rules. */
 export const AGENDA_LIMITS = { app: 40, ref: 200, title: 120, detail: 200, url: 2000, who: 60, by: 254 };
 /** Apps publish items from this many days ago (overdue ones whatever their age)... */
@@ -50,6 +51,7 @@ export function agendaDoc(app, input, by, now = Date.now()) {
         url: input.url.slice(0, AGENDA_LIMITS.url),
         ...(who ? { who } : {}),
         ...(input.status ? { status: input.status } : {}),
+        private: input.private === true || MONEY_APPS.includes(app),
         updatedAt: now,
         by: by.trim().toLowerCase(),
     };
@@ -69,7 +71,19 @@ const comparable = ({ updatedAt: _u, by: _b, ...rest }) => {
     delete rest.id;
     return JSON.stringify(Object.keys(rest).sort().map((k) => [k, rest[k]]));
 };
-async function commit(db, ops) {
+const refused = (e) => e?.code === 'permission-denied';
+async function commit(db, ops, restricted = false) {
+    if (restricted) {
+        for (const op of ops) {
+            const batch = writeBatch(db);
+            op(batch);
+            await batch.commit().catch((e) => {
+                if (!refused(e))
+                    throw e;
+            });
+        }
+        return;
+    }
     for (let i = 0; i < ops.length; i += 450) {
         const batch = writeBatch(db);
         for (const op of ops.slice(i, i + 450))
@@ -78,10 +92,13 @@ async function commit(db, ops) {
     }
 }
 /** Makes `stored` (this app's items, or one ref's) exactly `items`, writing only what changed. */
-async function reconcile(db, householdId, app, stored, items, { by, now = Date.now() }) {
+async function reconcile(db, householdId, app, stored, items, { by, restricted = false, now = Date.now() }) {
     const wanted = new Map();
     for (const item of items) {
         if (!inAgendaWindow(item, now))
+            continue;
+        // A helper's device can't see private items, so it never publishes or removes them.
+        if (restricted && item.private)
             continue;
         wanted.set(agendaId(app, item.ref, item.start), agendaDoc(app, item, by, now));
     }
@@ -100,9 +117,11 @@ async function reconcile(db, householdId, app, stored, items, { by, now = Date.n
         else
             ops.push((b) => b.set(doc(col, id), data));
     }
-    await commit(db, ops);
+    await commit(db, ops, restricted);
     return { written: ops.length - deleted, deleted, unchanged };
 }
+/** The agenda, or for a helper or kid only its open items (what the rules let them read). */
+const visible = (db, householdId, restricted, ...filters) => query(agendaOf(db, householdId), ...filters, ...(restricted ? [where('private', '==', false)] : []));
 const snapshotDocs = (snap) => snap.docs.map((d) => ({ id: d.id, data: d.data() }));
 /**
  * Makes one source record's items exactly `items` (each gets `ref`): call it when the record is
@@ -110,13 +129,13 @@ const snapshotDocs = (snap) => snap.docs.map((d) => ({ id: d.id, data: d.data() 
  * has (a moved appointment's old time) are deleted. An empty list removes the record's items.
  */
 export async function replaceAgenda(db, householdId, app, ref, items, options) {
-    const snap = await getDocs(query(agendaOf(db, householdId), where('app', '==', app), where('ref', '==', ref)));
+    const snap = await getDocs(visible(db, householdId, options.restricted, where('app', '==', app), where('ref', '==', ref)));
     return reconcile(db, householdId, app, snapshotDocs(snap), items.map((i) => ({ ...i, ref })), options);
 }
 /** Deletes one source record's items (the record was deleted). */
-export async function removeAgenda(db, householdId, app, ref) {
-    const snap = await getDocs(query(agendaOf(db, householdId), where('app', '==', app), where('ref', '==', ref)));
-    await commit(db, snap.docs.map((d) => (b) => b.delete(d.ref)));
+export async function removeAgenda(db, householdId, app, ref, { restricted = false } = {}) {
+    const snap = await getDocs(visible(db, householdId, restricted, where('app', '==', app), where('ref', '==', ref)));
+    await commit(db, snap.docs.map((d) => (b) => b.delete(d.ref)), restricted);
     return snap.docs.length;
 }
 /**
@@ -125,7 +144,7 @@ export async function removeAgenda(db, householdId, app, ref) {
  * every open costs one read of the app's items and almost no writes.
  */
 export async function syncAgenda(db, householdId, app, items, options) {
-    const snap = await getDocs(query(agendaOf(db, householdId), where('app', '==', app)));
+    const snap = await getDocs(visible(db, householdId, options.restricted, where('app', '==', app)));
     return reconcile(db, householdId, app, snapshotDocs(snap), items, options);
 }
 const str = (v) => (typeof v === 'string' ? v : undefined);
@@ -150,6 +169,8 @@ export function toAgendaItem(id, data) {
         url: str(data.url) ?? '',
         ...(who ? { who } : {}),
         ...(status ? { status } : {}),
+        // Left out when the document has no flag, so an admin's or member's sync writes one.
+        ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
         updatedAt: num(data.updatedAt) ?? 0,
         by: str(data.by) ?? '',
     };
@@ -157,8 +178,8 @@ export function toAgendaItem(id, data) {
 const byStart = (a, b) => a.start - b.start || Number(b.allDay) - Number(a.allDay) || a.title.localeCompare(b.title);
 /** Follows the household's items overlapping `from`..`to` (and any overdue), soonest first. */
 export function watchAgenda(db, householdId, range, onChange) {
-    const { from, to, apps, onError } = range;
-    return onSnapshot(query(agendaOf(db, householdId), where('start', '<', to)), (snap) => onChange(snap.docs
+    const { from, to, apps, restricted, onError } = range;
+    return onSnapshot(visible(db, householdId, restricted, where('start', '<', to)), (snap) => onChange(snap.docs
         .map((d) => toAgendaItem(d.id, d.data()))
         .filter((i) => (!apps || apps.includes(i.app)) && (i.status === 'overdue' || (i.end ?? i.start) >= from))
         .sort(byStart)), (error) => onError?.(error));

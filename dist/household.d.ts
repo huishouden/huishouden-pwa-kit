@@ -1,4 +1,5 @@
 import { type Firestore, type Unsubscribe } from 'firebase/firestore';
+import { type Role } from './roles.js';
 /**
  * A household shared by every app in the family: one document per household in
  * `households/{householdId}`, with members identified by lowercase email. Apps keep their own data
@@ -6,7 +7,7 @@ import { type Firestore, type Unsubscribe } from 'firebase/firestore';
  * access to members of the parent document — so adding someone here gives them every app at once.
  *
  * Shape matches the rules every app shares:
- *   { name: string, members: string[], joined?: string[], createdAt: number }
+ *   { name: string, members: string[], joined?: string[], roles?: { [email]: Role }, createdAt: number }
  */
 export interface Household {
     id: string;
@@ -15,6 +16,8 @@ export interface Household {
     members: string[];
     /** Members who have signed in at least once (each member records their own). */
     joined: string[];
+    /** Roles written out (`./roles`); anyone missing is a member, except the creator (first), an admin. */
+    roles?: Record<string, Role>;
     createdAt: number;
 }
 export type HouseholdState = {
@@ -47,11 +50,20 @@ export declare function watchHousehold(db: Firestore, email: string, onChange: (
 /** One-off lookup of the same household `watchHousehold` follows; null when not a member anywhere. */
 export declare function findHousehold(db: Firestore, email: string): Promise<Household | null>;
 export declare function toHousehold(id: string, data: Record<string, unknown>): Household;
-/** Starts a household with only its creator; others are invited from inside. */
+/** Starts a household with only its creator, its admin; others are invited from inside. */
 export declare function createHousehold(db: Firestore, email: string, name: string): Promise<string>;
-/** Invites by email: they get every app the next time they sign in with that Google account. */
-export declare function inviteMember(db: Firestore, householdId: string, email: string): Promise<void>;
-export declare function removeMember(db: Firestore, householdId: string, email: string): Promise<void>;
+type People = Pick<Household, 'id' | 'members' | 'roles'>;
+/**
+ * Invites by email (admins only): they get every app the next time they sign in with that Google
+ * account, as a member unless `role` says otherwise. Pass the household to give a role.
+ */
+export declare function inviteMember(db: Firestore, household: string | People, email: string, role?: Role): Promise<void>;
+/**
+ * Removes someone (admins only, never themselves). With the household, their role goes too and
+ * everyone else's is written out, so removing the creator never makes the next person an admin by
+ * position; the rules refuse a removal that would leave a role behind.
+ */
+export declare function removeMember(db: Firestore, household: string | People, email: string): Promise<void>;
 /** Records the signed-in member's first visit; harmless to call on every sign-in. */
 export declare function markJoined(db: Firestore, household: Household, email: string): Promise<void>;
 /** Members who were invited but have not signed in yet. */
@@ -79,3 +91,4 @@ export declare function saveMyProfile(db: Firestore, householdId: string, user: 
 }): Promise<void>;
 /** Follows the profiles members have recorded, keyed by email. */
 export declare function watchProfiles(db: Firestore, householdId: string, onChange: (profiles: Map<string, Profile>) => void, onError?: (error: Error) => void): Unsubscribe;
+export {};

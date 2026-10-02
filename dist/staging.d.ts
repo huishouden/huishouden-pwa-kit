@@ -6,7 +6,8 @@
  * Signed-in tests don't use Google: CI mints Firebase custom tokens for invented test users with
  * the staging deploy service account (IAM `signJwt`, keyless through Workload Identity Federation),
  * and the page signs in with `signInWithCustomToken`. The seed gives those users verified emails
- * (the rules require `email_verified`) and one household they both belong to.
+ * (the rules require `email_verified`) and one household they all belong to: test-a its admin
+ * (the creator, first), test-b a member and test-helper a helper (`./roles`).
  *
  * Runs in Node or bun (CI, Playwright), never in an app bundle.
  */
@@ -22,6 +23,7 @@ export declare const TEST_HOUSEHOLD: {
     readonly id: "test-household";
     readonly name: "Test household";
     readonly members: string[];
+    readonly roles: Record<string, "admin" | "member" | "helper" | "kid">;
     readonly createdAt: number;
 };
 /** The audience Firebase Auth requires on a custom token. */

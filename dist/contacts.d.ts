@@ -4,6 +4,9 @@ import { type Firestore, type Unsubscribe } from 'firebase/firestore';
  * lawn service). One collection, `households/{id}/contacts`, shared by every app; `apps` says
  * which apps show a contact, so the pediatrician appears in Baby and later in a health app too.
  *
+ * A contact marked `private` is for admins and members only (`./roles`); helpers and kids never
+ * read it. Every save writes the flag, since one without it counts as private to them.
+ *
  * Fields match the rules exactly (see CONTACT_FIELDS); keep them in step.
  */
 export interface Contact {
@@ -19,20 +22,29 @@ export interface Contact {
     notes?: string;
     /** Apps that show this contact, by short name: ["baby"]. */
     apps: string[];
+    /** Only admins and members see it. */
+    private?: boolean;
     createdAt: number;
     updatedAt?: number;
     by: string;
 }
-export declare const CONTACT_FIELDS: readonly ["name", "role", "phone", "email", "website", "address", "mapsUrl", "notes", "apps", "createdAt", "updatedAt", "by"];
+export declare const CONTACT_FIELDS: readonly ["name", "role", "phone", "email", "website", "address", "mapsUrl", "notes", "apps", "private", "createdAt", "updatedAt", "by"];
 export type ContactInput = Omit<Contact, 'id' | 'createdAt' | 'updatedAt' | 'by'>;
-/** Drops empty optional fields so documents only carry what was filled in. */
+/** Drops empty optional fields so documents only carry what was filled in; `private` is always written. */
 export declare function cleanContact(input: ContactInput): ContactInput;
 export declare function toContact(id: string, data: Record<string, unknown>): Contact;
-/** Follows the household's contacts, optionally only those shown in one app, sorted by name. */
-export declare function watchContacts(db: Firestore, householdId: string, onChange: (contacts: Contact[]) => void, { app, onError }?: {
+export interface WatchContactsOptions {
+    /** Only those shown in this app. */
     app?: string;
+    /** A helper or kid (`isRestricted(role)`): only contacts not marked private, as the rules require. */
+    restricted?: boolean;
     onError?: (error: Error) => void;
-}): Unsubscribe;
+}
+/**
+ * Follows the household's contacts, optionally only those shown in one app, sorted by name. Pass
+ * `restricted` for helpers and kids: the rules refuse them a list that could include private ones.
+ */
+export declare function watchContacts(db: Firestore, householdId: string, onChange: (contacts: Contact[]) => void, { app, restricted, onError }?: WatchContactsOptions): Unsubscribe;
 export declare function addContact(db: Firestore, householdId: string, input: ContactInput, by: string): Promise<string>;
 /** Replaces the contact's details; fields left empty are removed. */
 export declare function updateContact(db: Firestore, householdId: string, id: string, input: ContactInput, by: string): Promise<void>;
@@ -42,6 +54,16 @@ export declare function deleteContact(db: Firestore, householdId: string, id: st
  * when no other app shows it (the pediatrician stays in a health app after Baby drops it).
  */
 export declare function removeContactFromApp(db: Firestore, householdId: string, contact: Contact, app: string, by: string): Promise<void>;
+/**
+ * Writes `private: false` on records saved before the flag existed, which helpers and kids can't
+ * read until then. Admins and members only (`can(role, 'see-private')`), for any private-capable
+ * collection (contacts, an app's appointments); cheap to run whenever the list loads, since it
+ * writes only records without the flag.
+ */
+export declare function markUnflaggedOpen(db: Firestore, householdId: string, collectionName: string, records: {
+    id: string;
+    private?: unknown;
+}[]): Promise<number>;
 /** Puts a deleted contact back under its old id (Undo), so appointments that point at it still do. */
 export declare function restoreContact(db: Firestore, householdId: string, contact: Contact): Promise<void>;
 /** Field lengths the household rules allow for contacts. */

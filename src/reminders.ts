@@ -1,6 +1,7 @@
 import { collection, doc, getDocs, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { deleteDoc, setDoc, writeBatch } from './firestore.js';
 import { doseSlots, type MedCourse } from './dose.js';
+import { MONEY_APPS } from './roles.js';
 
 /**
  * Reminders any app writes and the shared sender (huishouden/notify) delivers as push
@@ -24,17 +25,57 @@ export interface Reminder {
   recipients: 'all' | string[];
   /** What it belongs to, for replacing or cancelling a group ("pet:course:abc"). */
   ref?: string;
+  /**
+   * For admins and members only (a private appointment, a bill): helpers and kids neither read it
+   * nor get it on their devices. Always written; one without it counts as private to them.
+   */
+  private?: boolean;
   sent: boolean;
   sentAt?: number;
   createdAt: number;
   by: string;
 }
 
-export const REMINDER_FIELDS = ['app', 'title', 'body', 'at', 'url', 'recipients', 'ref', 'sent', 'sentAt', 'createdAt', 'by'] as const;
+export const REMINDER_FIELDS = ['app', 'title', 'body', 'at', 'url', 'recipients', 'ref', 'private', 'sent', 'sentAt', 'createdAt', 'by'] as const;
 
-export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Partial<Pick<Reminder, 'id' | 'body' | 'recipients' | 'ref'>>;
+export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Partial<Pick<Reminder, 'id' | 'body' | 'recipients' | 'ref' | 'private'>>;
+
+/**
+ * For writes from a helper's or kid's device (`isRestricted(role)`): only reminders not marked
+ * private are read and written, each on its own, and one the rules refuse (written before the
+ * flag, until an admin's or member's device rewrites it) is skipped rather than failing the rest.
+ */
+export interface ReminderWriteOptions {
+  restricted?: boolean;
+}
 
 const remindersOf = (db: Firestore, householdId: string) => collection(db, 'households', householdId, 'reminders');
+
+/** Reminders matching `filters`, or for a helper or kid only the open ones (what the rules let them read). */
+const visible = (db: Firestore, householdId: string, restricted: boolean | undefined, ...filters: ReturnType<typeof where>[]) =>
+  query(remindersOf(db, householdId), ...filters, ...(restricted ? [where('private', '==', false)] : []));
+
+const refused = (e: unknown) => (e as { code?: string })?.code === 'permission-denied';
+
+type Op = (b: ReturnType<typeof writeBatch>) => void;
+
+async function commit(db: Firestore, ops: Op[], restricted = false): Promise<void> {
+  if (restricted) {
+    for (const op of ops) {
+      const batch = writeBatch(db);
+      op(batch);
+      await batch.commit().catch((e) => {
+        if (!refused(e)) throw e;
+      });
+    }
+    return;
+  }
+  for (let i = 0; i < ops.length; i += 450) {
+    const batch = writeBatch(db);
+    for (const op of ops.slice(i, i + 450)) op(batch);
+    await batch.commit();
+  }
+}
 
 /**
  * The same id for the same reminder however often it is written, so re-saving a course
@@ -59,6 +100,7 @@ export function reminderDoc(input: ReminderInput, by: string, now = Date.now()):
     url: input.url,
     recipients,
     ...(input.ref ? { ref: input.ref } : {}),
+    private: input.private === true || MONEY_APPS.includes(input.app),
     sent: false,
     createdAt: now,
     by,
@@ -80,13 +122,9 @@ export async function cancelReminder(db: Firestore, householdId: string, id: str
 }
 
 /** Deletes every reminder with this `ref` (a course stopped, an appointment cancelled). */
-export async function cancelReminders(db: Firestore, householdId: string, ref: string): Promise<number> {
-  const snap = await getDocs(query(remindersOf(db, householdId), where('ref', '==', ref)));
-  for (let i = 0; i < snap.docs.length; i += 450) {
-    const batch = writeBatch(db);
-    for (const d of snap.docs.slice(i, i + 450)) batch.delete(d.ref);
-    await batch.commit();
-  }
+export async function cancelReminders(db: Firestore, householdId: string, ref: string, { restricted }: ReminderWriteOptions = {}): Promise<number> {
+  const snap = await getDocs(visible(db, householdId, restricted, where('ref', '==', ref)));
+  await commit(db, snap.docs.map((d) => (b) => b.delete(d.ref)), restricted);
   return snap.size;
 }
 
@@ -95,30 +133,34 @@ export async function cancelReminders(db: Firestore, householdId: string, ref: s
  * deleted, the list is written (unchanged ones keep their ids), and past ones are left alone so a
  * sent reminder is never sent twice. Use it whenever a course or appointment is saved.
  */
-export async function replaceReminders(db: Firestore, householdId: string, ref: string, inputs: ReminderInput[], by: string, now = Date.now()): Promise<string[]> {
+export async function replaceReminders(
+  db: Firestore,
+  householdId: string,
+  ref: string,
+  inputs: ReminderInput[],
+  by: string,
+  now = Date.now(),
+  { restricted }: ReminderWriteOptions = {},
+): Promise<string[]> {
   const wanted = new Map(
     inputs
-      .filter((r) => r.at > now)
+      .filter((r) => r.at > now && !(restricted && r.private))
       .map((r) => [r.id ?? reminderId(ref, r.at), reminderDoc({ ...r, ref }, by, now)] as const),
   );
-  const existing = await getDocs(query(remindersOf(db, householdId), where('ref', '==', ref)));
-  const ops: ((b: ReturnType<typeof writeBatch>) => void)[] = [];
+  const existing = await getDocs(visible(db, householdId, restricted, where('ref', '==', ref)));
+  const ops: Op[] = [];
   for (const d of existing.docs) {
     const at = d.data().at as number;
     if (at > now && !wanted.has(d.id)) ops.push((b) => b.delete(d.ref));
   }
   for (const [id, data] of wanted) ops.push((b) => b.set(doc(remindersOf(db, householdId), id), data));
-  for (let i = 0; i < ops.length; i += 450) {
-    const batch = writeBatch(db);
-    for (const op of ops.slice(i, i + 450)) op(batch);
-    await batch.commit();
-  }
+  await commit(db, ops, restricted);
   return [...wanted.keys()];
 }
 
 /** A reminder as it would be sent, for telling whether a stored one needs rewriting. */
 const sameReminder = (a: Record<string, unknown>, b: Omit<Reminder, 'id'>) =>
-  (['app', 'title', 'body', 'at', 'url', 'ref'] as const).every((k) => a[k] === b[k]) &&
+  (['app', 'title', 'body', 'at', 'url', 'ref', 'private'] as const).every((k) => a[k] === b[k]) &&
   JSON.stringify(a.recipients) === JSON.stringify(b.recipients) &&
   a.sent === false;
 
@@ -135,18 +177,26 @@ export interface SyncRemindersResult {
  * so running it often costs one read and almost no writes. Past and sent reminders are never
  * touched, so nothing is sent twice.
  */
-export async function syncReminders(db: Firestore, householdId: string, app: string, inputs: ReminderInput[], by: string, now = Date.now()): Promise<SyncRemindersResult> {
+export async function syncReminders(
+  db: Firestore,
+  householdId: string,
+  app: string,
+  inputs: ReminderInput[],
+  by: string,
+  now = Date.now(),
+  { restricted }: ReminderWriteOptions = {},
+): Promise<SyncRemindersResult> {
   const wanted = new Map(
     inputs
-      .filter((r) => r.at > now)
+      .filter((r) => r.at > now && !(restricted && r.private))
       .map((r) => {
         const data = reminderDoc({ ...r, app }, by, now);
         return [r.id ?? reminderId(r.ref ?? app, data.at), data] as const;
       }),
   );
-  const existing = await getDocs(query(remindersOf(db, householdId), where('app', '==', app)));
+  const existing = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
   const have = new Map(existing.docs.map((d) => [d.id, d.data() as Record<string, unknown>]));
-  const ops: ((b: ReturnType<typeof writeBatch>) => void)[] = [];
+  const ops: Op[] = [];
   for (const d of existing.docs) {
     const data = d.data() as Record<string, unknown>;
     if (typeof data.at === 'number' && data.at > now && data.sent !== true && !wanted.has(d.id)) ops.push((b) => b.delete(d.ref));
@@ -159,11 +209,7 @@ export async function syncReminders(db: Firestore, householdId: string, app: str
     else if (old?.sent === true) unchanged++;
     else ops.push((b) => b.set(doc(remindersOf(db, householdId), id), data));
   }
-  for (let i = 0; i < ops.length; i += 450) {
-    const batch = writeBatch(db);
-    for (const op of ops.slice(i, i + 450)) op(batch);
-    await batch.commit();
-  }
+  await commit(db, ops, restricted);
   return { written: ops.length - deleted, deleted, unchanged };
 }
 
@@ -177,6 +223,7 @@ export function toReminder(id: string, data: Record<string, unknown>): Reminder 
     url: String(data.url ?? ''),
     recipients: Array.isArray(data.recipients) ? data.recipients.map(String) : 'all',
     ref: typeof data.ref === 'string' ? data.ref : undefined,
+    ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
     sent: data.sent === true,
     sentAt: typeof data.sentAt === 'number' ? data.sentAt : undefined,
     createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
@@ -189,9 +236,9 @@ export function watchReminders(
   db: Firestore,
   householdId: string,
   onChange: (reminders: Reminder[]) => void,
-  { app, onError }: { app?: string; onError?: (error: Error) => void } = {},
+  { app, restricted, onError }: { app?: string; restricted?: boolean; onError?: (error: Error) => void } = {},
 ): Unsubscribe {
-  const source = app ? query(remindersOf(db, householdId), where('app', '==', app)) : remindersOf(db, householdId);
+  const source = visible(db, householdId, restricted, ...(app ? [where('app', '==', app)] : []));
   return onSnapshot(
     source,
     (snap) => onChange(snap.docs.map((d) => toReminder(d.id, d.data())).sort((a, b) => a.at - b.at)),
@@ -206,6 +253,8 @@ export interface CourseReminderOptions {
   /** Groups the course's reminders; default `<app>:course:<course id>`. */
   ref?: string;
   recipients?: 'all' | string[];
+  /** Only for admins and members. */
+  private?: boolean;
   /** Notify this many minutes before each dose. Default 0. */
   leadMinutes?: number;
   /** Ongoing courses get reminders this many days ahead; re-run when the app opens. Default 14. */
@@ -240,6 +289,7 @@ export function remindersForCourse(course: MedCourse & { id: string }, options: 
     at: slot.at - lead,
     url: options.url,
     recipients: options.recipients ?? 'all',
+    ...(options.private ? { private: true } : {}),
     ref,
   }));
 }

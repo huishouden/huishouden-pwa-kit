@@ -22,13 +22,26 @@ export interface Reminder {
     recipients: 'all' | string[];
     /** What it belongs to, for replacing or cancelling a group ("pet:course:abc"). */
     ref?: string;
+    /**
+     * For admins and members only (a private appointment, a bill): helpers and kids neither read it
+     * nor get it on their devices. Always written; one without it counts as private to them.
+     */
+    private?: boolean;
     sent: boolean;
     sentAt?: number;
     createdAt: number;
     by: string;
 }
-export declare const REMINDER_FIELDS: readonly ["app", "title", "body", "at", "url", "recipients", "ref", "sent", "sentAt", "createdAt", "by"];
-export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Partial<Pick<Reminder, 'id' | 'body' | 'recipients' | 'ref'>>;
+export declare const REMINDER_FIELDS: readonly ["app", "title", "body", "at", "url", "recipients", "ref", "private", "sent", "sentAt", "createdAt", "by"];
+export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Partial<Pick<Reminder, 'id' | 'body' | 'recipients' | 'ref' | 'private'>>;
+/**
+ * For writes from a helper's or kid's device (`isRestricted(role)`): only reminders not marked
+ * private are read and written, each on its own, and one the rules refuse (written before the
+ * flag, until an admin's or member's device rewrites it) is skipped rather than failing the rest.
+ */
+export interface ReminderWriteOptions {
+    restricted?: boolean;
+}
 /**
  * The same id for the same reminder however often it is written, so re-saving a course
  * overwrites its reminders instead of doubling them: `<ref or app>-<at>`, Firestore-safe.
@@ -43,13 +56,13 @@ export declare function reminderDoc(input: ReminderInput, by: string, now?: numb
 export declare function upsertReminder(db: Firestore, householdId: string, input: ReminderInput, by: string): Promise<string>;
 export declare function cancelReminder(db: Firestore, householdId: string, id: string): Promise<void>;
 /** Deletes every reminder with this `ref` (a course stopped, an appointment cancelled). */
-export declare function cancelReminders(db: Firestore, householdId: string, ref: string): Promise<number>;
+export declare function cancelReminders(db: Firestore, householdId: string, ref: string, { restricted }?: ReminderWriteOptions): Promise<number>;
 /**
  * Makes the reminders with this `ref` exactly `inputs` from now on: future ones not in the list are
  * deleted, the list is written (unchanged ones keep their ids), and past ones are left alone so a
  * sent reminder is never sent twice. Use it whenever a course or appointment is saved.
  */
-export declare function replaceReminders(db: Firestore, householdId: string, ref: string, inputs: ReminderInput[], by: string, now?: number): Promise<string[]>;
+export declare function replaceReminders(db: Firestore, householdId: string, ref: string, inputs: ReminderInput[], by: string, now?: number, { restricted }?: ReminderWriteOptions): Promise<string[]>;
 export interface SyncRemindersResult {
     written: number;
     deleted: number;
@@ -62,11 +75,12 @@ export interface SyncRemindersResult {
  * so running it often costs one read and almost no writes. Past and sent reminders are never
  * touched, so nothing is sent twice.
  */
-export declare function syncReminders(db: Firestore, householdId: string, app: string, inputs: ReminderInput[], by: string, now?: number): Promise<SyncRemindersResult>;
+export declare function syncReminders(db: Firestore, householdId: string, app: string, inputs: ReminderInput[], by: string, now?: number, { restricted }?: ReminderWriteOptions): Promise<SyncRemindersResult>;
 export declare function toReminder(id: string, data: Record<string, unknown>): Reminder;
 /** Follows the household's reminders, optionally one app's, soonest first. */
-export declare function watchReminders(db: Firestore, householdId: string, onChange: (reminders: Reminder[]) => void, { app, onError }?: {
+export declare function watchReminders(db: Firestore, householdId: string, onChange: (reminders: Reminder[]) => void, { app, restricted, onError }?: {
     app?: string;
+    restricted?: boolean;
     onError?: (error: Error) => void;
 }): Unsubscribe;
 export interface CourseReminderOptions {
@@ -76,6 +90,8 @@ export interface CourseReminderOptions {
     /** Groups the course's reminders; default `<app>:course:<course id>`. */
     ref?: string;
     recipients?: 'all' | string[];
+    /** Only for admins and members. */
+    private?: boolean;
     /** Notify this many minutes before each dose. Default 0. */
     leadMinutes?: number;
     /** Ongoing courses get reminders this many days ahead; re-run when the app opens. Default 14. */

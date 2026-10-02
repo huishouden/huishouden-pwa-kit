@@ -78,6 +78,48 @@ user of it (dogfooding), never a special case. So:
   numbers, local or regional businesses, store numbers, and real amounts or dates copied from
   real records.
 
+## Roles
+
+Every member of a household has a role, set by an admin in the portal's household panel and
+enforced by the rules, not just hidden in the apps (`@huishouden/pwa-kit/roles`, `huishouden/rules`
+README "Roles"):
+
+| | Admin | Member | Helper | Kid |
+|---|---|---|---|---|
+| Invite and remove people, set roles (never their own) | yes | | | |
+| Settings: household name, food preferences, portal layout, an app's settings, lists, the meal plan, medicine courses | yes | yes | | |
+| Read the everyday things, add their own, tick off anyone's | yes | yes | yes | yes |
+| Change or delete what someone else added | yes | yes | | |
+| Give medicine | yes | yes | if the course allows them | |
+| Spending and Bills | yes | yes | | |
+| Records marked private | yes | yes | | |
+
+The creator is an admin; a new invitee is a member unless the admin picks another role. A helper
+is a babysitter, a pet sitter or the shared wall tablet's account; a kid is a helper who never
+gives medicine.
+
+- **Hide, then explain.** Take `useRole(household, me)` once in the app's shell. Leave out the
+  controls a role can't use (delete on someone else's item, settings, the private toggle) and, where
+  a person would look for one, say why in one line with `RoleNote` (`refusal(action)`: "Only admins
+  and members can change settings."). A refused write still shows that sentence, not a raw error.
+- **Sign what you add.** Every record a helper or kid may add carries `by` (the adder's email) and
+  keeps it on edits: that is what lets them change their own and nothing else. Ticking something
+  off writes only the fields that tick it (`completed`, `done`, `lastDone`, `due`), never `by`.
+- **Private records.** Contacts, appointments, agenda items and reminders take `private: true`
+  ("Only admins and members", `PrivateCheckbox`). Write the flag on every save, `false` included:
+  a record without it is private to helpers and kids. Their reads of those collections pass
+  `restricted: isRestricted(role)` (`watchContacts`, `watchAgenda`, `syncAgenda`, `syncReminders`,
+  ...) or add `where('private', '==', false)`, since the rules refuse a list that could include a
+  private one. On an admin's or member's device, run `markUnflaggedOpen` on the app's appointments
+  so older ones become visible to helpers. An appointment's agenda items and reminders take its flag.
+- **Money.** Spending and Bills open to a one-line refusal for helpers and kids, and the portal
+  hides their tiles. Their agenda items and reminders are always private (`MONEY_APPS`).
+- **Medicine.** A course says who can give it (`givers`: all helpers, the default, or only
+  `approvedHelpers`; `GiversField`). Check `mayGive(course, role, me)` before offering "Given".
+- **Tests.** The rules repo tests every role against every collection. Each app's signed-in suite
+  runs one flow as `test-helper@example.com` (a helper in the staging household): a refused action
+  shows its sentence and a permitted one works.
+
 ## Shared code
 
 - **Copy once, then extract.** When a second app needs code another app already has, it moves into
@@ -163,8 +205,9 @@ with `@huishouden/pwa-kit/agenda`; the portal only reads.
 - **Window**: from 30 days ago to 180 days ahead, plus overdue items whatever their age. Repeating
   things publish their next date, not every future one. Keep `title` and `detail` short (120 and
   200 characters) and in the app's own words ("Change HVAC filter", "$84.20, autopay off").
-- **Privacy**: every member reads every item, on any device and on the shared wall screen. Publish
-  only what any member may see; a private detail stays in the app.
+- **Privacy**: admins and members read every item; helpers and kids (and the shared wall screen,
+  if its account is a helper) read only items with `private: false`. An item from a private record
+  is published `private: true`; Spending's and Bills' always are. Keep a private detail in the app.
 - **Rules**: the `agenda` block in the project's rules file; fields match `AGENDA_FIELDS`, and
   `by` must be the signed-in member.
 
@@ -258,8 +301,9 @@ nothing deployed or tested there can read or write real household data.
 - **What runs there**: the build with the `STAGING_VITE_FIREBASE_*` variables, the deploy, the seed
   (`pwa-staging seed`), then `e2e` and `e2e:signed-in` against the staging site. A failure fails the
   PR's checks.
-- **Test users**: `test-a@example.com` and `test-b@example.com` (uids `test-a`, `test-b`, emails
-  verified), both members of `households/test-household`. The seed rewrites the users and the
+- **Test users**: `test-a@example.com` (admin), `test-b@example.com` (member) and
+  `test-helper@example.com` (helper) (uids `test-a`, `test-b`, `test-helper`, emails verified), all
+  in `households/test-household`. The seed rewrites the users and the
   household document on every run and leaves app data alone, so a test writes values unique to its
   run (a timestamp in a note, a budget from the run number) and looks for exactly those.
 - **Signing in**: `signInTestUser(page, { email })` from `@huishouden/pwa-kit/e2e` mints a custom

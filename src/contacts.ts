@@ -1,10 +1,13 @@
-import { collection, doc, onSnapshot, type Firestore, type Unsubscribe } from 'firebase/firestore';
-import { addDoc, deleteDoc, deleteField, setDoc, updateDoc } from './firestore.js';
+import { collection, doc, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
+import { addDoc, deleteDoc, deleteField, setDoc, updateDoc, writeBatch } from './firestore.js';
 
 /**
  * The household's contacts: the people and businesses it deals with (a pediatrician, the vet, the
  * lawn service). One collection, `households/{id}/contacts`, shared by every app; `apps` says
  * which apps show a contact, so the pediatrician appears in Baby and later in a health app too.
+ *
+ * A contact marked `private` is for admins and members only (`./roles`); helpers and kids never
+ * read it. Every save writes the flag, since one without it counts as private to them.
  *
  * Fields match the rules exactly (see CONTACT_FIELDS); keep them in step.
  */
@@ -21,20 +24,22 @@ export interface Contact {
   notes?: string;
   /** Apps that show this contact, by short name: ["baby"]. */
   apps: string[];
+  /** Only admins and members see it. */
+  private?: boolean;
   createdAt: number;
   updatedAt?: number;
   by: string;
 }
 
 export const CONTACT_FIELDS = [
-  'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'apps', 'createdAt', 'updatedAt', 'by',
+  'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'apps', 'private', 'createdAt', 'updatedAt', 'by',
 ] as const;
 
 export type ContactInput = Omit<Contact, 'id' | 'createdAt' | 'updatedAt' | 'by'>;
 
 const contactsOf = (db: Firestore, householdId: string) => collection(db, 'households', householdId, 'contacts');
 
-/** Drops empty optional fields so documents only carry what was filled in. */
+/** Drops empty optional fields so documents only carry what was filled in; `private` is always written. */
 export function cleanContact(input: ContactInput): ContactInput {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(input)) {
@@ -42,6 +47,7 @@ export function cleanContact(input: ContactInput): ContactInput {
       if (v.trim()) out[k] = v.trim();
     } else if (v !== undefined) out[k] = v;
   }
+  out.private = input.private === true;
   return out as ContactInput;
 }
 
@@ -58,21 +64,34 @@ export function toContact(id: string, data: Record<string, unknown>): Contact {
     mapsUrl: str('mapsUrl'),
     notes: str('notes'),
     apps: Array.isArray(data.apps) ? data.apps.map(String) : [],
+    ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
     createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
     updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : undefined,
     by: str('by') ?? '',
   };
 }
 
-/** Follows the household's contacts, optionally only those shown in one app, sorted by name. */
+export interface WatchContactsOptions {
+  /** Only those shown in this app. */
+  app?: string;
+  /** A helper or kid (`isRestricted(role)`): only contacts not marked private, as the rules require. */
+  restricted?: boolean;
+  onError?: (error: Error) => void;
+}
+
+/**
+ * Follows the household's contacts, optionally only those shown in one app, sorted by name. Pass
+ * `restricted` for helpers and kids: the rules refuse them a list that could include private ones.
+ */
 export function watchContacts(
   db: Firestore,
   householdId: string,
   onChange: (contacts: Contact[]) => void,
-  { app, onError }: { app?: string; onError?: (error: Error) => void } = {},
+  { app, restricted, onError }: WatchContactsOptions = {},
 ): Unsubscribe {
+  const all = contactsOf(db, householdId);
   return onSnapshot(
-    contactsOf(db, householdId),
+    restricted ? query(all, where('private', '==', false)) : all,
     (snap) =>
       onChange(
         snap.docs
@@ -109,6 +128,22 @@ export async function removeContactFromApp(db: Firestore, householdId: string, c
   const others = contact.apps.filter((a) => a !== app);
   if (others.length === 0) return deleteContact(db, householdId, contact.id);
   await updateDoc(doc(contactsOf(db, householdId), contact.id), { apps: others, updatedAt: Date.now(), by });
+}
+
+/**
+ * Writes `private: false` on records saved before the flag existed, which helpers and kids can't
+ * read until then. Admins and members only (`can(role, 'see-private')`), for any private-capable
+ * collection (contacts, an app's appointments); cheap to run whenever the list loads, since it
+ * writes only records without the flag.
+ */
+export async function markUnflaggedOpen(db: Firestore, householdId: string, collectionName: string, records: { id: string; private?: unknown }[]): Promise<number> {
+  const unflagged = records.filter((r) => typeof r.private !== 'boolean');
+  for (let i = 0; i < unflagged.length; i += 450) {
+    const batch = writeBatch(db);
+    for (const r of unflagged.slice(i, i + 450)) batch.update(doc(db, 'households', householdId, collectionName, r.id), { private: false });
+    await batch.commit();
+  }
+  return unflagged.length;
 }
 
 /** Puts a deleted contact back under its old id (Undo), so appointments that point at it still do. */
@@ -178,5 +213,6 @@ export function contactInput(fields: Omit<ContactInput, 'apps'>, apps: string[],
     mapsUrl: fields.mapsUrl?.trim() || undefined,
     notes: cut(fields.notes, CONTACT_LIMITS.notes),
     apps: apps.includes(app) ? apps : [...apps, app],
+    private: fields.private === true,
   };
 }

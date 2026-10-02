@@ -136,7 +136,12 @@ describe('places', () => {
 
 describe('contacts', () => {
   test('empty optional fields are dropped and text trimmed', () => {
-    expect(cleanContact({ name: ' Dr. Example ', role: 'Pediatrician', phone: '  ', apps: ['baby'] })).toEqual({ name: 'Dr. Example', role: 'Pediatrician', apps: ['baby'] });
+    expect(cleanContact({ name: ' Dr. Example ', role: 'Pediatrician', phone: '  ', apps: ['baby'] })).toEqual({ name: 'Dr. Example', role: 'Pediatrician', apps: ['baby'], private: false });
+  });
+  test('always writes the private flag, which helpers and kids need to see a contact', () => {
+    expect(cleanContact({ name: 'Example Vet', apps: ['pet'], private: true }).private).toBe(true);
+    expect(toContact('c1', { name: 'Example Vet', apps: [] }).private).toBeUndefined();
+    expect(toContact('c1', { name: 'Example Vet', apps: [], private: false }).private).toBe(false);
   });
   test('reads documents defensively', () => {
     expect(toContact('c1', { name: 'Example Vet', apps: 'baby' })).toMatchObject({ id: 'c1', name: 'Example Vet', apps: [], createdAt: 0 });

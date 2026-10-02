@@ -5,7 +5,8 @@
     "body": {
       "users": [
         { "localId": "test-a", "email": "test-a@example.com", "emailVerified": true, "displayName": "Test A" },
-        { "localId": "test-b", "email": "test-b@example.com", "emailVerified": true, "displayName": "Test B" }
+        { "localId": "test-b", "email": "test-b@example.com", "emailVerified": true, "displayName": "Test B" },
+        { "localId": "test-helper", "email": "test-helper@example.com", "emailVerified": true, "displayName": "Test Helper" }
       ],
       "allowOverwrite": true
     }
@@ -16,8 +17,17 @@
     "body": {
       "fields": {
         "name": { "stringValue": "Test household" },
-        "members": { "arrayValue": { "values": [{ "stringValue": "test-a@example.com" }, { "stringValue": "test-b@example.com" }] } },
-        "joined": { "arrayValue": { "values": [{ "stringValue": "test-a@example.com" }, { "stringValue": "test-b@example.com" }] } },
+        "members": { "arrayValue": { "values": [{ "stringValue": "test-a@example.com" }, { "stringValue": "test-b@example.com" }, { "stringValue": "test-helper@example.com" }] } },
+        "joined": { "arrayValue": { "values": [{ "stringValue": "test-a@example.com" }, { "stringValue": "test-b@example.com" }, { "stringValue": "test-helper@example.com" }] } },
+        "roles": {
+          "mapValue": {
+            "fields": {
+              "test-a@example.com": { "stringValue": "admin" },
+              "test-b@example.com": { "stringValue": "member" },
+              "test-helper@example.com": { "stringValue": "helper" }
+            }
+          }
+        },
         "createdAt": { "integerValue": "1767225600000" }
       }
     }
