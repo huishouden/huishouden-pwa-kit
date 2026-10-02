@@ -30,10 +30,19 @@ export type HouseholdState = {
 };
 export declare const normalizeEmail: (email: string) => string;
 /**
- * Follows the household the signed-in person belongs to. If they belong to several, the oldest
- * wins, so every app picks the same one.
+ * The household an app uses when a person belongs to several: the oldest, so every app picks the
+ * same one. Documents still waiting for the server (a household created a moment ago on this device)
+ * are skipped — the rules can't see them yet, so subscriptions under them would be refused.
  */
+export declare function pickHousehold(docs: {
+    id: string;
+    data: Record<string, unknown>;
+    pending?: boolean;
+}[]): Household | null;
+/** Follows the household the signed-in person belongs to (see `pickHousehold`). */
 export declare function watchHousehold(db: Firestore, email: string, onChange: (state: HouseholdState) => void): Unsubscribe;
+/** One-off lookup of the same household `watchHousehold` follows; null when not a member anywhere. */
+export declare function findHousehold(db: Firestore, email: string): Promise<Household | null>;
 export declare function toHousehold(id: string, data: Record<string, unknown>): Household;
 /** Starts a household with only its creator; others are invited from inside. */
 export declare function createHousehold(db: Firestore, email: string, name: string): Promise<string>;
