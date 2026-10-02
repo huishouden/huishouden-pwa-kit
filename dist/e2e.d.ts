@@ -56,6 +56,18 @@ export interface GoogleTokenStubOptions {
  * recorded in `window.__gisTokenRequests` (`{ client_id, scope }`). Call before `page.goto`.
  */
 export declare function stubGoogleTokens(page: Page, { token, fail }?: GoogleTokenStubOptions): Promise<void>;
+export interface CalendarStubOptions {
+    /** What the calendar holds, as `findCalendarEvents` returns it (`CalendarMatch[]` from `./calendar`). */
+    events: unknown[];
+    /** Also stand in for a calendar token already granted on this device, so suggestions look on open (default true). */
+    cachedToken?: boolean;
+}
+/**
+ * Before the page loads: Google Calendar answers from `events` (`window.__mockCalendarEvents`) and,
+ * with `cachedToken`, the device counts as having a calendar token (`window.__mockCalendarToken`),
+ * which `useCalendarSuggestions` needs before it looks. Works signed out, in the sample app.
+ */
+export declare function stubCalendar(page: Page | BrowserContext, { events, cachedToken }: CalendarStubOptions): Promise<void>;
 export interface SignInTestUserOptions {
     /** One of the seeded test users (`TEST_USERS` in `@huishouden/pwa-kit/staging`). */
     email: string;

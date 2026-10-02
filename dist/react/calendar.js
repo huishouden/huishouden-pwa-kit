@@ -1,15 +1,16 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 /**
  * Calendar search in React: the one-search-at-a-time hook, "Find in my calendar" inside a dialog,
- * the import dialog that lists events not yet in the app, the linked-event row and the one-line
- * hint before Google's first permission window. Built on `findCalendarEvents` in `../calendar`.
+ * the import dialog that lists events not yet in the app, the linked-event row, the one-line
+ * hint before Google's first permission window, and suggestions of new events found when the app
+ * opens. Built on `findCalendarEvents` in `../calendar`.
  *
  * `app` is the app's short name ("Baby"): it words the hint and keys whether this browser has
  * already been asked (`<app>-calendar-allowed` in localStorage).
  */
-import { useCallback, useRef, useState } from 'react';
-import { CalendarSearch, ExternalLink, MapPin, Plus, X } from 'lucide-react';
-import { calendarError, findCalendarEvents, notImported } from '../calendar';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { CalendarPlus, CalendarSearch, ChevronDown, ChevronUp, ExternalLink, MapPin, Plus, X } from 'lucide-react';
+import { cachedCalendarToken, calendarError, dismissedEvents, dismissEvent, findCalendarEvents, newSuggestions, notImported, SUGGESTION_RESCAN_MS, suggestionWhen, } from '../calendar';
 import { formatDayShort, formatTime } from '../time';
 import { Dialog, ErrorNotice, ghostButton, iconButton, linkClass, primaryButton, secondaryButton } from './ui';
 const askedKey = (app) => `${app.toLowerCase()}-calendar-allowed`;
@@ -88,4 +89,125 @@ export function CalendarImportDialog({ state, records, intro, noneFound, allImpo
                         onAdd(fresh);
                         onClose();
                     }, children: ["Add all ", fresh.length] }))] }), children: [_jsx("p", { className: "text-base text-stone-600", children: intro }), children, _jsxs("div", { className: "mt-4", children: [(state.status === 'searching' || state.status === 'idle') && (_jsx("p", { role: "status", className: "text-base text-stone-600", children: "Searching your calendars" })), state.status === 'error' && _jsx(ErrorNotice, { message: state.message, onRetry: onRetry }), state.status === 'done' && fresh.length === 0 && (_jsx("p", { role: "status", className: "text-base text-stone-600", children: state.matches.length ? allImported : noneFound })), fresh.length > 0 && (_jsx("ul", { className: "divide-y divide-stone-200 rounded-2xl border border-stone-200", "aria-label": "Calendar events", children: fresh.map((m) => (_jsxs("li", { className: "flex items-center gap-3 px-3 py-2", children: [_jsxs("div", { className: "min-w-0 flex-1", children: [_jsx("p", { className: "font-medium text-stone-800 [overflow-wrap:anywhere]", children: m.title }), _jsx("p", { className: "text-sm text-stone-600", children: matchWhen(m) }), m.location && _jsx("p", { className: "text-sm text-stone-600 [overflow-wrap:anywhere]", children: m.location })] }), _jsxs("button", { type: "button", className: secondaryButton, onClick: () => onAdd([m]), "aria-label": `Add ${m.title}`, children: [_jsx(Plus, { size: 18 }), " Add"] })] }, `${m.id}-${m.start}`))) }))] })] }));
+}
+const GUEST = 'guest';
+/**
+ * New calendar events that belong in the app, so "add a vet appointment for Biscuit Tuesday at 3"
+ * told to an assistant that writes to Google Calendar turns up in Pet without anyone importing it.
+ *
+ * Looks when the app opens (and when the signed-in member changes), and again when it comes back
+ * into view, at most every 30 minutes, for `words` from now to `horizonDays` ahead. Only with a
+ * calendar token this device already has (`cachedCalendarToken`): it never opens Google's window,
+ * so without one `canScan` is false and there are no suggestions until the member next uses Import
+ * from calendar or Find in my calendar. A failed look is silent; the next one tries again.
+ *
+ * Mount it once in the app's shell, not in a screen that comes and goes, so switching tabs does not
+ * look again. Dismissals are kept per member in localStorage (`<app>-calendar-dismissed-<uid>`).
+ */
+export function useCalendarSuggestions({ auth, words, isImported, app, horizonDays = 60, limit = 25 }) {
+    const [member, setMember] = useState(() => auth.currentUser?.uid ?? GUEST);
+    const [canScan, setCanScan] = useState(false);
+    const [matches, setMatches] = useState([]);
+    const [dismissed, setDismissed] = useState(() => dismissedEvents(app, member));
+    const lastScan = useRef(0);
+    const seq = useRef(0);
+    const settings = useRef({ words, horizonDays, limit });
+    settings.current = { words, horizonDays, limit };
+    const scan = useCallback(async () => {
+        const token = cachedCalendarToken(auth);
+        setCanScan(!!token);
+        const mine = ++seq.current;
+        if (!token) {
+            setMatches([]);
+            return;
+        }
+        lastScan.current = Date.now();
+        const { words, horizonDays, limit } = settings.current;
+        const from = Date.now();
+        const to = from + horizonDays * 86_400_000;
+        try {
+            const found = await findCalendarEvents(auth, [...words], { token, from, to, limit });
+            // The real search keeps to the window already; the browser-test stand-in does not.
+            if (mine === seq.current)
+                setMatches(found.filter((m) => (m.end ?? m.start) >= from && m.start <= to));
+        }
+        catch {
+            // A revoked or expired token is forgotten by the search; the next look starts over.
+            if (mine === seq.current)
+                setCanScan(!!cachedCalendarToken(auth));
+        }
+    }, [auth]);
+    // On open, then again whenever the signed-in member changes (a restored session arrives after mount).
+    const looked = useRef(null);
+    useEffect(() => {
+        const lookFor = (who) => {
+            if (looked.current === who)
+                return;
+            looked.current = who;
+            setMember(who);
+            setDismissed(dismissedEvents(app, who));
+            setMatches([]);
+            void scan();
+        };
+        lookFor(auth.currentUser?.uid ?? GUEST);
+        return auth.onAuthStateChanged((user) => lookFor(user?.uid ?? GUEST));
+    }, [auth, app, scan]);
+    useEffect(() => {
+        const onShow = () => {
+            if (document.visibilityState === 'visible' && Date.now() - lastScan.current >= SUGGESTION_RESCAN_MS)
+                void scan();
+        };
+        document.addEventListener('visibilitychange', onShow);
+        return () => document.removeEventListener('visibilitychange', onShow);
+    }, [scan]);
+    const dismiss = useCallback((m) => setDismissed(dismissEvent(app, member, m.id)), [app, member]);
+    const suggestions = canScan ? newSuggestions(matches, { isImported, dismissed }) : [];
+    return { canScan, suggestions, dismiss, scan };
+}
+/** How long an added event stays hidden waiting for its record; a failed save brings it back. */
+const ADDED_HIDE_MS = 10_000;
+/**
+ * The calm one-line card for new calendar events: "New in your calendar: Vet — Biscuit · Tue 3:00 PM"
+ * with Add and Not this one, and "+2 more" opening the rest as a list. Renders nothing without
+ * suggestions. `onAdd` is the app's own import (the same as Import from calendar's Add); the event
+ * leaves the card at once and stays gone when its record arrives (if none arrives within ten
+ * seconds, the save failed and it comes back). After either button, focus stays on the card.
+ */
+export function CalendarSuggestions({ suggestions, onAdd, onDismiss, now = Date.now() }) {
+    const [open, setOpen] = useState(false);
+    const [added, setAdded] = useState(() => new Map());
+    const card = useRef(null);
+    const listId = useId();
+    // Forget added ids once their event is gone from the suggestions (imported, or another member's
+    // list), or once the wait for the record is over.
+    const ids = suggestions.map((m) => m.id).join('\n');
+    useEffect(() => {
+        if (added.size === 0)
+            return;
+        const present = new Set(ids.split('\n'));
+        const live = [...added].filter(([id, at]) => present.has(id) && Date.now() - at < ADDED_HIDE_MS);
+        if (live.length !== added.size) {
+            setAdded(new Map(live));
+            return;
+        }
+        const next = Math.min(...live.map(([, at]) => at + ADDED_HIDE_MS)) - Date.now();
+        const timer = setTimeout(() => setAdded((a) => new Map([...a].filter(([, at]) => Date.now() - at < ADDED_HIDE_MS))), Math.max(next, 0));
+        return () => clearTimeout(timer);
+    }, [ids, added]);
+    const shown = suggestions.filter((m) => !added.has(m.id));
+    if (shown.length === 0)
+        return null;
+    const [first, ...rest] = shown;
+    const keepFocus = () => setTimeout(() => card.current?.focus());
+    const add = (m) => {
+        setAdded((a) => new Map(a).set(m.id, Date.now()));
+        onAdd(m);
+        keepFocus();
+    };
+    const dismiss = (m) => {
+        onDismiss(m);
+        keepFocus();
+    };
+    const actions = (m) => (_jsxs("div", { className: "flex shrink-0 gap-1", children: [_jsx("button", { type: "button", className: ghostButton, onClick: () => dismiss(m), "aria-label": `Not this one: ${m.title}`, children: "Not this one" }), _jsxs("button", { type: "button", className: secondaryButton, onClick: () => add(m), "aria-label": `Add ${m.title}`, children: [_jsx(Plus, { size: 18 }), " Add"] })] }));
+    return (_jsxs("section", { ref: card, tabIndex: -1, className: "rounded-2xl border border-stone-200 bg-white px-4 py-2 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-forest-200", "aria-label": "New in your calendar", children: [_jsxs("div", { className: "flex flex-wrap items-center gap-x-3 gap-y-1", children: [_jsx(CalendarPlus, { size: 20, className: "shrink-0 text-forest-700", "aria-hidden": "true" }), _jsxs("p", { role: "status", className: "min-w-0 flex-1 text-base text-stone-700 [overflow-wrap:anywhere]", children: ["New in your calendar: ", _jsx("span", { className: "font-medium text-stone-800", children: first.title }), _jsxs("span", { className: "text-stone-600", children: [" \u00B7 ", suggestionWhen(first, now)] })] }), rest.length > 0 && (_jsxs("button", { type: "button", className: ghostButton, onClick: () => setOpen((o) => !o), "aria-expanded": open, "aria-controls": listId, children: [open ? _jsx(ChevronUp, { size: 18 }) : _jsx(ChevronDown, { size: 18 }), " +", rest.length, " more"] })), actions(first)] }), open && rest.length > 0 && (_jsx("ul", { id: listId, className: "mt-1 divide-y divide-stone-200 border-t border-stone-200", "aria-label": "More new calendar events", children: rest.map((m) => (_jsxs("li", { className: "flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 pl-8", children: [_jsxs("p", { className: "min-w-0 flex-1 text-base [overflow-wrap:anywhere]", children: [_jsx("span", { className: "font-medium text-stone-800", children: m.title }), _jsxs("span", { className: "text-stone-600", children: [" \u00B7 ", suggestionWhen(m, now)] })] }), actions(m)] }, m.id))) }))] }));
 }

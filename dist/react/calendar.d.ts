@@ -1,7 +1,8 @@
 /**
  * Calendar search in React: the one-search-at-a-time hook, "Find in my calendar" inside a dialog,
- * the import dialog that lists events not yet in the app, the linked-event row and the one-line
- * hint before Google's first permission window. Built on `findCalendarEvents` in `../calendar`.
+ * the import dialog that lists events not yet in the app, the linked-event row, the one-line
+ * hint before Google's first permission window, and suggestions of new events found when the app
+ * opens. Built on `findCalendarEvents` in `../calendar`.
  *
  * `app` is the app's short name ("Baby"): it words the hint and keys whether this browser has
  * already been asked (`<app>-calendar-allowed` in localStorage).
@@ -79,3 +80,55 @@ export declare function CalendarImportDialog({ state, records, intro, noneFound,
     /** Shown above the events: an app's own suggestions from the same scan (Pet's birthdays). */
     children?: ReactNode;
 }): import("react").JSX.Element;
+export interface CalendarSuggestionsOptions {
+    /** The app's one `Auth` (a new object each render would look again each render). */
+    auth: Auth;
+    /** The theme words Import from calendar scans for (the app's own list). */
+    words: readonly string[];
+    /** Whether the app already has a record for this event, e.g. `(m) => isImported(m, appointments)`. */
+    isImported: (m: CalendarMatch) => boolean;
+    /** The app's short name ("Pet"): keys the dismissals. */
+    app: string;
+    /** How far ahead to look, in days (default 60). */
+    horizonDays?: number;
+    /** Most events per scan (default 25). */
+    limit?: number;
+}
+export interface CalendarSuggestionsState {
+    /** This device has a calendar token, so a scan can run without asking. False: no suggestions. */
+    canScan: boolean;
+    /** New events, soonest first: not in the app, not dismissed by this member. */
+    suggestions: CalendarMatch[];
+    /** "Not this one": never suggest this event to this member again, on this device. */
+    dismiss: (m: CalendarMatch) => void;
+    /** Look again now (it also looks on its own; see `useCalendarSuggestions`). */
+    scan: () => Promise<void>;
+}
+/**
+ * New calendar events that belong in the app, so "add a vet appointment for Biscuit Tuesday at 3"
+ * told to an assistant that writes to Google Calendar turns up in Pet without anyone importing it.
+ *
+ * Looks when the app opens (and when the signed-in member changes), and again when it comes back
+ * into view, at most every 30 minutes, for `words` from now to `horizonDays` ahead. Only with a
+ * calendar token this device already has (`cachedCalendarToken`): it never opens Google's window,
+ * so without one `canScan` is false and there are no suggestions until the member next uses Import
+ * from calendar or Find in my calendar. A failed look is silent; the next one tries again.
+ *
+ * Mount it once in the app's shell, not in a screen that comes and goes, so switching tabs does not
+ * look again. Dismissals are kept per member in localStorage (`<app>-calendar-dismissed-<uid>`).
+ */
+export declare function useCalendarSuggestions({ auth, words, isImported, app, horizonDays, limit }: CalendarSuggestionsOptions): CalendarSuggestionsState;
+/**
+ * The calm one-line card for new calendar events: "New in your calendar: Vet — Biscuit · Tue 3:00 PM"
+ * with Add and Not this one, and "+2 more" opening the rest as a list. Renders nothing without
+ * suggestions. `onAdd` is the app's own import (the same as Import from calendar's Add); the event
+ * leaves the card at once and stays gone when its record arrives (if none arrives within ten
+ * seconds, the save failed and it comes back). After either button, focus stays on the card.
+ */
+export declare function CalendarSuggestions({ suggestions, onAdd, onDismiss, now }: {
+    suggestions: CalendarMatch[];
+    onAdd: (m: CalendarMatch) => void;
+    onDismiss: (m: CalendarMatch) => void;
+    /** For the day words ("Today", "Tue"); default the current time. */
+    now?: number;
+}): import("react").JSX.Element | null;
