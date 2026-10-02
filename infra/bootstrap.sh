@@ -97,6 +97,12 @@ step "Deploy service account"
 SA="$SA_NAME@$PROJECT.iam.gserviceaccount.com"
 gcloud iam service-accounts describe "$SA" --project "$PROJECT" >/dev/null 2>&1 \
   || gcloud iam service-accounts create "$SA_NAME" --project "$PROJECT" --display-name "GitHub Actions deploy"
+# A new service account takes a few seconds to become visible to IAM; granting roles before then
+# fails with "does not exist". Wait for it (up to a minute) rather than failing the run.
+for _ in $(seq 1 12); do
+  gcloud iam service-accounts describe "$SA" --project "$PROJECT" >/dev/null 2>&1 && break
+  sleep 5
+done
 ROLES=(roles/firebasehosting.admin roles/serviceusage.serviceUsageConsumer roles/serviceusage.apiKeysViewer roles/run.viewer)
 # Staging only: the rules repo deploys there from PRs, and CI seeds the test household (Firestore,
 # Auth users) and signs the test users' custom tokens. Never granted in production.
