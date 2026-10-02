@@ -16,6 +16,7 @@ const { Dialog, SectionTabs, Toast, StatusPill, useToast } = await import('../sr
 const { ClockProvider, useClock } = await import('../src/react/clock');
 const { CalendarImportDialog, CalendarHint } = await import('../src/react/calendar');
 const { ContactDialog, ContactCard } = await import('../src/react/contacts');
+const { PhotoPicker } = await import('../src/react/photo');
 
 function render(node: React.ReactNode): { root: Root; el: HTMLElement } {
   document.body.innerHTML = '<div id="app"></div>';
@@ -256,6 +257,44 @@ describe('contacts', () => {
     expect(hrefs).toContain('https://www.example.com/');
     expect(document.body.textContent).toContain('example.com');
     expect(hrefs.some((h) => h?.startsWith('https://www.google.com/maps/search/'))).toBe(true);
+  });
+});
+
+describe('PhotoPicker', () => {
+  test('choose, Use photo saves the small data URL; Remove photo clears it', async () => {
+    const g = globalThis as Record<string, unknown>;
+    const saved = { createImageBitmap: g.createImageBitmap, OffscreenCanvas: g.OffscreenCanvas };
+    g.createImageBitmap = async () => ({ width: 800, height: 600, close() {} });
+    g.OffscreenCanvas = class {
+      constructor(
+        public width: number,
+        public height: number,
+      ) {}
+      getContext() {
+        return { drawImage() {} };
+      }
+      async convertToBlob({ type }: { type: string }) {
+        return new Blob([new Uint8Array(1000)], { type });
+      }
+    };
+    try {
+      const saves: string[] = [];
+      let removed = 0;
+      render(<PhotoPicker photo={null} fallback={<span>B</span>} label="Biscuit's photo" pick={async () => new Blob(['x'])} onSave={(d) => saves.push(d)} onRemove={() => removed++} />);
+      expect(document.querySelector('[aria-label="Add Biscuit\'s photo"]')).not.toBeNull();
+      await act(async () => click(byText('Choose photo')));
+      expect(document.querySelector('input[type="range"]')).not.toBeNull();
+      await act(async () => click(byText('Use photo')));
+      expect(saves).toHaveLength(1);
+      expect(saves[0].startsWith('data:image/webp;base64,')).toBe(true);
+
+      render(<PhotoPicker photo={saves[0]} fallback={<span>B</span>} label="Biscuit's photo" onSave={() => {}} onRemove={() => removed++} />);
+      expect(document.querySelector('img')?.getAttribute('src')).toBe(saves[0]);
+      click(byText('Remove photo'));
+      expect(removed).toBe(1);
+    } finally {
+      Object.assign(g, saved);
+    }
   });
 });
 
