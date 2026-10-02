@@ -48,7 +48,7 @@ export function testUser(email: string): TestUser {
   return user;
 }
 
-export interface Request {
+export interface AdminRestCall {
   method: 'POST' | 'PATCH';
   url: string;
   body: unknown;
@@ -60,7 +60,7 @@ export function customTokenClaims(uid: string, serviceAccount: string, nowMs: nu
   return { iss: serviceAccount, sub: serviceAccount, aud: CUSTOM_TOKEN_AUDIENCE, iat, exp: iat + 3600, uid };
 }
 
-export function signJwtRequest(uid: string, serviceAccount: string, nowMs: number): Request {
+export function signJwtRequest(uid: string, serviceAccount: string, nowMs: number): AdminRestCall {
   if (!serviceAccount.endsWith(`@${STAGING_PROJECT}.iam.gserviceaccount.com`)) {
     throw new Error(`Custom tokens are only minted by a ${STAGING_PROJECT} service account, not ${serviceAccount}`);
   }
@@ -79,8 +79,8 @@ const str = (s: string): FirestoreValue => ({ stringValue: s });
  * verified) and the household document (replaced whole each run). App data under the household is
  * left alone, so tests write values unique to their run rather than counting on an empty household.
  */
-export function seedRequests(projectId: string = STAGING_PROJECT): Request[] {
-  assertStagingProject(projectId);
+export function seedRequests(): AdminRestCall[] {
+  const projectId = STAGING_PROJECT;
   const members = { arrayValue: { values: TEST_HOUSEHOLD.members.map(str) } };
   return [
     {
@@ -106,10 +106,10 @@ export function seedRequests(projectId: string = STAGING_PROJECT): Request[] {
   ];
 }
 
-async function call(req: Request, accessToken: string, fetchImpl: typeof fetch, projectId = STAGING_PROJECT): Promise<Record<string, unknown>> {
+async function call(req: AdminRestCall, accessToken: string, fetchImpl: typeof fetch): Promise<Record<string, unknown>> {
   const res = await fetchImpl(req.url, {
     method: req.method,
-    headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json', 'x-goog-user-project': projectId },
+    headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json', 'x-goog-user-project': STAGING_PROJECT },
     body: JSON.stringify(req.body),
   });
   const text = await res.text();
@@ -124,11 +124,11 @@ export interface StagingCredentials {
 }
 
 /** Creates or resets the test users and their household. Safe to run on every CI run. */
-export async function seedTestHousehold({ accessToken, projectId = STAGING_PROJECT, fetchImpl = fetch }: StagingCredentials & { projectId?: string }) {
-  const [users, household] = seedRequests(projectId);
-  const created = await call(users!, accessToken, fetchImpl, projectId);
+export async function seedTestHousehold({ accessToken, fetchImpl = fetch }: StagingCredentials) {
+  const [users, household] = seedRequests();
+  const created = await call(users!, accessToken, fetchImpl);
   if (Array.isArray(created.error) && created.error.length) throw new Error(`test users: ${JSON.stringify(created.error)}`);
-  await call(household!, accessToken, fetchImpl, projectId);
+  await call(household!, accessToken, fetchImpl);
 }
 
 /** A Firebase custom token for a test user, signed by the staging service account without a key. */
@@ -145,11 +145,34 @@ export async function mintCustomToken({
   return signedJwt;
 }
 
+export interface StagingWebConfig {
+  apiKey: string;
+  projectId: string;
+  authDomain?: string;
+}
+
+/**
+ * The Firebase web config a test signs in with, and the guard that it is staging's. The build's
+ * VITE_FIREBASE_* (what the app was built with) win over the site's /__/firebase/init.json (what its
+ * Hosting project serves); either one naming another project refuses, as does a missing API key.
+ */
+export function stagingWebConfig(
+  env: Record<string, string | undefined>,
+  site: { apiKey?: string; projectId?: string; authDomain?: string } | null,
+): StagingWebConfig {
+  if (site?.projectId) assertStagingProject(site.projectId, "This site's Hosting project");
+  const projectId = env.VITE_FIREBASE_PROJECT_ID || site?.projectId;
+  assertStagingProject(projectId, "The app's Firebase project");
+  const apiKey = env.VITE_FIREBASE_API_KEY || site?.apiKey;
+  if (!apiKey) throw new Error('No Firebase API key: set VITE_FIREBASE_API_KEY or test a Firebase Hosting site');
+  return { apiKey, projectId: projectId!, authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || site?.authDomain };
+}
+
 const processEnv = () =>
   (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
 
 /** CI hands these to the staging e2e step (see .github/workflows/pwa.yml). */
-export function stagingCredentialsFromEnv(env: Record<string, string | undefined> = processEnv()) {
+export function stagingCredentialsFromEnv(env: Record<string, string | undefined> = processEnv()): { accessToken: string; serviceAccount: string } {
   const accessToken = env.HH_STAGING_ACCESS_TOKEN;
   const serviceAccount = env.HH_STAGING_SA;
   if (!accessToken || !serviceAccount) {

@@ -57,8 +57,8 @@ const str = (s) => ({ stringValue: s });
  * verified) and the household document (replaced whole each run). App data under the household is
  * left alone, so tests write values unique to their run rather than counting on an empty household.
  */
-export function seedRequests(projectId = STAGING_PROJECT) {
-    assertStagingProject(projectId);
+export function seedRequests() {
+    const projectId = STAGING_PROJECT;
     const members = { arrayValue: { values: TEST_HOUSEHOLD.members.map(str) } };
     return [
         {
@@ -83,10 +83,10 @@ export function seedRequests(projectId = STAGING_PROJECT) {
         },
     ];
 }
-async function call(req, accessToken, fetchImpl, projectId = STAGING_PROJECT) {
+async function call(req, accessToken, fetchImpl) {
     const res = await fetchImpl(req.url, {
         method: req.method,
-        headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json', 'x-goog-user-project': projectId },
+        headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json', 'x-goog-user-project': STAGING_PROJECT },
         body: JSON.stringify(req.body),
     });
     const text = await res.text();
@@ -95,12 +95,12 @@ async function call(req, accessToken, fetchImpl, projectId = STAGING_PROJECT) {
     return text ? JSON.parse(text) : {};
 }
 /** Creates or resets the test users and their household. Safe to run on every CI run. */
-export async function seedTestHousehold({ accessToken, projectId = STAGING_PROJECT, fetchImpl = fetch }) {
-    const [users, household] = seedRequests(projectId);
-    const created = await call(users, accessToken, fetchImpl, projectId);
+export async function seedTestHousehold({ accessToken, fetchImpl = fetch }) {
+    const [users, household] = seedRequests();
+    const created = await call(users, accessToken, fetchImpl);
     if (Array.isArray(created.error) && created.error.length)
         throw new Error(`test users: ${JSON.stringify(created.error)}`);
-    await call(household, accessToken, fetchImpl, projectId);
+    await call(household, accessToken, fetchImpl);
 }
 /** A Firebase custom token for a test user, signed by the staging service account without a key. */
 export async function mintCustomToken({ email, serviceAccount, accessToken, fetchImpl = fetch, now = Date.now(), }) {
@@ -109,6 +109,21 @@ export async function mintCustomToken({ email, serviceAccount, accessToken, fetc
     if (typeof signedJwt !== 'string')
         throw new Error('signJwt returned no token');
     return signedJwt;
+}
+/**
+ * The Firebase web config a test signs in with, and the guard that it is staging's. The build's
+ * VITE_FIREBASE_* (what the app was built with) win over the site's /__/firebase/init.json (what its
+ * Hosting project serves); either one naming another project refuses, as does a missing API key.
+ */
+export function stagingWebConfig(env, site) {
+    if (site?.projectId)
+        assertStagingProject(site.projectId, "This site's Hosting project");
+    const projectId = env.VITE_FIREBASE_PROJECT_ID || site?.projectId;
+    assertStagingProject(projectId, "The app's Firebase project");
+    const apiKey = env.VITE_FIREBASE_API_KEY || site?.apiKey;
+    if (!apiKey)
+        throw new Error('No Firebase API key: set VITE_FIREBASE_API_KEY or test a Firebase Hosting site');
+    return { apiKey, projectId: projectId, authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || site?.authDomain };
 }
 const processEnv = () => globalThis.process?.env ?? {};
 /** CI hands these to the staging e2e step (see .github/workflows/pwa.yml). */

@@ -15,6 +15,5 @@ if (!accessToken) {
   console.error('HH_STAGING_ACCESS_TOKEN is not set');
   process.exit(2);
 }
-const projectId = process.env.HH_STAGING_PROJECT || STAGING_PROJECT;
-await seedTestHousehold({ accessToken, projectId });
-console.log(`seeded ${projectId}: households/${TEST_HOUSEHOLD.id} with ${TEST_USERS.map((u) => u.email).join(', ')}`);
+await seedTestHousehold({ accessToken });
+console.log(`seeded ${STAGING_PROJECT}: households/${TEST_HOUSEHOLD.id} with ${TEST_USERS.map((u) => u.email).join(', ')}`);

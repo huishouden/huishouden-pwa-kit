@@ -63,18 +63,20 @@ export interface SignInTestUserOptions {
     path?: string;
     /** Firebase JS SDK version loaded from gstatic for the sign-in (default `FIREBASE_WEB_SDK`). */
     sdkVersion?: string;
+    /** Where HH_STAGING_* and VITE_FIREBASE_* are read from (default `process.env`). */
+    env?: Record<string, string | undefined>;
 }
 /** The Firebase web SDK the test sign-in loads; its saved session is read by any v9+ app build. */
 export declare const FIREBASE_WEB_SDK = "12.19.0";
 /**
  * Signs a seeded test user in on a staging site, then opens `path` signed in. Staging only: it
- * throws unless the build's Firebase project (VITE_FIREBASE_PROJECT_ID, or the site's own
- * /__/firebase/init.json) is huishouden-staging, and the custom token it mints is signed by the
- * staging service account, so Firebase would refuse it anywhere else too.
+ * throws unless the build's Firebase project (VITE_FIREBASE_PROJECT_ID) and the site's own
+ * /__/firebase/init.json both say huishouden-staging (`stagingWebConfig`), and the custom token it
+ * mints is signed by the staging service account, so Firebase would refuse it anywhere else too.
  *
  * How: on the site's /__/firebase/init.json (same origin, no app code running) it loads the Firebase
  * SDK from gstatic, runs `signInWithCustomToken`, and leaves the session in IndexedDB where the
  * app's own Firebase finds it on load, exactly as after a real sign-in. Needs the staging CI job's
  * HH_STAGING_ACCESS_TOKEN and HH_STAGING_SA; call `test.skip(!process.env.HH_STAGING_SA)` around it.
  */
-export declare function signInTestUser(page: Page, { email, path, sdkVersion }: SignInTestUserOptions): Promise<void>;
+export declare function signInTestUser(page: Page, { email, path, sdkVersion, env }: SignInTestUserOptions): Promise<void>;

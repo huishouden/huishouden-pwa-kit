@@ -5,8 +5,8 @@
 #   infra/bootstrap.sh path/to/apps.conf
 #   infra/bootstrap.sh --staging path/to/apps.conf
 #
-# --staging provisions the separate staging project instead (STANDARD.md "Staging"): the same apps
-# with sites named <STAGING_PROJECT>-<app> (the production default site becomes the staging default
+# --staging provisions the separate staging project, huishouden-staging, instead (STANDARD.md
+# "Staging"): the same apps with sites named <STAGING_PROJECT>-<app> (the production default site becomes the staging default
 # site), STAGING_-prefixed repo variables, a `staging` environment any branch may use, and a WIF
 # provider that accepts any branch of the owner's repos (pull requests deploy there). Its deploy
 # account may also deploy rules, write Firestore, manage Auth users and sign custom tokens for the
@@ -23,8 +23,8 @@
 #   every app as VITE_VAPID_PUBLIC_KEY for @huishouden/pwa-kit/push. Public, like the web config.
 #   DEPLOY_REPOS="<repo> ..." — repos that deploy to the project without a site (the rules repo):
 #   they get the WIF binding, the deploy variables and the environment.
-#   STAGING_PROJECT=<id> (needed for --staging), STAGING_DISPLAY_NAME, STAGING_FIRESTORE_LOCATION
-#   (default us-east1; the staging Firestore database is created if missing).
+#   STAGING_PROJECT (only huishouden-staging, the default), STAGING_DISPLAY_NAME,
+#   STAGING_FIRESTORE_LOCATION (default us-east1; the staging Firestore database is created if missing).
 #
 # Prerequisites (once per machine), all as the same Google account:
 #   npx firebase-tools login ; gcloud auth login ; gh auth login
@@ -44,7 +44,12 @@ read -r -a DEPLOY_REPOS <<<"${DEPLOY_REPOS:-}"
 VAR=""                # repo variable prefix
 
 if $STAGING; then
-  : "${STAGING_PROJECT:?STAGING_PROJECT missing in $CONFIG}"
+  # The kit's staging code (seed, test sign-in, the staging CI job) refuses every other project.
+  STAGING_PROJECT=${STAGING_PROJECT:-huishouden-staging}
+  if [[ "$STAGING_PROJECT" != huishouden-staging ]]; then
+    echo "STAGING_PROJECT must be huishouden-staging: the kit's staging code accepts no other project" >&2
+    exit 1
+  fi
   # Every site moves to the staging project: the production default site (named after the
   # project) becomes the staging default site, and <family>-<app> becomes <staging project>-<app>.
   STAGED=()

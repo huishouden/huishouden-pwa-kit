@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import { assertStagingProject, mintCustomToken, stagingCredentialsFromEnv, testUser } from './staging.js';
+import { mintCustomToken, stagingCredentialsFromEnv, stagingWebConfig, testUser } from './staging.js';
 /** Loads `path` and fails on any uncaught page error. Returns the errors seen for further checks. */
 export async function expectCleanLoad(page, path = '/') {
     const errors = [];
@@ -110,30 +110,21 @@ export async function stubGoogleTokens(page, { token = 'test-token', fail } = {}
 export const FIREBASE_WEB_SDK = '12.19.0';
 /**
  * Signs a seeded test user in on a staging site, then opens `path` signed in. Staging only: it
- * throws unless the build's Firebase project (VITE_FIREBASE_PROJECT_ID, or the site's own
- * /__/firebase/init.json) is huishouden-staging, and the custom token it mints is signed by the
- * staging service account, so Firebase would refuse it anywhere else too.
+ * throws unless the build's Firebase project (VITE_FIREBASE_PROJECT_ID) and the site's own
+ * /__/firebase/init.json both say huishouden-staging (`stagingWebConfig`), and the custom token it
+ * mints is signed by the staging service account, so Firebase would refuse it anywhere else too.
  *
  * How: on the site's /__/firebase/init.json (same origin, no app code running) it loads the Firebase
  * SDK from gstatic, runs `signInWithCustomToken`, and leaves the session in IndexedDB where the
  * app's own Firebase finds it on load, exactly as after a real sign-in. Needs the staging CI job's
  * HH_STAGING_ACCESS_TOKEN and HH_STAGING_SA; call `test.skip(!process.env.HH_STAGING_SA)` around it.
  */
-export async function signInTestUser(page, { email, path = '/', sdkVersion = FIREBASE_WEB_SDK }) {
-    const { accessToken, serviceAccount } = stagingCredentialsFromEnv(process.env);
+export async function signInTestUser(page, { email, path = '/', sdkVersion = FIREBASE_WEB_SDK, env = process.env }) {
+    const { accessToken, serviceAccount } = stagingCredentialsFromEnv(env);
     testUser(email);
     const res = await page.goto('/__/firebase/init.json');
     const site = res?.ok() ? (await res.json().catch(() => null)) : null;
-    if (site?.projectId)
-        assertStagingProject(site.projectId, 'This site\'s Hosting project');
-    const config = {
-        apiKey: process.env.VITE_FIREBASE_API_KEY || site?.apiKey,
-        projectId: process.env.VITE_FIREBASE_PROJECT_ID || site?.projectId,
-        authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || site?.authDomain,
-    };
-    assertStagingProject(config.projectId, 'The app\'s Firebase project');
-    if (!config.apiKey)
-        throw new Error('No Firebase API key: set VITE_FIREBASE_API_KEY or test a Firebase Hosting site');
+    const config = stagingWebConfig(env, site);
     const token = await mintCustomToken({ email, serviceAccount, accessToken });
     const signedIn = await page.evaluate(async ({ config, token, base }) => {
         const { initializeApp } = await import(`${base}/firebase-app.js`);

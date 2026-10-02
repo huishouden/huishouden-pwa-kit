@@ -28,7 +28,7 @@ export declare const TEST_HOUSEHOLD: {
 export declare const CUSTOM_TOKEN_AUDIENCE = "https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit";
 export declare function assertStagingProject(projectId: string | undefined, what?: string): void;
 export declare function testUser(email: string): TestUser;
-export interface Request {
+export interface AdminRestCall {
     method: 'POST' | 'PATCH';
     url: string;
     body: unknown;
@@ -42,28 +42,41 @@ export declare function customTokenClaims(uid: string, serviceAccount: string, n
     exp: number;
     uid: string;
 };
-export declare function signJwtRequest(uid: string, serviceAccount: string, nowMs: number): Request;
+export declare function signJwtRequest(uid: string, serviceAccount: string, nowMs: number): AdminRestCall;
 /**
  * The seed as two idempotent Admin REST calls: the test users (overwritten each run, emails
  * verified) and the household document (replaced whole each run). App data under the household is
  * left alone, so tests write values unique to their run rather than counting on an empty household.
  */
-export declare function seedRequests(projectId?: string): Request[];
+export declare function seedRequests(): AdminRestCall[];
 export interface StagingCredentials {
     /** OAuth access token of the staging deploy service account (CI: the auth step's output). */
     accessToken: string;
     fetchImpl?: typeof fetch;
 }
 /** Creates or resets the test users and their household. Safe to run on every CI run. */
-export declare function seedTestHousehold({ accessToken, projectId, fetchImpl }: StagingCredentials & {
-    projectId?: string;
-}): Promise<void>;
+export declare function seedTestHousehold({ accessToken, fetchImpl }: StagingCredentials): Promise<void>;
 /** A Firebase custom token for a test user, signed by the staging service account without a key. */
 export declare function mintCustomToken({ email, serviceAccount, accessToken, fetchImpl, now, }: StagingCredentials & {
     email: string;
     serviceAccount: string;
     now?: number;
 }): Promise<string>;
+export interface StagingWebConfig {
+    apiKey: string;
+    projectId: string;
+    authDomain?: string;
+}
+/**
+ * The Firebase web config a test signs in with, and the guard that it is staging's. The build's
+ * VITE_FIREBASE_* (what the app was built with) win over the site's /__/firebase/init.json (what its
+ * Hosting project serves); either one naming another project refuses, as does a missing API key.
+ */
+export declare function stagingWebConfig(env: Record<string, string | undefined>, site: {
+    apiKey?: string;
+    projectId?: string;
+    authDomain?: string;
+} | null): StagingWebConfig;
 /** CI hands these to the staging e2e step (see .github/workflows/pwa.yml). */
 export declare function stagingCredentialsFromEnv(env?: Record<string, string | undefined>): {
     accessToken: string;
