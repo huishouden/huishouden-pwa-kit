@@ -1,0 +1,9 @@
+{
+  "name": "Hillcrest Pharmacy",
+  "address": "3920 Fifth Ave, San Diego, CA 92103",
+  "phone": "+1 (619) 555-0171",
+  "website": "https://hillcrestrx.example.com",
+  "hours": "Mon – Fri 8:00 AM – 8:00 PM; Sat 9:00 AM – 5:00 PM; Sun 10:00 AM – 2:00 PM",
+  "category": "Pharmacy",
+  "unparsed": []
+}

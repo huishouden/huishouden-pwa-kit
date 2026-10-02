@@ -8,74 +8,22 @@
  * back in `assumptions`, so the app can show them next to the fields it filled in.
  */
 
+import { readImageText, type ReadTextOptions } from './ocr';
+
+export { OCR_LANG_PATH, releaseOcr } from './ocr';
+
 // ---------------------------------------------------------------------------------------------
 // OCR
 
-/**
- * Where the OCR engine's files come from. tesseract.js loads its worker and WebAssembly core from
- * jsDelivr at the exact version installed (its own default), and the English language data from
- * the pinned package below (about 2 MB, gzipped). The language data is kept in IndexedDB after the
- * first read; with `pwaApp({ ocr: true })` the service worker also caches the worker and core, so
- * reading labels works offline after the first use. To self-host instead, copy the files into the
- * app's `public/` and pass their paths as `readLabel(image, { paths })`.
- */
-export const OCR_LANG_PATH = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int';
-
-export interface ReadLabelOptions {
-  /** Self-hosted engine files: `workerPath`, `corePath`, `langPath` (see OCR_LANG_PATH). */
-  paths?: { workerPath?: string; corePath?: string; langPath?: string };
-  /** 0..1 while the engine loads and reads. */
-  onProgress?: (progress: number, status: string) => void;
-  /** Longest side the photo is scaled down to before reading (phone photos are slow at full size). Default 2000. */
-  maxSide?: number;
-}
-
-type OcrWorker = { recognize(image: unknown): Promise<{ data: { text: string } }>; terminate(): Promise<unknown> };
-let worker: Promise<OcrWorker> | null = null;
-let progressListener: ReadLabelOptions['onProgress'];
+export type ReadLabelOptions = Omit<ReadTextOptions, 'screenshot'>;
 
 /**
- * The text on a label photo, read on the device with tesseract.js (English). The engine is loaded
- * on first use only, so apps that never call this don't download it; it needs `tesseract.js`
- * (v7) installed in the app. Accuracy depends on the photo: flat, well lit and in focus.
+ * The text on a label photo, read on the device with tesseract.js (English; see `./ocr`). The
+ * engine is loaded on first use only, so apps that never call this don't download it. Accuracy
+ * depends on the photo: flat, well lit and in focus.
  */
-export async function readLabel(image: Blob, options: ReadLabelOptions = {}): Promise<string> {
-  progressListener = options.onProgress;
-  if (!worker) {
-    worker = (async () => {
-      const { createWorker } = await import('tesseract.js');
-      return (await createWorker('eng', 1, {
-        langPath: OCR_LANG_PATH,
-        ...options.paths,
-        logger: (m: { progress: number; status: string }) => progressListener?.(m.progress, m.status),
-      })) as unknown as OcrWorker;
-    })();
-    worker.catch(() => (worker = null));
-  }
-  const ocr = await worker;
-  const { data } = await ocr.recognize(await downscale(image, options.maxSide ?? 2000));
-  return data.text;
-}
-
-/** Stops the OCR engine and frees its memory; the next `readLabel` starts it again. */
-export async function releaseOcr(): Promise<void> {
-  const w = worker;
-  worker = null;
-  if (w) await (await w).terminate().catch(() => {});
-}
-
-async function downscale(image: Blob, maxSide: number): Promise<Blob> {
-  if (typeof createImageBitmap !== 'function' || typeof OffscreenCanvas === 'undefined') return image;
-  const bitmap = await createImageBitmap(image);
-  const scale = maxSide / Math.max(bitmap.width, bitmap.height);
-  if (scale >= 1) {
-    bitmap.close();
-    return image;
-  }
-  const canvas = new OffscreenCanvas(Math.round(bitmap.width * scale), Math.round(bitmap.height * scale));
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  return canvas.convertToBlob({ type: 'image/png' });
+export function readLabel(image: Blob, options: ReadLabelOptions = {}): Promise<string> {
+  return readImageText(image, options);
 }
 
 // ---------------------------------------------------------------------------------------------

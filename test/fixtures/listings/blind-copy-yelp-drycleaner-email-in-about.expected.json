@@ -1,0 +1,12 @@
+{
+  "name": "Starlight Cleaners",
+  "address": "1650 Divisadero St, Ste 2, San Francisco, CA 94115",
+  "phone": "(415) 555-0193",
+  "email": "hello@starlightcleaners.example.com",
+  "hours": "Mon 7:00 AM - 7:00 PM; Tue 7:00 AM - 7:00 PM; Wed 7:00 AM - 7:00 PM; Thu 7:00 AM - 7:00 PM; Fri 7:00 AM - 7:00 PM; Sat 9:00 AM - 5:00 PM; Sun Closed",
+  "category": "Dry Cleaning, Laundry Services, Sewing & Alterations",
+  "unparsed": [
+    "Lower Pacific Heights",
+    "Family owned since 1994. Same-day service if dropped off before 9 AM. Questions about an order? Email us at hello@starlightcleaners.example.com"
+  ]
+}

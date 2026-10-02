@@ -1,0 +1,17 @@
+{
+  "name": "Dierenkliniek De Linde",
+  "address": "Lindelaan 42, 3828 AB Hoogland",
+  "phone": "+31 33 555 0142",
+  "website": "https://dierenkliniekdelinde.example.com",
+  "hours": "maandag 08:00–18:00; dinsdag 08:00–18:00; woensdag 08:00–18:00; donderdag 08:00–20:00; vrijdag 08:00–18:00; zaterdag 09:00–12:00; zondag Gesloten",
+  "unparsed": [
+    "Dierenarts",
+    "Route",
+    "Opslaan",
+    "In de buurt",
+    "Naar telefoon sturen",
+    "Delen",
+    "Open ⋅ Sluit om 18:00",
+    "Een wijziging voorstellen"
+  ]
+}

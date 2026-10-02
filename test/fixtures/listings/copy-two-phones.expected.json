@@ -1,0 +1,9 @@
+{
+  "name": "Brightside Pediatrics",
+  "address": "900 SE Morrison St, Portland, OR 97214",
+  "phone": "(503) 555-0150",
+  "website": "https://www.brightside.example.com",
+  "unparsed": [
+    "Fax: (503) 555-0151"
+  ]
+}

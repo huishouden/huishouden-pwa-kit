@@ -1,0 +1,9 @@
+{
+  "name": "Hampstead Heath Veterinary Surgery",
+  "address": "14 Fleet Rd, London NW3 2QS",
+  "phone": "+44 20 7946 0815",
+  "website": "https://hampsteadvets.example.com",
+  "hours": "Monday 08:00–19:00; Tuesday 08:00–19:00; Wednesday 08:00–19:00; Thursday 08:00–19:00; Friday 08:00–19:00; Saturday 09:00–13:00; Sunday Closed",
+  "category": "Veterinarian",
+  "unparsed": []
+}

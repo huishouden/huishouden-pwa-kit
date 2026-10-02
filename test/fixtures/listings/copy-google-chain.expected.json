@@ -1,0 +1,10 @@
+{
+  "name": "Petco",
+  "address": "3100 Westgate Plaza, Fairview, TX 75069",
+  "phone": "+1 972-555-0105",
+  "website": "https://petco.example.com",
+  "category": "Pet supply store",
+  "unparsed": [
+    "Located in: Westgate Shopping Center"
+  ]
+}

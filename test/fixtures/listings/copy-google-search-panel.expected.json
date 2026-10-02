@@ -1,0 +1,9 @@
+{
+  "name": "Hillside Family Dentistry",
+  "address": "2200 N Brookfield Rd #104, Brookfield, WI 53045",
+  "phone": "(262) 555-0187",
+  "category": "Dentist",
+  "unparsed": [
+    "Appointments: example.com/hillside/book"
+  ]
+}
