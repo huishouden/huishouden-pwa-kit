@@ -1,4 +1,6 @@
 import type { Auth } from 'firebase/auth';
+import { type EventRule } from './schedule';
+import { type Hhmm } from './time';
 /**
  * Finds Google Calendar events that match a piece of household data (a task, an appointment), so
  * an app can fill in its date, time and place from the calendar instead of retyping them.
@@ -122,3 +124,24 @@ export declare function newSuggestions(matches: CalendarMatch[], { isImported, d
  * "Tue 3:00 PM" within the week, then "Tue, Oct 14, 3:00 PM"; all-day events drop the time.
  */
 export declare function suggestionWhen(m: CalendarMatch, now: number): string;
+/** Occurrences of one repeating calendar event, with the schedule they follow. */
+export interface CalendarSeries {
+    /** The series id (`recurringEventId`), or the lowercased title when the calendar gave none. */
+    key: string;
+    title: string;
+    /** Soonest first. */
+    matches: CalendarMatch[];
+    rule: EventRule;
+    /** 'HH:MM' when every occurrence starts at the same time; all day or varying times give none. */
+    time?: Hhmm;
+}
+/**
+ * Splits matches into repeating events and the rest: occurrences of one series (or, without a
+ * series id, with the same title), at least two of them, on dates a schedule fits (`inferRule`).
+ * "Garbage pickup" every Thursday becomes one series to add as a regular event; a one-off visit,
+ * or a series with a single occurrence in the window, stays in `rest`.
+ */
+export declare function recurringSeries(matches: CalendarMatch[]): {
+    series: CalendarSeries[];
+    rest: CalendarMatch[];
+};

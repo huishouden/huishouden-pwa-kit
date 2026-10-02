@@ -216,7 +216,8 @@ const OCCASIONS = ['feeding', 'medicine'];
 /**
  * What needs attention: overdue things first (oldest first), then today's (all-day first, then by
  * time; finished appointments left out), then the next `soonHours`. Done items are left out, and so
- * are feeds and doses from earlier days (`feeding`, `medicine`): those are missed, not overdue.
+ * are feeds and doses from earlier days (`feeding`, `medicine`) and timed items with a status whose
+ * `end` has passed (a window to do it in that has closed): those are missed, not overdue.
  * Ongoing spans (all-day, several days, no status: a medicine course, a trip) are context for the
  * calendar, not something to do today, so they are left out too. With `includeDone`, today's
  * finished items come back as the 'done' group, last.
@@ -238,6 +239,10 @@ export function todayItems(items, now, { soonHours = 48, includeDone = false } =
         if (status === 'overdue') {
             const due = item.allDay ? lastDay(item) : first;
             if (due < today && OCCASIONS.includes(item.kind))
+                continue;
+            // A timed one with an end is due within a window (put the bins out before pickup): once the
+            // window has closed it is missed, not something still to do.
+            if (!item.allDay && item.end !== undefined && item.end <= now)
                 continue;
             const when = due < today || item.allDay ? dueText(due, today) : `Overdue since ${formatTime(item.start)}`;
             out.push({ item, group: 'overdue', when });
