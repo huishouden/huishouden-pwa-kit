@@ -46,22 +46,31 @@ export interface PwaAppOptions {
  */
 export function pwaApp(options: PwaAppOptions) {
   const { overrides = {} } = options;
-  const { importScripts = [], runtimeCaching = [], ...workboxOverrides } = overrides.workbox ?? {};
   return [buildStamp(), telemetryChunks(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...VitePWA({
     registerType: 'autoUpdate',
     includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
     ...overrides,
     manifest: { ...webManifest(options), ...(overrides.manifest || {}) },
-    workbox: {
-      globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
-      globIgnores: [TELEMETRY_CHUNKS],
-      navigateFallback: '/index.html',
-      navigateFallbackDenylist: FIREBASE_RESERVED_PATHS,
-      importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...importScripts],
-      runtimeCaching: [...(options.ocr ? [OCR_CACHE] : []), ...runtimeCaching],
-      ...workboxOverrides,
-    },
+    workbox: pwaWorkbox(options),
   })];
+}
+
+/**
+ * The Workbox options `pwaApp` passes. The kit's entries in `importScripts`, `runtimeCaching` and
+ * `globIgnores` are kept and an app's `overrides.workbox` entries are added after them; other
+ * keys in `overrides.workbox` replace the kit's.
+ */
+export function pwaWorkbox(options: PwaAppOptions) {
+  const { importScripts = [], runtimeCaching = [], globIgnores = [], ...workboxOverrides } = options.overrides?.workbox ?? {};
+  return {
+    globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+    navigateFallback: '/index.html',
+    navigateFallbackDenylist: FIREBASE_RESERVED_PATHS,
+    ...workboxOverrides,
+    importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...importScripts],
+    runtimeCaching: [...(options.ocr ? [OCR_CACHE] : []), ...runtimeCaching],
+    globIgnores: [TELEMETRY_CHUNKS, ...globIgnores],
+  };
 }
 
 /** The web app manifest `pwaApp` writes (before `overrides.manifest`). */
@@ -120,25 +129,38 @@ export function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' 
   };
 }
 
-/** The New Relic agent's chunks (`./observability`), left out of the precache. */
-export const TELEMETRY_CHUNKS = '**/assets/nr-*.js';
+/** File-name prefix of the New Relic agent's chunks (`./observability`). */
+export const TELEMETRY_PREFIX = 'nr-';
+/** Those chunks, left out of the precache (`globIgnores`), whatever the assets directory. */
+export const TELEMETRY_CHUNKS = `**/${TELEMETRY_PREFIX}*.js`;
+
+type ChunkInfo = { moduleIds: string[]; name: string };
+type ChunkFileNames = string | ((chunk: ChunkInfo) => string);
 
 /**
- * Names the browser agent's lazily loaded chunks `assets/nr-*.js`, so the service worker doesn't
- * precache them: about 35 files a device would download on every update for reports that only
- * matter online, and that slow the first install enough to miss "controlled after one reload".
+ * Names the browser agent's lazily loaded chunks `<assetsDir>/nr-*.js`, so the service worker
+ * doesn't precache them: about 35 files a device would download on every update for reports that
+ * only matter online, and that slow the first install enough to miss "controlled after one
+ * reload". Other chunks keep the app's own `chunkFileNames`, or Vite's default.
  */
 export function telemetryChunks() {
   return {
     name: 'huishouden-telemetry-chunks',
     apply: 'build' as const,
-    config() {
+    config(user: { build?: { assetsDir?: string; rollupOptions?: { output?: unknown } } } = {}) {
+      const dir = user.build?.assetsDir ?? 'assets';
+      const output = user.build?.rollupOptions?.output;
+      const own = (Array.isArray(output) ? undefined : (output as { chunkFileNames?: ChunkFileNames } | undefined)?.chunkFileNames) ?? `${dir}/[name]-[hash].js`;
       return {
         build: {
           rollupOptions: {
             output: {
-              chunkFileNames: (chunk: { moduleIds: string[] }) =>
-                chunk.moduleIds.length > 0 && chunk.moduleIds.every((id) => id.includes('@newrelic/browser-agent')) ? 'assets/nr-[name]-[hash].js' : 'assets/[name]-[hash].js',
+              chunkFileNames: (chunk: ChunkInfo) =>
+                chunk.moduleIds.length > 0 && chunk.moduleIds.every((id) => id.includes('@newrelic/browser-agent'))
+                  ? `${dir}/${TELEMETRY_PREFIX}[name]-[hash].js`
+                  : typeof own === 'function'
+                    ? own(chunk)
+                    : own,
             },
           },
         },
