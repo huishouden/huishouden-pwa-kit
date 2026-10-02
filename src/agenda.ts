@@ -304,7 +304,7 @@ export function agendaTime(item: AgendaItem): string {
 /** Kinds tied to one occasion: a meal or a dose not given by the end of its day is missed, not still to do. */
 const OCCASIONS: readonly AgendaKind[] = ['feeding', 'medicine'];
 
-export type TodayGroup = 'overdue' | 'today' | 'soon';
+export type TodayGroup = 'overdue' | 'today' | 'soon' | 'done';
 
 export interface TodayEntry {
   item: AgendaItem;
@@ -316,21 +316,30 @@ export interface TodayEntry {
 export interface TodayOptions {
   /** How far ahead "soon" reaches. Default 48. */
   soonHours?: number;
+  /** Also return today's finished items, as the 'done' group, so a screen can show what's been done. */
+  includeDone?: boolean;
 }
 
 /**
  * What needs attention: overdue things first (oldest first), then today's (all-day first, then by
  * time; finished appointments left out), then the next `soonHours`. Done items are left out, and so
  * are feeds and doses from earlier days (`feeding`, `medicine`): those are missed, not overdue.
+ * Ongoing spans (all-day, several days, no status: a medicine course, a trip) are context for the
+ * calendar, not something to do today, so they are left out too. With `includeDone`, today's
+ * finished items come back as the 'done' group, last.
  */
-export function todayItems(items: AgendaItem[], now: number, { soonHours = 48 }: TodayOptions = {}): TodayEntry[] {
+export function todayItems(items: AgendaItem[], now: number, { soonHours = 48, includeDone = false }: TodayOptions = {}): TodayEntry[] {
   const today = toYmd(now);
   const soonUntil = now + soonHours * HOUR;
   const out: TodayEntry[] = [];
   for (const item of items) {
     const status = agendaStatus(item, now);
-    if (status === 'done') continue;
     const first = toYmd(item.start);
+    if (status === 'done') {
+      if (includeDone && first <= today && lastDay(item) >= today) out.push({ item, group: 'done', when: 'Done' });
+      continue;
+    }
+    if (item.allDay && !status && lastDay(item) > first) continue;
     if (status === 'overdue') {
       const due = item.allDay ? lastDay(item) : first;
       if (due < today && OCCASIONS.includes(item.kind)) continue;
@@ -349,7 +358,7 @@ export function todayItems(items: AgendaItem[], now: number, { soonHours = 48 }:
       out.push({ item, group: 'soon', when: item.allDay ? day : `${day}, ${formatTime(item.start)}` });
     }
   }
-  const rank: Record<TodayGroup, number> = { overdue: 0, today: 1, soon: 2 };
+  const rank: Record<TodayGroup, number> = { overdue: 0, today: 1, soon: 2, done: 3 };
   return out.sort((a, b) => rank[a.group] - rank[b.group] || byStart(a.item, b.item));
 }
 
