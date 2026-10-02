@@ -56,13 +56,18 @@ export declare function pwaApp(options: PwaAppOptions): ({
 } | {
     name: string;
     apply: "build";
-    config(): {
+    config(user?: {
+        build?: {
+            assetsDir?: string;
+            rollupOptions?: {
+                output?: unknown;
+            };
+        };
+    }): {
         build: {
             rollupOptions: {
                 output: {
-                    chunkFileNames: (chunk: {
-                        moduleIds: string[];
-                    }) => "assets/nr-[name]-[hash].js" | "assets/[name]-[hash].js";
+                    chunkFileNames: (chunk: ChunkInfo) => string;
                 };
             };
         };
@@ -81,6 +86,59 @@ export declare function pwaApp(options: PwaAppOptions): ({
         }): string;
     }): void;
 } | import("vite").Plugin<any>)[];
+/**
+ * The Workbox options `pwaApp` passes. The kit's entries in `importScripts`, `runtimeCaching` and
+ * `globIgnores` are kept and an app's `overrides.workbox` entries are added after them; other
+ * keys in `overrides.workbox` replace the kit's.
+ */
+export declare function pwaWorkbox(options: PwaAppOptions): {
+    importScripts: string[];
+    runtimeCaching: (import("workbox-build").RuntimeCaching | {
+        urlPattern: RegExp;
+        handler: "CacheFirst";
+        options: {
+            cacheName: string;
+            expiration: {
+                maxEntries: number;
+                maxAgeSeconds: number;
+            };
+            cacheableResponse: {
+                statuses: number[];
+            };
+        };
+    })[];
+    globIgnores: string[];
+    additionalManifestEntries?: Array<string | import("workbox-build").ManifestEntry> | undefined;
+    dontCacheBustURLsMatching?: RegExp | undefined;
+    manifestTransforms?: Array<import("workbox-build").ManifestTransform> | undefined;
+    maximumFileSizeToCacheInBytes?: number | undefined;
+    modifyURLPrefix?: {
+        [key: string]: string;
+    } | undefined;
+    globFollow?: boolean | undefined;
+    globPatterns: Array<string>;
+    templatedURLs?: {
+        [key: string]: string | Array<string>;
+    } | undefined;
+    babelPresetEnvTargets?: Array<string> | undefined;
+    cacheId?: string | null | undefined;
+    cleanupOutdatedCaches?: boolean | undefined;
+    clientsClaim?: boolean | undefined;
+    directoryIndex?: string | null | undefined;
+    disableDevLogs?: boolean | undefined;
+    ignoreURLParametersMatching?: Array<RegExp> | undefined;
+    inlineWorkboxRuntime?: boolean | undefined;
+    mode?: string | null | undefined;
+    navigateFallback: string | null;
+    navigateFallbackAllowlist?: Array<RegExp> | undefined;
+    navigateFallbackDenylist: Array<RegExp>;
+    navigationPreload?: boolean | undefined;
+    offlineGoogleAnalytics?: (boolean | import("workbox-google-analytics/initialize.js").GoogleAnalyticsInitializeOptions) | undefined;
+    skipWaiting?: boolean | undefined;
+    sourcemap?: boolean | undefined;
+    swDest?: string | undefined;
+    globDirectory?: string | undefined;
+};
 /** The web app manifest `pwaApp` writes (before `overrides.manifest`). */
 export declare function webManifest(options: PwaAppOptions): {
     icons: {
@@ -119,23 +177,35 @@ export declare function linkPreview(options: Pick<PwaAppOptions, 'name' | 'descr
     name: string;
     transformIndexHtml(html: string): string;
 };
-/** The New Relic agent's chunks (`./observability`), left out of the precache. */
-export declare const TELEMETRY_CHUNKS = "**/assets/nr-*.js";
+/** File-name prefix of the New Relic agent's chunks (`./observability`). */
+export declare const TELEMETRY_PREFIX = "nr-";
+/** Those chunks, left out of the precache (`globIgnores`), whatever the assets directory. */
+export declare const TELEMETRY_CHUNKS = "**/nr-*.js";
+type ChunkInfo = {
+    moduleIds: string[];
+    name: string;
+};
 /**
- * Names the browser agent's lazily loaded chunks `assets/nr-*.js`, so the service worker doesn't
- * precache them: about 35 files a device would download on every update for reports that only
- * matter online, and that slow the first install enough to miss "controlled after one reload".
+ * Names the browser agent's lazily loaded chunks `<assetsDir>/nr-*.js`, so the service worker
+ * doesn't precache them: about 35 files a device would download on every update for reports that
+ * only matter online, and that slow the first install enough to miss "controlled after one
+ * reload". Other chunks keep the app's own `chunkFileNames`, or Vite's default.
  */
 export declare function telemetryChunks(): {
     name: string;
     apply: "build";
-    config(): {
+    config(user?: {
+        build?: {
+            assetsDir?: string;
+            rollupOptions?: {
+                output?: unknown;
+            };
+        };
+    }): {
         build: {
             rollupOptions: {
                 output: {
-                    chunkFileNames: (chunk: {
-                        moduleIds: string[];
-                    }) => "assets/nr-[name]-[hash].js" | "assets/[name]-[hash].js";
+                    chunkFileNames: (chunk: ChunkInfo) => string;
                 };
             };
         };
@@ -190,3 +260,4 @@ export declare function buildStamp(): {
         };
     };
 };
+export {};
