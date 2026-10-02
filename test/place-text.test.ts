@@ -113,3 +113,24 @@ describe('share target and OCR setup', () => {
     expect(light[0]).toBe(250);
   });
 });
+
+describe('map links come from Google or Apple only', () => {
+  test('does not take a look-alike host for a map link', () => {
+    for (const fake of [
+      'https://maps.apple.example.com/place?q=x',
+      'https://google.example.com/maps/place/x',
+      'https://www.google.com.example.io/maps/place/x',
+      'https://maps.google.example.com/?q=x',
+    ]) expect(parsePlaceText(`Example Vet\n${fake}`).mapsUrl).toBeUndefined();
+  });
+  test('still reads real map links', () => {
+    for (const real of [
+      'https://maps.app.goo.gl/abc123',
+      'https://www.google.com/maps/place/Example+Vet/@1,2,17z',
+      'https://www.google.co.uk/maps/place/Example+Vet',
+      'https://maps.google.de/?q=Example',
+      'https://maps.apple.com/?q=Example',
+      'https://maps.apple/p/abc',
+    ]) expect(parsePlaceText(`Example Vet\n${real}`).mapsUrl).toBe(real);
+  });
+});
