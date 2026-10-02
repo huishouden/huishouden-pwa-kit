@@ -44,3 +44,28 @@ export declare function deleteContact(db: Firestore, householdId: string, id: st
 export declare function removeContactFromApp(db: Firestore, householdId: string, contact: Contact, app: string, by: string): Promise<void>;
 /** Puts a deleted contact back under its old id (Undo), so appointments that point at it still do. */
 export declare function restoreContact(db: Firestore, householdId: string, contact: Contact): Promise<void>;
+/** Field lengths the household rules allow for contacts. */
+export declare const CONTACT_LIMITS: {
+    readonly name: 120;
+    readonly role: 60;
+    readonly phone: 40;
+    readonly email: 120;
+    readonly website: 300;
+    readonly address: 300;
+    readonly notes: 1000;
+};
+export interface ContactGroup {
+    role: string;
+    contacts: Contact[];
+}
+/**
+ * Contacts grouped by role: the app's known `roles` first in their order (matched ignoring case),
+ * then typed roles A–Z, then contacts without a role as "Other". Names A–Z within each group.
+ */
+export declare function groupContacts(contacts: Contact[], roles: readonly string[]): ContactGroup[];
+/** "example.com" → "https://example.com"; empty stays empty. */
+export declare function normalizeWebsite(url: string | undefined): string | undefined;
+/** "https://www.example.com/kids/" → "example.com/kids", for showing a link compactly. */
+export declare function displayWebsite(url: string): string;
+/** What a contact dialog saves: trimmed to the rules' limits, the website made a full URL, and shown in `app`. */
+export declare function contactInput(fields: Omit<ContactInput, 'apps'>, apps: string[], app: string): ContactInput;

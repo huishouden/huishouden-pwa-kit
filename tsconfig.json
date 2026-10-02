@@ -6,6 +6,7 @@
     "lib": ["ES2022", "DOM"],
     "types": ["bun"],
     "strict": true,
+    "jsx": "react-jsx",
     "skipLibCheck": true,
     "noEmit": true
   },

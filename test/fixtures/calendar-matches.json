@@ -1,0 +1,46 @@
+{
+  "description": "Invented Google Calendar matches as @huishouden/pwa-kit/calendar returns them (start in ms: 2031-05-28, 2031-06-03 and 2031-06-10, UTC).",
+  "matches": [
+    {
+      "id": "evt-prenatal-1",
+      "title": "Prenatal visit",
+      "start": 1938245400000,
+      "end": 1938247200000,
+      "allDay": false,
+      "location": "Riverside Family Clinic, 40 River Road, Springfield",
+      "description": "<p>Bring the <b>glucose</b> results.</p><p>Ask about the&nbsp;birth plan &amp; hospital tour.</p>",
+      "link": "https://www.google.com/calendar/event?eid=evt-prenatal-1",
+      "calendarName": "Family"
+    },
+    {
+      "id": "evt-tour",
+      "title": "Hospital tour",
+      "start": 1938879000000,
+      "allDay": false,
+      "location": "",
+      "description": "",
+      "link": "https://www.google.com/calendar/event?eid=evt-tour",
+      "calendarName": "Sam"
+    },
+    {
+      "id": "evt-scan",
+      "title": "Ultrasound",
+      "start": 1937743200000,
+      "allDay": false,
+      "location": "City Hospital, imaging",
+      "description": "Line one\nLine two",
+      "link": "https://www.google.com/calendar/event?eid=evt-scan",
+      "calendarName": "Family"
+    },
+    {
+      "id": "evt-prenatal-1",
+      "title": "Prenatal visit",
+      "start": 1938245400000,
+      "allDay": false,
+      "location": "Riverside Family Clinic, 40 River Road, Springfield",
+      "description": "",
+      "link": "https://www.google.com/calendar/event?eid=evt-prenatal-1",
+      "calendarName": "Alex"
+    }
+  ]
+}

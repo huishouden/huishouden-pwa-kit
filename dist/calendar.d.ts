@@ -1,4 +1,4 @@
-import { type Auth } from 'firebase/auth';
+import type { Auth } from 'firebase/auth';
 /**
  * Finds Google Calendar events that match a piece of household data (a task, an appointment), so
  * an app can fill in its date, time and place from the calendar instead of retyping them.
@@ -27,8 +27,8 @@ declare global {
 /** Search phrases, most specific first: "Get car seat checked at fire station" → "car seat fire station", "car seat", ... */
 export declare function searchPhrases(text: string): string[];
 /**
- * A short-lived token that can read the signed-in person's calendars. Re-confirms their Google
- * account in a popup with the calendar scopes added; the first time, Google asks to allow access.
+ * A token that can read the signed-in person's calendars. The first time, Google asks to allow
+ * access in a popup (call from a tap); the token is then reused for its hour.
  */
 export declare function calendarAccessToken(auth: Auth): Promise<string>;
 interface GoogleEvent {
@@ -61,4 +61,26 @@ export interface FindEventsOptions {
  * anything; pass several queries to scan for a theme ("prenatal", "pediatric", ...).
  */
 export declare function findCalendarEvents(auth: Auth, queries: string | string[], options?: FindEventsOptions): Promise<CalendarMatch[]>;
+/**
+ * Calendar descriptions often arrive as HTML: line breaks kept, tags dropped, common entities
+ * decoded, at most `max` characters (cut with "…") so notes stay within the app's rules.
+ */
+export declare function plainText(description: string, max?: number): string;
+/**
+ * What an app keeps from an imported event: its id and link, and either the moment (`at`, for an
+ * appointment) or the day (`date`, for a log entry).
+ */
+export interface ImportedRecord {
+    title: string;
+    at?: number;
+    date?: string;
+    calendarEventId?: string;
+    calendarLink?: string;
+}
+/** Whether a record already stands for this event: the same event id or link, or the same title at the same time (or on the same day). */
+export declare function isImported(m: CalendarMatch, records: ImportedRecord[]): boolean;
+/** Events not yet imported, each once, soonest first. */
+export declare function notImported(matches: CalendarMatch[], records: ImportedRecord[]): CalendarMatch[];
+/** A readable reason for a failed calendar search; every case offers Try again. */
+export declare function calendarError(e: unknown): string;
 export {};

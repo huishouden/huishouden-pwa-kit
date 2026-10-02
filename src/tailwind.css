@@ -1,0 +1,62 @@
+/*
+ * The Huishouden theme for Tailwind v4 apps, in one import after Tailwind's own:
+ *
+ *   @import "tailwindcss";
+ *   @import "@huishouden/pwa-kit/tailwind.css";
+ *
+ * It brings the kit's palette (theme.css) as Tailwind colours (forest-*, cream, terracotta*), Inter,
+ * the page base every app shares, and adds the kit's React components to Tailwind's sources so
+ * their classes are generated (Tailwind skips node_modules otherwise).
+ */
+@import './theme.css';
+
+@source '../dist/react';
+
+@theme {
+  --color-forest-50: var(--hh-forest-50);
+  --color-forest-100: var(--hh-forest-100);
+  --color-forest-200: var(--hh-forest-200);
+  --color-forest-300: var(--hh-forest-300);
+  --color-forest-400: var(--hh-forest-400);
+  --color-forest-500: var(--hh-forest-500);
+  --color-forest-600: var(--hh-forest-600);
+  --color-forest-700: var(--hh-forest-700);
+  --color-forest-800: var(--hh-forest-800);
+  --color-forest-900: var(--hh-forest-900);
+  --color-cream: var(--hh-cream);
+  --color-terracotta: var(--hh-terracotta);
+  --color-terracotta-light: var(--hh-terracotta-light);
+  --color-terracotta-dark: var(--hh-terracotta-dark);
+  --font-sans: var(--hh-font);
+}
+
+@layer base {
+  body {
+    font-family: var(--hh-font);
+    background-color: var(--hh-cream);
+    color: var(--hh-ink);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--hh-forest-500);
+    outline-offset: 2px;
+  }
+
+  button {
+    cursor: pointer;
+  }
+}
+
+/* Bottom padding that clears the iPhone home indicator; dialogs use it as bottom sheets. */
+.safe-bottom {
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}

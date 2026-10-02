@@ -1,4 +1,4 @@
-import { GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth';
+import { googleAccessToken, googleFetch } from './google-token';
 /**
  * Tells someone they were invited to the household, the way sharing a Google Sheet does: an email
  * from the inviter's own Gmail. Sending needs Gmail's send permission, which Google asks for once
@@ -39,38 +39,10 @@ function toBase64(text) {
         binary += String.fromCharCode(b);
     return btoa(binary);
 }
-let cached = null;
-async function gmailSendToken(auth) {
-    const user = auth.currentUser;
-    if (!user)
-        throw new Error('Sign in first.');
-    if (cached && cached.uid === user.uid && cached.expires > Date.now())
-        return cached.token;
-    const provider = new GoogleAuthProvider();
-    provider.addScope(GMAIL_SEND_SCOPE);
-    if (user.email)
-        provider.setCustomParameters({ login_hint: user.email });
-    const result = await reauthenticateWithPopup(user, provider);
-    const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
-    if (!token)
-        throw new Error('Google did not allow sending email.');
-    cached = { uid: user.uid, token, expires: Date.now() + 55 * 60_000 };
-    return token;
-}
-/** Sends the invitation from the signed-in person's Gmail. */
+/** Sends the invitation from the signed-in person's Gmail (asks for send permission the first time; call from a tap). */
 export async function sendInviteEmail(auth, invite) {
-    const token = await gmailSendToken(auth);
-    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw: rawMessage(invite) }),
-    });
-    if (res.status === 401)
-        cached = null;
-    if (!res.ok) {
-        const body = (await res.json().catch(() => ({})));
-        throw new Error(`[${res.status}] Gmail: ${body.error?.message ?? res.statusText}`);
-    }
+    const token = await googleAccessToken(auth, [GMAIL_SEND_SCOPE], { deniedMessage: 'Google did not allow sending email.' });
+    await googleFetch(token, 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { label: 'Gmail', method: 'POST', body: { raw: rawMessage(invite) } });
 }
 /** A prefilled draft in the person's own mail app, for when sending from Gmail isn't wanted. */
 export function inviteMailto(invite) {
