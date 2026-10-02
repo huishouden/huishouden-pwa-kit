@@ -77,16 +77,33 @@ export const DIET_GUIDANCE: Record<Diet, string> = {
 };
 
 /**
- * Diets that are preferences rather than rules. A strict reflux or low-salt diet every day leaves
- * only bland food (and many people manage reflux with medication), so apps rate and order meals for
- * these instead of dropping them. Every other diet (beliefs, allergies, pregnancy safety) is strict.
+ * Whether each diet is a rule (true) or a preference (false). A strict reflux or low-salt diet every
+ * day leaves only bland food (and many people manage reflux with medication), so apps rate and order
+ * meals for preferences instead of dropping them. Beliefs, allergies and pregnancy safety are rules.
+ * A Record, so adding a diet forces the choice.
  */
-export const GENTLE_DIETS: readonly Diet[] = Object.freeze(['gerd', 'low-sodium'] as Diet[]);
+export const DIET_STRICT: Readonly<Record<Diet, boolean>> = Object.freeze({
+  vegan: true,
+  vegetarian: true,
+  pescatarian: true,
+  'gluten-free': true,
+  'dairy-free': true,
+  'nut allergy': true,
+  'shellfish allergy': true,
+  gerd: false,
+  pregnant: true,
+  'low-sodium': false,
+  halal: true,
+  kosher: true,
+});
 
 /** Whether a meal that breaks this diet must be left out (true) or only rated and ordered (false). */
 export function isStrict(diet: Diet): boolean {
-  return !GENTLE_DIETS.includes(diet);
+  return DIET_STRICT[diet];
 }
+
+/** The preference diets, in DIETS order. */
+export const GENTLE_DIETS: readonly Diet[] = Object.freeze(DIETS.filter((d) => !DIET_STRICT[d]));
 
 export interface FoodPerson {
   /** Stable within the household's list: the member's email, or an invented id for someone without an account. */
@@ -230,18 +247,37 @@ const list = (items: string[]) => (items.length < 2 ? items.join('') : `${items.
  * and, when more than one person has constraints, that shared meals must suit all of them.
  * Empty when nobody has any.
  */
-export function householdDietRules(food: Pick<FoodPreferences, 'people'>): string[] {
+export interface DietRulesOptions {
+  /**
+   * Leave preference diets (GERD, low-sodium; see `isStrict`) out of the rules, for apps that word
+   * them separately with `householdDietPreferences`. Default false: every diet is worded as a rule.
+   */
+  strictOnly?: boolean;
+}
+
+export function householdDietRules(food: Pick<FoodPreferences, 'people'>, { strictOnly = false }: DietRulesOptions = {}): string[] {
   const rules: string[] = [];
   let constrained = 0;
   for (const p of food.people) {
     const before = rules.length;
-    for (const d of p.diets) rules.push(`${p.name} ${DIET_PHRASES[d]}: ${DIET_GUIDANCE[d]}.`);
+    for (const d of p.diets) if (!strictOnly || isStrict(d)) rules.push(`${p.name} ${DIET_PHRASES[d]}: ${DIET_GUIDANCE[d]}.`);
     if (p.avoid.length) rules.push(`${p.name} avoids ${list(p.avoid)}.`);
     if (p.note) rules.push(`About ${p.name}: ${p.note.replace(/[.\s]+$/, '')}.`);
     if (rules.length > before) constrained++;
   }
   if (constrained > 1) rules.push('Meals for the whole household should suit all of these at once.');
   return rules;
+}
+
+/**
+ * The household's preference diets as soft guidance, one line each: "Sam has GERD (reflux): lean
+ * towards meals that go easy on spicy food, citrus, …". Pair with `householdDietRules(food,
+ * { strictOnly: true })`: most meals should lean this way, not every one.
+ */
+export function householdDietPreferences(food: Pick<FoodPreferences, 'people'>): string[] {
+  return food.people.flatMap((p) =>
+    p.diets.filter((d) => !isStrict(d)).map((d) => `${p.name} ${DIET_PHRASES[d]}: lean towards meals that ${DIET_GUIDANCE[d].replace(/^avoid /, 'go easy on ').replace(/^keep /, 'keep ')}.`),
+  );
 }
 
 /** "Assume the kitchen already has salt, black pepper and cooking oil." or '' when the list is empty. */

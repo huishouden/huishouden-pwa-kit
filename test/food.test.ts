@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import fixture from './fixtures/food.json';
-import { DEFAULT_PANTRY, DIETS, GENTLE_DIETS, isStrict, DIET_GUIDANCE, DIET_LABELS, FOOD_LIMITS, foodDoc, householdDietRules, householdDiets, pantryText, toFood, withMembers } from '../src/food';
+import { DEFAULT_PANTRY, DIETS, DIET_STRICT, GENTLE_DIETS, householdDietPreferences, isStrict, DIET_GUIDANCE, DIET_LABELS, FOOD_LIMITS, foodDoc, householdDietRules, householdDiets, pantryText, toFood, withMembers } from '../src/food';
 
 describe('reading the stored document', () => {
   test('keeps valid people once, known diets only, avoid lists trimmed and de-duplicated', () => {
@@ -90,5 +90,17 @@ describe('strict and gentle diets', () => {
     expect(DIETS.filter((d) => !isStrict(d))).toEqual(['gerd', 'low-sodium']);
     for (const d of ['vegan', 'vegetarian', 'nut allergy', 'shellfish allergy', 'pregnant', 'halal', 'kosher'] as const) expect(isStrict(d)).toBe(true);
     expect(Object.isFrozen(GENTLE_DIETS)).toBe(true);
+    expect(Object.keys(DIET_STRICT).sort()).toEqual([...DIETS].sort());
+  });
+
+  test('rules can leave preferences out, and preferences are worded softly', () => {
+    const food = { people: [{ id: 'a', name: 'Sam', diets: ['vegetarian', 'gerd'] as const, avoid: [] }] } as unknown as Parameters<typeof householdDietRules>[0];
+    const strict = householdDietRules(food, { strictOnly: true });
+    expect(strict.some((r) => r.includes('vegetarian'))).toBe(true);
+    expect(strict.some((r) => r.includes('GERD'))).toBe(false);
+    expect(householdDietRules(food).some((r) => r.includes('GERD'))).toBe(true);
+    const prefs = householdDietPreferences(food);
+    expect(prefs).toHaveLength(1);
+    expect(prefs[0]).toMatch(/^Sam has GERD \(reflux\): lean towards meals that go easy on spicy food/);
   });
 });

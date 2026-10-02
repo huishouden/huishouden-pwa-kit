@@ -147,7 +147,10 @@ The portal's household panel edits one document, `households/{id}/settings/food`
   list of ingredients and a short note.
 - **Constraints in words**: use `householdDietRules(food)` (and `pantryText`) in a prompt or next to
   a suggestion instead of wording diets per app, so GERD or pregnancy guidance reads the same
-  everywhere. Allergies are strict; dislikes in `avoid` are preferences.
+  everywhere. Allergies are strict; dislikes in `avoid` are preferences. Diets are rules or
+  preferences per `DIET_STRICT` (`isStrict`, `GENTLE_DIETS`): GERD and low-sodium are preferences, so
+  rank and label meals for them rather than filter; use `householdDietRules(food, { strictOnly: true })`
+  for the rules and `householdDietPreferences(food)` for the rest.
 - **Rules**: the `settings/food` case of the `settings` block checks the document's shape
   (`FOOD_FIELDS`, list sizes, the pantry, `by` the signed-in member). A request may evaluate only
   1000 expressions, too few to check every person's fields, so always write with `saveFood` (which
