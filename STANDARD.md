@@ -148,8 +148,10 @@ The portal's household panel edits one document, `households/{id}/settings/food`
 - **Constraints in words**: use `householdDietRules(food)` (and `pantryText`) in a prompt or next to
   a suggestion instead of wording diets per app, so GERD or pregnancy guidance reads the same
   everywhere. Allergies are strict; dislikes in `avoid` are preferences.
-- **Rules**: the `settings/food` case of the `settings` block; fields match `FOOD_FIELDS`,
-  `FOOD_PERSON_FIELDS` and `FOOD_LIMITS`, and `by` must be the signed-in member.
+- **Rules**: the `settings/food` case of the `settings` block checks the document's shape
+  (`FOOD_FIELDS`, list sizes, the pantry, `by` the signed-in member). A request may evaluate only
+  1000 expressions, too few to check every person's fields, so always write with `saveFood` (which
+  clips each person to `FOOD_PERSON_FIELDS` and `FOOD_LIMITS`) and read with `watchFood`.
 
 ## CI/CD
 
