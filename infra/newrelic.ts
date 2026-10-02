@@ -73,8 +73,15 @@ async function browserApps() {
       guid = made?.agentApplicationCreateBrowser.guid;
     }
     if (!guid) continue;
-    const d = await gql(`query($g: EntityGuid!) { actor { entity(guid: $g) { ... on BrowserApplicationEntity { browserProperties { jsConfig } } } } }`, { g: guid });
-    const cfg = d.actor.entity.browserProperties.jsConfig.loader_config as { accountID: string; applicationID: string; licenseKey: string };
+    // A just-created app takes a little while to appear in entity queries; wait for it (up to ~2 minutes).
+    let js: { loader_config: { accountID: string; applicationID: string; licenseKey: string } } | undefined;
+    for (let i = 0; i < 24 && !js; i++) {
+      const d = await gql(`query($g: EntityGuid!) { actor { entity(guid: $g) { ... on BrowserApplicationEntity { browserProperties { jsConfig } } } } }`, { g: guid });
+      js = d?.actor?.entity?.browserProperties?.jsConfig;
+      if (!js) await new Promise((r) => setTimeout(r, 5000));
+    }
+    if (!js) throw new Error(`New Relic hasn't indexed ${browserName(app)} yet; re-run in a minute (safe to repeat)`);
+    const cfg = js.loader_config;
     const vars = { VITE_NEWRELIC_ACCOUNT_ID: String(cfg.accountID), VITE_NEWRELIC_APP_ID: String(cfg.applicationID), VITE_NEWRELIC_BROWSER_KEY: cfg.licenseKey };
     for (const [name, value] of Object.entries(vars)) {
       console.log(`${DRY ? '[dry run] ' : ''}gh variable set ${name} --repo ${OWNER}/${app.repo}`);
