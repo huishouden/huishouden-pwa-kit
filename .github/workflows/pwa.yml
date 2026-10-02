@@ -79,6 +79,9 @@ jobs:
       - run: bun run lint
       - name: Huishouden design language (DESIGN.md)
         run: bunx pwa-design-check
+      - name: Firestore writes go through the kit's outbox
+        # Kits before v0.37.0 have no pwa-write-check.
+        run: if [ -e node_modules/.bin/pwa-write-check ]; then bunx pwa-write-check; else echo "kit has no pwa-write-check"; fi
       - name: Unit tests
         run: if jq -e '.scripts.test' package.json >/dev/null; then bun run test; else echo "no test script"; fi
       - run: bun run build

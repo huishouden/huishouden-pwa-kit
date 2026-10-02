@@ -66,7 +66,8 @@ user of it (dogfooding), never a special case. So:
   not `firebase/firestore`. A write reaches Firestore's offline cache a few milliseconds after the
   call returns; these also note it in localStorage at once, so an entry tapped in just before the
   app is closed or reloaded is written when it next opens instead of being lost. Writes stay
-  fire-and-forget: the screen updates from the local cache, and errors go to a toast.
+  fire-and-forget: the screen updates from the local cache, and errors go to a toast. CI's
+  `pwa-write-check` fails an import of a write function from `firebase/firestore` in app code.
 - People, accounts, card numbers and other personal facts are data, not code: keep them in the
   app's data store (a sheet tab, Firestore), never in the repo, including test fixtures (use
   made-up values). A leak scan can't recognise most of these, so this rule is the protection.
