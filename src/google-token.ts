@@ -1,5 +1,6 @@
 import type { Auth } from 'firebase/auth';
 import { loadGsi, loadedGsi, type GsiTokenResponse } from './gsi';
+import { reportError } from './observability';
 
 /**
  * Google API access tokens (Calendar, Gmail, Sheets) for the signed-in member, with their own
@@ -195,7 +196,10 @@ export async function googleFetch<T>(token: string, url: string | URL, { label =
   if (res.status === 401) forgetGoogleToken(token);
   if (!res.ok) {
     const answer = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    throw new GoogleApiError(`[${res.status}] ${label}: ${answer.error?.message ?? res.statusText}`, res.status);
+    const error = new GoogleApiError(`[${res.status}] ${label}: ${answer.error?.message ?? res.statusText}`, res.status);
+    // A 401 is an hour-old token, forgotten above and asked for again: routine, not a fault.
+    if (res.status !== 401) reportError(error, { where: label, api: new URL(url, 'https://x').hostname });
+    throw error;
   }
   const text = await res.text();
   return (text ? JSON.parse(text) : {}) as T;

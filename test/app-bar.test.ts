@@ -111,6 +111,8 @@ describe('<hh-app-bar>', () => {
     expect(menu.querySelector('.who-email')!.textContent).toBe('sam@example.com');
     expect(menu.querySelector('a.item')!.getAttribute('href')).toBe('https://portal.example.com/');
     expect(menu.querySelector('a.item')!.textContent).toBe('All apps');
+    const links = Array.from(menu.querySelectorAll('a.item')).map((a) => [a.textContent, a.getAttribute('href')]);
+    expect(links).toEqual([['All apps', 'https://portal.example.com/'], ['Privacy', 'https://portal.example.com/privacy']]);
     expect(menu.querySelector('.version')!.textContent).toBe('Huishouden Baby 1.2.0 (abc1234)');
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
@@ -142,10 +144,12 @@ describe('<hh-app-bar>', () => {
     expect(img.getAttribute('src')).toBe('https://photos.example.com/sam.png');
   });
 
-  test('no "All apps" on the portal itself', () => {
+  test('no "All apps" on the portal itself; Privacy stays', () => {
     const { bar, $ } = mount({ 'portal-url': '/' });
     bar.user = { email: 'sam@example.com' };
-    expect($('.menu a.item')).toBeNull();
+    const links = Array.from($('.menu')!.querySelectorAll('a.item')).map((a) => a.textContent);
+    expect(links).toEqual(['Privacy']);
+    expect($('.menu a.item')!.getAttribute('href')).toBe(new URL('/privacy', location.href).href);
   });
 
   test('the nav area shows only when the app slots something into it', async () => {

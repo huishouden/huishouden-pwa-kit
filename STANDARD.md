@@ -182,6 +182,36 @@ The portal's household panel edits one document, `households/{id}/settings/food`
   1000 expressions, too few to check every person's fields, so always write with `saveFood` (which
   clips each person to `FOOD_PERSON_FIELDS` and `FOOD_LIMITS`) and read with `watchFood`.
 
+## Observability
+
+The maintainers hear about a failure from the reports, not from a household. Every app sends
+errors, speed and anonymous usage counts to one New Relic account on its free tier
+(`@huishouden/pwa-kit/observability`; setup, alerts and dashboard in
+[docs/observability.md](docs/observability.md)).
+
+- **Start it first.** `startObservability({ app: 'baby', env: import.meta.env })` in `firebase.ts`
+  (or `main.tsx`) before rendering. It reads `VITE_NEWRELIC_ACCOUNT_ID`, `VITE_NEWRELIC_APP_ID` and
+  `VITE_NEWRELIC_BROWSER_KEY` (repo variables, public by design: the browser key can only send).
+  Local builds, previews, staging and automated browsers send nothing.
+- **Errors and performance are always on.** Uncaught errors and Core Web Vitals are automatic;
+  `readError` and `googleFetch` report the failures they word or throw (not offline or an expired
+  token); anything else handled goes through `reportError(e, { where: 'save feed' })`.
+- **Usage is counted per visit, anonymously.** `track('log feed', { kind: 'bottle' })` for a feature
+  used and `trackView(tab)` for a screen; action names and small enums only. The agent runs with
+  session tracking off: no cookie and no localStorage id, so nothing links one visit to the next and
+  no consent banner is needed. Households are counted by a hash of the id (`saveMyProfile` sets it).
+  When the browser sends Global Privacy Control (or Do Not Track), usage counts and the household
+  hash are skipped silently; errors and performance still go. There is no opt-out screen.
+- **No personal data leaves the device.** No names, emails, household ids, entries, free text or
+  query strings: messages, stacks and URLs pass through `redact` and the agent's obfuscation rules.
+  Geography is the country and region New Relic derives from the request; the city it also derives
+  is dropped at ingest. No session replay, traces, AJAX URLs or click tracking.
+- **Say so.** The portal's `/privacy` page (linked from every app's account menu as "Privacy" and
+  from the portal's footer) says in plain words what is collected, what isn't and who provides it;
+  each app's README has a Privacy section pointing to it.
+- **Free.** 100 GB a month of ingest (the apps use megabytes), one full user, unlimited ping
+  monitors, alerts and dashboards. A feature that would need more is a decision for the user.
+
 ## CI/CD
 
 Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@v0`
@@ -196,7 +226,8 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 | `staging` | same-repo PRs that change more than docs; manual runs with `staging-ref` | Build against the staging project, deploy to the app's staging site, seed, `e2e` and `e2e:signed-in` there (see Staging) |
 
 - Repo variables (not secrets; the Firebase web config is public by design): `GCP_WIF_PROVIDER`,
-  `GCP_DEPLOY_SA`, `VITE_FIREBASE_*`. The bootstrap sets them.
+  `GCP_DEPLOY_SA`, `VITE_FIREBASE_*` (the bootstrap sets them) and `VITE_NEWRELIC_*`
+  (`infra/newrelic.ts`, see Observability).
 - Deploy waits on `leak-scan` and `build`. `concurrency: cancel-in-progress` on every workflow.
 - `pull_request` ignores `CHANGELOG.md` and `package.json`-only changes (`templates/ci.yml`): release
   PRs are opened by github-actions[bot], and GitHub holds a bot-opened PR's run for approval and

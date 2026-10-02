@@ -1,4 +1,5 @@
 import { loadGsi, loadedGsi } from './gsi';
+import { reportError } from './observability';
 const STORE_KEY = 'hh-google-tokens';
 /** Stop using a token this long before Google says it ends. */
 const MARGIN_MS = 5 * 60_000;
@@ -147,7 +148,11 @@ export async function googleFetch(token, url, { label = 'Google', method = 'GET'
         forgetGoogleToken(token);
     if (!res.ok) {
         const answer = (await res.json().catch(() => ({})));
-        throw new GoogleApiError(`[${res.status}] ${label}: ${answer.error?.message ?? res.statusText}`, res.status);
+        const error = new GoogleApiError(`[${res.status}] ${label}: ${answer.error?.message ?? res.statusText}`, res.status);
+        // A 401 is an hour-old token, forgotten above and asked for again: routine, not a fault.
+        if (res.status !== 401)
+            reportError(error, { where: label, api: new URL(url, 'https://x').hostname });
+        throw error;
     }
     const text = await res.text();
     return (text ? JSON.parse(text) : {});
