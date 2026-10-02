@@ -4,16 +4,20 @@ import { observeHousehold } from './observability.js';
 export const normalizeEmail = (email) => email.trim().toLowerCase();
 const COLLECTION = 'households';
 /**
- * The household an app uses when a person belongs to several: the oldest, so every app picks the
- * same one. Documents still waiting for the server (a household created a moment ago on this device)
- * are skipped — the rules can't see them yet, so subscriptions under them would be refused.
+ * The household an app uses when a person belongs to several. Any member of any household can add
+ * an email to it, so an invitation the person never acted on must not displace a household they
+ * already use: households they have joined (opened an app in, see `markJoined`) come first, and
+ * among those, or among invitations when they have joined none, the oldest, so every app picks the
+ * same one. Documents still waiting for the server (a household created a moment ago on this
+ * device) are skipped — the rules can't see them yet, so subscriptions under them would be refused.
  */
-export function pickHousehold(docs) {
+export function pickHousehold(docs, email) {
+    const me = email ? normalizeEmail(email) : null;
     const households = docs
         .filter((d) => !d.pending)
         .map((d) => toHousehold(d.id, d.data))
         .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
-    return households[0] ?? null;
+    return (me && households.find((h) => h.joined.includes(me))) || households[0] || null;
 }
 const membersQuery = (db, email) => query(collection(db, COLLECTION), where('members', 'array-contains', normalizeEmail(email)));
 /** Follows the household the signed-in person belongs to (see `pickHousehold`). */
@@ -24,14 +28,14 @@ export function watchHousehold(db, email, onChange) {
         // Stay loading while the only household is a local one the server hasn't accepted yet.
         if (docs.length && docs.every((d) => d.pending))
             return;
-        const household = pickHousehold(docs);
+        const household = pickHousehold(docs, email);
         onChange(household ? { status: 'ready', household } : { status: 'none' });
     }, (error) => onChange({ status: 'error', error }));
 }
 /** One-off lookup of the same household `watchHousehold` follows; null when not a member anywhere. */
 export async function findHousehold(db, email) {
     const snap = await getDocs(membersQuery(db, email));
-    return pickHousehold(snap.docs.map((d) => ({ id: d.id, data: d.data() })));
+    return pickHousehold(snap.docs.map((d) => ({ id: d.id, data: d.data() })), email);
 }
 export function toHousehold(id, data) {
     return {
