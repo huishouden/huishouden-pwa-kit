@@ -85,6 +85,9 @@ jobs:
       - name: Security headers on every app path, none on Firebase's /__/ (STANDARD.md "Security headers")
         # Kits before v0.43.0 have no pwa-headers-check.
         run: if [ -e node_modules/.bin/pwa-headers-check ]; then bunx pwa-headers-check; else echo "kit has no pwa-headers-check"; fi
+      - name: Kit code copied into the app (warnings)
+        # Kits before v0.44.0 have no pwa-reuse-check. Warnings only for now: each shows on the PR's files.
+        run: if [ -e node_modules/.bin/pwa-reuse-check ]; then bunx pwa-reuse-check; else echo "kit has no pwa-reuse-check"; fi
       - name: Unit tests
         run: if jq -e '.scripts.test' package.json >/dev/null; then bun run test; else echo "no test script"; fi
       - run: bun run build

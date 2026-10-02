@@ -38,6 +38,7 @@ import {
   type OutboxEntry,
   type StorageLike,
 } from './outbox-codec.js';
+import type { Op as StoreOp } from './store.js';
 
 /**
  * Firestore for a household app, and writes that survive the app closing at once.
@@ -197,6 +198,23 @@ export function writeBatch(db: Firestore): WriteBatch {
     },
   };
   return self;
+}
+
+/**
+ * Writes `./store` ops as one batch under `base` (`households/{id}`): a set for each op with data
+ * (merged with `merge`), a delete for each without. `path(col)` names the Firestore collection for an op's list (the list
+ * name itself by default). Returns the commit, for the caller's error toast; the screen updates
+ * from the local cache before it resolves.
+ */
+export function commitOps<C extends string>(db: Firestore, base: string, ops: readonly StoreOp<C>[], path: (col: C) => string = (col) => col): Promise<void> {
+  const batch = writeBatch(db);
+  for (const op of ops) {
+    const ref = doc(db, base, path(op.col), op.id);
+    if (!op.data) batch.delete(ref);
+    else if (op.merge) batch.set(ref, op.data, { merge: true });
+    else batch.set(ref, op.data);
+  }
+  return batch.commit();
 }
 
 // Field sentinels: Firestore's, remembered so a note can repeat them -------------------------------

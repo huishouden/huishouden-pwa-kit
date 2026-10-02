@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.43.0",
+  "version": "0.44.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "PolyForm-Shield-1.0.0",
   "type": "module",
@@ -8,6 +8,10 @@
     "./agenda": {
       "types": "./dist/agenda.d.ts",
       "default": "./dist/agenda.js"
+    },
+    "./app": {
+      "types": "./dist/app.d.ts",
+      "default": "./dist/app.js"
     },
     "./app-bar": {
       "types": "./dist/app-bar.d.ts",
@@ -20,6 +24,10 @@
     "./calendar": {
       "types": "./dist/calendar.d.ts",
       "default": "./dist/calendar.js"
+    },
+    "./chart": {
+      "types": "./dist/chart.d.ts",
+      "default": "./dist/chart.js"
     },
     "./contacts": {
       "types": "./dist/contacts.d.ts",
@@ -77,6 +85,10 @@
       "types": "./dist/invite.d.ts",
       "default": "./dist/invite.js"
     },
+    "./log": {
+      "types": "./dist/log.d.ts",
+      "default": "./dist/log.js"
+    },
     "./logo": {
       "types": "./dist/logo.d.ts",
       "default": "./dist/logo.js"
@@ -125,6 +137,10 @@
       "types": "./dist/react/calendar.d.ts",
       "default": "./dist/react/calendar.js"
     },
+    "./react/chart": {
+      "types": "./dist/react/chart.d.ts",
+      "default": "./dist/react/chart.js"
+    },
     "./react/clock": {
       "types": "./dist/react/clock.d.ts",
       "default": "./dist/react/clock.js"
@@ -144,6 +160,10 @@
     "./react/schedule": {
       "types": "./dist/react/schedule.d.ts",
       "default": "./dist/react/schedule.js"
+    },
+    "./react/store": {
+      "types": "./dist/react/store.d.ts",
+      "default": "./dist/react/store.js"
     },
     "./react/roles": {
       "types": "./dist/react/roles.d.ts",
@@ -185,6 +205,10 @@
       "types": "./dist/staging.d.ts",
       "default": "./dist/staging.js"
     },
+    "./store": {
+      "types": "./dist/store.d.ts",
+      "default": "./dist/store.js"
+    },
     "./suggestions": {
       "types": "./dist/suggestions.d.ts",
       "default": "./dist/suggestions.js"
@@ -207,7 +231,8 @@
     "pwa-logo": "./scripts/logo.ts",
     "pwa-oauth-origins": "./scripts/oauth-origins.ts",
     "pwa-staging": "./scripts/staging.ts",
-    "pwa-write-check": "./scripts/write-check.ts"
+    "pwa-write-check": "./scripts/write-check.ts",
+    "pwa-reuse-check": "./scripts/reuse-check.ts"
   },
   "files": [
     "DESIGN.md",
@@ -221,7 +246,7 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "lint": "tsc --noEmit",
-    "test": "bun test test && bun test ./test/sdk/firestore.sdk.ts"
+    "test": "bun test test && bun test ./test/sdk/firestore.sdk.ts && bun test ./test/isolated/app.mocked.ts"
   },
   "peerDependencies": {
     "@playwright/test": ">=1.45",
