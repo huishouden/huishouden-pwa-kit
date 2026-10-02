@@ -1,0 +1,25 @@
+[
+  {
+    "method": "POST",
+    "url": "https://identitytoolkit.googleapis.com/v1/projects/huishouden-staging/accounts:batchCreate",
+    "body": {
+      "users": [
+        { "localId": "test-a", "email": "test-a@example.com", "emailVerified": true, "displayName": "Test A" },
+        { "localId": "test-b", "email": "test-b@example.com", "emailVerified": true, "displayName": "Test B" }
+      ],
+      "allowOverwrite": true
+    }
+  },
+  {
+    "method": "PATCH",
+    "url": "https://firestore.googleapis.com/v1/projects/huishouden-staging/databases/(default)/documents/households/test-household",
+    "body": {
+      "fields": {
+        "name": { "stringValue": "Test household" },
+        "members": { "arrayValue": { "values": [{ "stringValue": "test-a@example.com" }, { "stringValue": "test-b@example.com" }] } },
+        "joined": { "arrayValue": { "values": [{ "stringValue": "test-a@example.com" }, { "stringValue": "test-b@example.com" }] } },
+        "createdAt": { "integerValue": "1767225600000" }
+      }
+    }
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "iss": "github-deploy@huishouden-staging.iam.gserviceaccount.com",
+  "sub": "github-deploy@huishouden-staging.iam.gserviceaccount.com",
+  "aud": "https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit",
+  "iat": 1790000000,
+  "exp": 1790003600,
+  "uid": "test-a"
+}
