@@ -68,6 +68,16 @@ export const DIET_GUIDANCE = {
     halal: 'no pork or alcohol (including in cooking); meat and poultry should be halal',
     kosher: 'no pork or shellfish, and no meat and dairy in the same meal; meat should be kosher',
 };
+/**
+ * Diets that are preferences rather than rules. A strict reflux or low-salt diet every day leaves
+ * only bland food (and many people manage reflux with medication), so apps rate and order meals for
+ * these instead of dropping them. Every other diet (beliefs, allergies, pregnancy safety) is strict.
+ */
+export const GENTLE_DIETS = Object.freeze(['gerd', 'low-sodium']);
+/** Whether a meal that breaks this diet must be left out (true) or only rated and ordered (false). */
+export function isStrict(diet) {
+    return !GENTLE_DIETS.includes(diet);
+}
 export const FOOD_FIELDS = ['people', 'pantryAssumed', 'updatedAt', 'by'];
 export const FOOD_PERSON_FIELDS = ['id', 'name', 'member', 'diets', 'avoid', 'note'];
 /** The rules' limits. List entries may not contain `|` (the rules check a list as one joined string). */

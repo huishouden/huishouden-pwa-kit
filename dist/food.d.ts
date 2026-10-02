@@ -15,6 +15,14 @@ export type Diet = (typeof DIETS)[number];
 export declare const DIET_LABELS: Record<Diet, string>;
 /** What each diet means for a meal, from well-known guidance, in plain words. */
 export declare const DIET_GUIDANCE: Record<Diet, string>;
+/**
+ * Diets that are preferences rather than rules. A strict reflux or low-salt diet every day leaves
+ * only bland food (and many people manage reflux with medication), so apps rate and order meals for
+ * these instead of dropping them. Every other diet (beliefs, allergies, pregnancy safety) is strict.
+ */
+export declare const GENTLE_DIETS: readonly Diet[];
+/** Whether a meal that breaks this diet must be left out (true) or only rated and ordered (false). */
+export declare function isStrict(diet: Diet): boolean;
 export interface FoodPerson {
     /** Stable within the household's list: the member's email, or an invented id for someone without an account. */
     id: string;

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import fixture from './fixtures/food.json';
-import { DEFAULT_PANTRY, DIETS, DIET_GUIDANCE, DIET_LABELS, FOOD_LIMITS, foodDoc, householdDietRules, householdDiets, pantryText, toFood, withMembers } from '../src/food';
+import { DEFAULT_PANTRY, DIETS, GENTLE_DIETS, isStrict, DIET_GUIDANCE, DIET_LABELS, FOOD_LIMITS, foodDoc, householdDietRules, householdDiets, pantryText, toFood, withMembers } from '../src/food';
 
 describe('reading the stored document', () => {
   test('keeps valid people once, known diets only, avoid lists trimmed and de-duplicated', () => {
@@ -81,5 +81,14 @@ describe('constraints in words', () => {
       expect(DIET_LABELS[d]).toBeTruthy();
       expect(DIET_GUIDANCE[d]).toBeTruthy();
     }
+  });
+});
+
+describe('strict and gentle diets', () => {
+  test('GERD and low-sodium are preferences; beliefs, allergies and pregnancy are rules', () => {
+    expect([...GENTLE_DIETS]).toEqual(['gerd', 'low-sodium']);
+    expect(DIETS.filter((d) => !isStrict(d))).toEqual(['gerd', 'low-sodium']);
+    for (const d of ['vegan', 'vegetarian', 'nut allergy', 'shellfish allergy', 'pregnant', 'halal', 'kosher'] as const) expect(isStrict(d)).toBe(true);
+    expect(Object.isFrozen(GENTLE_DIETS)).toBe(true);
   });
 });
