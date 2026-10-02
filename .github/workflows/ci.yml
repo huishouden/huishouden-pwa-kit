@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  leak-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./actions/leak-scan
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run test
+      - run: bun run build
+      # Apps install this package straight from git, so the compiled output is committed.
+      - name: dist is up to date
+        run: git diff --exit-code -- dist
+      - name: Workflows and hooks parse
+        run: |
+          bash -n templates/githooks/pre-commit infra/bootstrap.sh
+          for f in .github/workflows/*.yml actions/*/action.yml; do python3 -c "import sys,yaml; yaml.safe_load(open(sys.argv[1]))" "$f"; done

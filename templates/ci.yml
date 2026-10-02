@@ -1,0 +1,24 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pwa:
+    uses: piekstra/pwa-kit/.github/workflows/pwa.yml@v0
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      hosting-target: APP_TARGET
+      site-url: https://APP_SITE.web.app

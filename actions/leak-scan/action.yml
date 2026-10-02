@@ -1,0 +1,31 @@
+name: leak-scan
+description: >
+  Scans for secrets and personal data with gitleaks: the commits a pull request or push adds,
+  or the current files when there is no base commit (manual runs, first pushes). History from
+  before a repo adopted the scan is audited once, at publication.
+inputs:
+  gitleaks-version:
+    description: gitleaks release to install
+    default: 8.30.1
+runs:
+  using: composite
+  steps:
+    - name: Install gitleaks
+      shell: bash
+      env:
+        V: ${{ inputs.gitleaks-version }}
+      run: curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${V}/gitleaks_${V}_linux_x64.tar.gz" | tar -xz -C /usr/local/bin gitleaks
+    - name: Scan
+      shell: bash
+      env:
+        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        HEAD: ${{ github.sha }}
+        DEFAULT_CONFIG: ${{ github.action_path }}/gitleaks.toml
+      run: |
+        config=.gitleaks.toml
+        [ -f "$config" ] || config="$DEFAULT_CONFIG"
+        if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ]; then
+          gitleaks git . --redact --no-banner --config "$config" --log-opts "$BASE..$HEAD"
+        else
+          gitleaks dir . --redact --no-banner --config "$config"
+        fi

@@ -1,0 +1,11 @@
+# Default leak rules: gitleaks' built-in secret detectors plus personal mailbox addresses.
+# A repo's own .gitleaks.toml replaces this file; start it with [extend] path = this file's rules
+# or copy this file. Allowlist entries must say why the match is safe.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "personal-email"
+description = "Address at a personal mailbox provider (people's accounts belong in data, not code)"
+regex = '''[a-zA-Z0-9._%+-]+@(?:gmail|googlemail|icloud|me|mac|outlook|hotmail|live|yahoo|aol|proton|protonmail|pm)\.(?:com|me|net)'''
+keywords = ["@gmail", "@googlemail", "@icloud", "@me.", "@mac.", "@outlook", "@hotmail", "@live.", "@yahoo", "@aol", "@proton", "@pm."]
