@@ -1,0 +1,32 @@
+[
+  {
+    "name": "emails",
+    "input": "No member named Someone.Else+x@example.org here",
+    "expected": "No member named [email] here"
+  },
+  {
+    "name": "query strings and fragments",
+    "input": "GET https://example-baby.web.app/feeds?member=a@example.com&day=3#top failed",
+    "expected": "GET https://example-baby.web.app/feeds failed"
+  },
+  {
+    "name": "household paths",
+    "input": "projects/p/databases/(default)/documents/households/AbC123xyz/feeds/f1",
+    "expected": "projects/p/databases/(default)/documents/households/[id]/feeds/f1"
+  },
+  {
+    "name": "profile paths keyed by email",
+    "input": "profiles/someone and profiles/other",
+    "expected": "profiles/[id] and profiles/[id]"
+  },
+  {
+    "name": "card and phone-like numbers",
+    "input": "card 4111 1111 1111 1111 or 555-010-0199",
+    "expected": "card [number] or [number]"
+  },
+  {
+    "name": "short numbers stay",
+    "input": "[403] Gmail: quota 250 exceeded",
+    "expected": "[403] Gmail: quota 250 exceeded"
+  }
+]

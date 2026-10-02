@@ -64,7 +64,11 @@ export interface Profile {
     photoURL?: string;
     updatedAt: number;
 }
-/** Records the signed-in member's name and photo; cheap to call on every sign-in. */
+/**
+ * Records the signed-in member's name and photo; cheap to call on every sign-in. Also tags this
+ * visit's usage counts with the household's hash (`./observability`), so active households can be
+ * counted without knowing which.
+ */
 export declare function saveMyProfile(db: Firestore, householdId: string, user: {
     email: string | null;
     displayName: string | null;

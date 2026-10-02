@@ -9,7 +9,8 @@
 #         site-url: https://example-spending.web.app
 #
 # Caller repo variables: GCP_WIF_PROVIDER, GCP_DEPLOY_SA (deploy is skipped until both are set),
-# VITE_FIREBASE_*, VITE_GOOGLE_CLIENT_ID and VITE_VAPID_PUBLIC_KEY (passed to the build). Optional package.json scripts:
+# VITE_FIREBASE_*, VITE_GOOGLE_CLIENT_ID, VITE_VAPID_PUBLIC_KEY and VITE_NEWRELIC_* (passed to the
+# production build; staging builds get no New Relic variables, so staging sends no reports). Optional package.json scripts:
 # test (unit), e2e (Playwright smoke tests against site-url after each deploy), screenshots
 # (Playwright, writes docs/screenshots/*.png; committed back to main when they change, which needs
 # contents: write from the caller).
@@ -61,6 +62,10 @@ jobs:
       VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
       VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
       VITE_VAPID_PUBLIC_KEY: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
+      # Error, performance and usage reports (STANDARD.md "Observability"); public browser values.
+      VITE_NEWRELIC_ACCOUNT_ID: ${{ vars.VITE_NEWRELIC_ACCOUNT_ID }}
+      VITE_NEWRELIC_APP_ID: ${{ vars.VITE_NEWRELIC_APP_ID }}
+      VITE_NEWRELIC_BROWSER_KEY: ${{ vars.VITE_NEWRELIC_BROWSER_KEY }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

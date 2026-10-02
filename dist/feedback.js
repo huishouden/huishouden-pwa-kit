@@ -2,9 +2,15 @@
  * Plain words for a failed read or write. Firestore's codes become what the person can do about
  * it; everything else is just the action that failed, so no stack trace or code reaches the screen.
  */
-/** "Couldn't save: offline. It will retry when the connection is back." */
+import { reportError } from './observability';
+/**
+ * "Couldn't save: offline. It will retry when the connection is back." Also reports the failure
+ * (`./observability`), except being offline, which is not a fault.
+ */
 export function readError(e, prefix) {
     const code = e?.code;
+    if (code !== 'unavailable')
+        reportError(e, { where: prefix });
     if (code === 'permission-denied')
         return `${prefix}: this household doesn't allow it yet.`;
     if (code === 'unavailable')

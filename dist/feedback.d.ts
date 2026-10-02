@@ -2,7 +2,10 @@
  * Plain words for a failed read or write. Firestore's codes become what the person can do about
  * it; everything else is just the action that failed, so no stack trace or code reaches the screen.
  */
-/** "Couldn't save: offline. It will retry when the connection is back." */
+/**
+ * "Couldn't save: offline. It will retry when the connection is back." Also reports the failure
+ * (`./observability`), except being offline, which is not a fault.
+ */
 export declare function readError(e: unknown, prefix: string): string;
 /**
  * "The person closed or cancelled the Google window": Google Identity Services' `popup_closed`

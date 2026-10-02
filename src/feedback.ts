@@ -3,9 +3,15 @@
  * it; everything else is just the action that failed, so no stack trace or code reaches the screen.
  */
 
-/** "Couldn't save: offline. It will retry when the connection is back." */
+import { reportError } from './observability';
+
+/**
+ * "Couldn't save: offline. It will retry when the connection is back." Also reports the failure
+ * (`./observability`), except being offline, which is not a fault.
+ */
 export function readError(e: unknown, prefix: string): string {
   const code = (e as { code?: string })?.code;
+  if (code !== 'unavailable') reportError(e, { where: prefix });
   if (code === 'permission-denied') return `${prefix}: this household doesn't allow it yet.`;
   if (code === 'unavailable') return `${prefix}: offline. It will retry when the connection is back.`;
   return `${prefix}.`;
