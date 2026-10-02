@@ -1,19 +1,5 @@
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
-const GSI_SRC = 'https://accounts.google.com/gsi/client';
-let gsiLoading = null;
-function loadGsi() {
-    if (window.google?.accounts?.id)
-        return Promise.resolve(window.google.accounts.id);
-    gsiLoading ??= new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = GSI_SRC;
-        script.async = true;
-        script.onload = () => (window.google?.accounts?.id ? resolve(window.google.accounts.id) : reject(new Error('Google Identity Services did not load')));
-        script.onerror = () => reject(new Error('Google Identity Services failed to load'));
-        document.head.appendChild(script);
-    });
-    return gsiLoading;
-}
+import { loadGsi } from './gsi';
 /**
  * Signs in with Google One Tap when possible. Resolves once Google has either returned a credential
  * (signed in) or declined to show anything (unavailable, with Google's reason) — callers then show
@@ -25,7 +11,7 @@ export async function signInSilently(auth, googleClientId) {
         return { status: 'already-signed-in', user: auth.currentUser };
     let gsi;
     try {
-        gsi = await loadGsi();
+        gsi = (await loadGsi()).id;
     }
     catch (e) {
         return { status: 'unavailable', reason: e instanceof Error ? e.message : String(e) };

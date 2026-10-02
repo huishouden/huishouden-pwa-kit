@@ -1,18 +1,35 @@
-import { type Auth } from 'firebase/auth';
+import type { Auth } from 'firebase/auth';
+/** Why Google gave no token. `code` is what `./feedback` reads to word it. */
+export type GoogleTokenErrorCode = 'popup_closed' | 'popup_failed_to_open' | 'access_denied' | 'not_configured' | 'unavailable' | 'unknown';
+export declare class GoogleTokenError extends Error {
+    readonly code: GoogleTokenErrorCode;
+    constructor(message: string, code: GoogleTokenErrorCode);
+}
+export interface GoogleTokensConfig {
+    /** The OAuth web client id (`VITE_GOOGLE_CLIENT_ID`). Empty or missing leaves tokens unavailable. */
+    clientId?: string;
+    /** Load Google's script now so the first tap opens the window at once (default true). */
+    preload?: boolean;
+}
+/** Call once at startup with the app's OAuth web client id. */
+export declare function configureGoogleTokens({ clientId, preload }: GoogleTokensConfig): void;
 /** A still-valid token covering `scopes` for the signed-in member, without asking anyone; null when there is none. */
 export declare function cachedGoogleToken(auth: Auth, scopes: readonly string[]): string | null;
 export interface GoogleTokenOptions {
-    /** Keep the token in localStorage for its hour (default: memory only). */
+    /** Keep the token in localStorage until it ends (default: memory only). */
     persist?: boolean;
-    /** The error message when Google gives no token, e.g. "Google did not grant calendar access." */
+    /** The error message when the member doesn't allow it, e.g. "Google did not grant calendar access." */
     deniedMessage?: string;
+    /** The OAuth web client id, when `configureGoogleTokens` wasn't called. */
+    clientId?: string;
 }
 /**
- * A token covering `scopes`: the cached one when there is one, otherwise from Google's popup. Call
- * from a tap the first time. Rejects with Firebase's `auth/popup-*` errors when the popup is
- * closed or blocked (see `popupCancelled` / `popupBlocked` in `./feedback`).
+ * A token covering `scopes`: the cached one when there is one, otherwise from Google's window.
+ * Call from a tap. Rejects with a `GoogleTokenError` when the window is closed (`popup_closed`),
+ * blocked (`popup_failed_to_open`) or the member says no (`access_denied`); `./feedback` words
+ * each (`popupCancelled`, `popupBlocked`, `googleAccessMessage`).
  */
-export declare function googleAccessToken(auth: Auth, scopes: readonly string[], { persist, deniedMessage }?: GoogleTokenOptions): Promise<string>;
+export declare function googleAccessToken(auth: Auth, scopes: readonly string[], { persist, deniedMessage, clientId }?: GoogleTokenOptions): Promise<string>;
 /**
  * Stops using a token: pass the one Google rejected (a 401: revoked, or expired early) so the next
  * call asks again, or nothing to forget every token (signing out).
