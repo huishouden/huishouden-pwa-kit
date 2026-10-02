@@ -4,9 +4,9 @@ import type { Auth } from 'firebase/auth';
  * and turn email HTML into readable text. For apps that read the household's own statement and
  * alert emails (Bills, Spending) with the member's consent; nothing leaves the browser.
  *
- * Google asks once, in a popup opened from a tap; the token is kept for its hour in localStorage,
- * so reopening the app can check again without another popup. Nothing ever asks without a tap:
- * `storedGmailToken` never opens a popup, `requestGmailToken` does.
+ * Google asks once, in a window opened from a tap (`./google-token`); the token is kept in
+ * localStorage until it ends, so reopening the app can check again without another window. Nothing
+ * ever asks without a tap: `storedGmailToken` never opens a window, `requestGmailToken` does.
  */
 export declare const GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 declare global {

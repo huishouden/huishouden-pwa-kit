@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { calendarError, isImported, notImported, plainText, type CalendarMatch } from '../src/calendar';
 import { contactInput, displayWebsite, groupContacts, normalizeWebsite, type Contact } from '../src/contacts';
-import { popupBlocked, popupCancelled, readError } from '../src/feedback';
+import { accessDenied, googleAccessMessage, popupBlocked, popupCancelled, readError } from '../src/feedback';
 import { PERSON_COLOURS, personColour, personInitial, personName } from '../src/people';
 import fixture from './fixtures/calendar-matches.json';
 
@@ -87,6 +87,18 @@ describe('feedback', () => {
     expect(popupCancelled({ code: 'auth/cancelled-popup-request' })).toBe(true);
     expect(popupCancelled({ code: 'auth/popup-blocked' })).toBe(false);
     expect(popupBlocked({ code: 'auth/popup-blocked' })).toBe(true);
+  });
+  test('Google Identity Services token errors in words', () => {
+    expect(popupCancelled({ code: 'popup_closed' })).toBe(true);
+    expect(popupBlocked({ code: 'popup_failed_to_open' })).toBe(true);
+    expect(accessDenied({ code: 'access_denied' })).toBe(true);
+    expect(googleAccessMessage({ code: 'popup_closed' }, 'Gmail')).toBe('Gmail access was not allowed: Google’s window was closed. Try again when you are ready.');
+    expect(googleAccessMessage({ code: 'popup_failed_to_open' })).toBe('The browser blocked Google’s window. Allow pop-ups for this site and try again.');
+    expect(googleAccessMessage({ code: 'access_denied' }, 'Calendar')).toBe('Calendar access was not allowed. Try again and allow it on Google’s page.');
+    expect(googleAccessMessage({ code: 'not_configured' }, 'Gmail')).toBe('Gmail access is not set up for this app yet.');
+    expect(googleAccessMessage({ code: 'unavailable' })).toBe('Couldn’t reach Google. Check the connection and try again.');
+    expect(googleAccessMessage(new Error('boom'))).toBeNull();
+    expect(calendarError({ code: 'access_denied' })).toBe('Calendar access was not allowed. Try again and allow it on Google’s page.');
   });
 });
 

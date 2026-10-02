@@ -1,0 +1,20 @@
+{
+  "granted": {
+    "access_token": "ya29.example-token",
+    "token_type": "Bearer",
+    "expires_in": 3599,
+    "scope": "https://www.googleapis.com/auth/a",
+    "prompt": "none"
+  },
+  "denied": {
+    "error": "access_denied",
+    "error_description": "The user denied the request.",
+    "error_uri": "https://developers.google.com/identity/protocols/oauth2"
+  },
+  "invalidRequest": {
+    "error": "invalid_request",
+    "error_description": "Invalid parameter value for scope."
+  },
+  "popupClosed": { "type": "popup_closed", "message": "Popup window closed" },
+  "popupFailed": { "type": "popup_failed_to_open", "message": "Failed to open popup window" }
+}

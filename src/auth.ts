@@ -1,4 +1,5 @@
 import { GoogleAuthProvider, signInWithCredential, type Auth, type User } from 'firebase/auth';
+import { loadGsi, type GoogleAccountsId } from './gsi';
 
 /**
  * Silent Google sign-in for a family of apps on different domains.
@@ -11,50 +12,6 @@ import { GoogleAuthProvider, signInWithCredential, type Auth, type User } from '
  * Requirements: the Google OAuth web client (the one Firebase created for Google sign-in) must list
  * each app's origin under "Authorized JavaScript origins"; Google Cloud has no API for that.
  */
-
-interface GsiCredentialResponse {
-  credential: string;
-}
-interface GsiPromptMoment {
-  isNotDisplayed?: () => boolean;
-  isSkippedMoment?: () => boolean;
-  isDismissedMoment?: () => boolean;
-  getNotDisplayedReason?: () => string;
-  getSkippedReason?: () => string;
-}
-interface GoogleAccountsId {
-  initialize(config: {
-    client_id: string;
-    callback: (response: GsiCredentialResponse) => void;
-    auto_select?: boolean;
-    cancel_on_tap_outside?: boolean;
-    use_fedcm_for_prompt?: boolean;
-    itp_support?: boolean;
-  }): void;
-  prompt(listener?: (moment: GsiPromptMoment) => void): void;
-  disableAutoSelect(): void;
-}
-declare global {
-  interface Window {
-    google?: { accounts: { id: GoogleAccountsId } };
-  }
-}
-
-const GSI_SRC = 'https://accounts.google.com/gsi/client';
-let gsiLoading: Promise<GoogleAccountsId> | null = null;
-
-function loadGsi(): Promise<GoogleAccountsId> {
-  if (window.google?.accounts?.id) return Promise.resolve(window.google.accounts.id);
-  gsiLoading ??= new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = GSI_SRC;
-    script.async = true;
-    script.onload = () => (window.google?.accounts?.id ? resolve(window.google.accounts.id) : reject(new Error('Google Identity Services did not load')));
-    script.onerror = () => reject(new Error('Google Identity Services failed to load'));
-    document.head.appendChild(script);
-  });
-  return gsiLoading;
-}
 
 export type SilentSignInResult =
   | { status: 'signed-in'; user: User }
@@ -72,7 +29,7 @@ export async function signInSilently(auth: Auth, googleClientId: string): Promis
 
   let gsi: GoogleAccountsId;
   try {
-    gsi = await loadGsi();
+    gsi = (await loadGsi()).id;
   } catch (e) {
     return { status: 'unavailable', reason: e instanceof Error ? e.message : String(e) };
   }
