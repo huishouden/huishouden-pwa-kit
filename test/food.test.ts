@@ -44,7 +44,7 @@ describe('members', () => {
   test('adds members not listed yet, by first name, after the people already there', () => {
     const people = withMembers(toFood(fixture.stored).people, [
       { email: 'sam@example.com', name: 'Sam Example' },
-      { email: 'Jo@example.com' },
+      { email: 'jo@example.com' },
       { email: 'kim@example.com', name: 'Kim Example' },
     ]);
     expect(people.map((p) => [p.id, p.name, p.member])).toEqual([

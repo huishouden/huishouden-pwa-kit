@@ -144,9 +144,10 @@ export function watchFood(db, householdId, onChange, onError) {
 export async function saveFood(db, householdId, input, by) {
     await setDoc(docOf(db, householdId), foodDoc(input, by));
 }
+const capitalise = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 /**
  * The list with every member in it: members not listed yet are added (named from their profile, or
- * their email's first part) with no diets, after the people already there. Nothing is saved.
+ * their email's first part, capitalised) with no diets, after the people already there. Nothing is saved.
  */
 export function withMembers(people, members) {
     const listed = new Set(people.flatMap((p) => (p.member ? [p.member.toLowerCase()] : [])));
@@ -154,7 +155,7 @@ export function withMembers(people, members) {
         .filter((m) => !listed.has(m.email.toLowerCase()))
         .map((m) => ({
         id: m.email.toLowerCase(),
-        name: clip(m.name?.split(/\s+/)[0] || m.email.split('@')[0], FOOD_LIMITS.name),
+        name: clip(m.name?.trim().split(/\s+/)[0] || capitalise(m.email.split('@')[0]), FOOD_LIMITS.name),
         member: m.email.toLowerCase(),
         diets: [],
         avoid: [],
