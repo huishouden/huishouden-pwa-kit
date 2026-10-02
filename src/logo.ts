@@ -15,6 +15,8 @@ export const GLYPHS = {
   check: `<path d="M176 300 l40 40 l84 -88" fill="none" stroke="${FOREST_600}" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>`,
   /** Spending: a payment card. */
   card: `<rect x="166" y="282" width="180" height="116" rx="16" fill="none" stroke="${FOREST_600}" stroke-width="24"/><path d="M166 322 h180" stroke="${FOREST_600}" stroke-width="22"/><path d="M196 364 h44" stroke="${FOREST_600}" stroke-width="18" stroke-linecap="round"/>`,
+  /** Baby: a feeding bottle. */
+  bottle: `<path d="M240 272 v-16 a16 16 0 0 1 32 0 v16" fill="none" stroke="${FOREST_600}" stroke-width="20" stroke-linecap="round"/><rect x="216" y="272" width="80" height="140" rx="26" fill="none" stroke="${FOREST_600}" stroke-width="22"/><path d="M228 318 h56 M228 352 h56" stroke="${FOREST_600}" stroke-width="16" stroke-linecap="round"/>`,
   /** Lists: three lines. */
   list: `<path d="M184 290 h144 M184 334 h144 M184 378 h96" stroke="${FOREST_600}" stroke-width="26" stroke-linecap="round"/>`,
   /** Shopping: a cart. */
