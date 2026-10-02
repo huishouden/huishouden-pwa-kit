@@ -8,7 +8,9 @@
 #   PROJECT=<firebase project id>
 #   GITHUB_OWNER=<github user or org>
 #   APPS=( "<repo>:<hosting site>:<web app display name or empty>" ... )
-# Optional: POOL, PROVIDER, SA_NAME (defaults: github, github, github-deploy).
+# Optional: POOL, PROVIDER, SA_NAME (defaults: github, github, github-deploy);
+#   ALSO_TRUSTED_OWNERS="<user or org> ..." — other owners whose repos may also deploy (each repo is
+#   still allowed separately), e.g. while repos move between a user and an org.
 #
 # Prerequisites (once per machine), all as the same Google account:
 #   npx firebase-tools login ; gcloud auth login ; gh auth login
@@ -54,8 +56,11 @@ echo "$SA"
 
 step "Workload Identity Federation (GitHub OIDC: owner $GITHUB_OWNER, main branch only)"
 # Numeric owner id, not the name: a renamed account's old name could be claimed by someone else.
-OWNER_ID=$(gh api "users/$GITHUB_OWNER" --jq .id)
-WIF_CONDITION="assertion.repository_owner_id == '$OWNER_ID' && assertion.ref == 'refs/heads/main'"
+OWNER_IDS=""
+for owner in "$GITHUB_OWNER" ${ALSO_TRUSTED_OWNERS:-}; do
+  OWNER_IDS+="${OWNER_IDS:+, }'$(gh api "users/$owner" --jq .id)'"
+done
+WIF_CONDITION="assertion.repository_owner_id in [$OWNER_IDS] && assertion.ref == 'refs/heads/main'"
 gcloud iam workload-identity-pools describe "$POOL" --project "$PROJECT" --location global >/dev/null 2>&1 \
   || gcloud iam workload-identity-pools create "$POOL" --project "$PROJECT" --location global --display-name "GitHub Actions"
 gcloud iam workload-identity-pools providers describe "$PROVIDER" --project "$PROJECT" --location global --workload-identity-pool "$POOL" >/dev/null 2>&1 \
@@ -112,7 +117,7 @@ JSON
     gh variable set VITE_FIREBASE_PROJECT_ID --repo "$GITHUB_OWNER/$repo" --body "$PROJECT"
     gh variable set VITE_FIREBASE_APP_ID --repo "$GITHUB_OWNER/$repo" --body "$app_id"
     gh variable set VITE_FIREBASE_MESSAGING_SENDER_ID --repo "$GITHUB_OWNER/$repo" --body "$(jq -r .messagingSenderId <<<"$config")"
-    # For silent One Tap sign-in (@piekstra/huishouden-pwa-kit/auth): the OAuth client Firebase created for
+    # For silent One Tap sign-in (@huishouden/pwa-kit/auth): the OAuth client Firebase created for
     # Google sign-in. Public, like the rest of the web config. Empty until Google sign-in is enabled.
     client_id=$(curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "x-goog-user-project: $PROJECT" \
       "https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/defaultSupportedIdpConfigs/google.com" | jq -r '.clientId // empty')
@@ -141,5 +146,5 @@ Manual steps the APIs don't cover (project $PROJECT):
      (initialises Auth on the free plan and creates the OAuth web client; no supported API does either)
   2. Google Cloud console > Google Auth Platform > Clients > the "Web client (auto created by Google
      Service)" > Authorized JavaScript origins: add https://<site>.web.app for each app using silent
-     sign-in (@piekstra/huishouden-pwa-kit/auth). Then re-run this script so apps get VITE_GOOGLE_CLIENT_ID.
+     sign-in (@huishouden/pwa-kit/auth). Then re-run this script so apps get VITE_GOOGLE_CLIENT_ID.
 EOF

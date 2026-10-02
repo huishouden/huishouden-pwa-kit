@@ -36,7 +36,7 @@ forest-600. Only the glyph changes between apps: portal `home` (a door), Tasks `
 
 ## Frame
 
-- Top: the Huishouden app bar (`<hh-app-bar>` from `@piekstra/huishouden-pwa-kit/app-bar` when available;
+- Top: the Huishouden app bar (`<hh-app-bar>` from `@huishouden/pwa-kit/app-bar` when available;
   until then the same anatomy by hand): house mark that links to the portal, the app's name, the
   app switcher, and the signed-in profile photo (`.hh-avatar`) on the right.
 - Page background `--hh-cream`; content on white surfaces; max content width 1200px, centred;
@@ -45,7 +45,7 @@ forest-600. Only the glyph changes between apps: portal `home` (a door), Tasks `
 
 ## Colour
 
-Only these, from `@piekstra/huishouden-pwa-kit/theme.css` (Tailwind names in brackets):
+Only these, from `@huishouden/pwa-kit/theme.css` (Tailwind names in brackets):
 
 | Role | Light | Dark |
 |---|---|---|

@@ -31,7 +31,7 @@ runs:
       run: |
         # Repo configs extend the kit's rules by their installed path; dependencies aren't installed
         # in this job, so put the rules where that path points.
-        kit=node_modules/@piekstra/huishouden-pwa-kit/actions/leak-scan
+        kit=node_modules/@huishouden/pwa-kit/actions/leak-scan
         [ -f "$kit/gitleaks.toml" ] || { mkdir -p "$kit" && cp "$DEFAULT_CONFIG" "$kit/gitleaks.toml"; }
         # Scan with the kit's rules always, and with the repo's config too when it has one: a change
         # can't switch off its own scan by adding allowlists.
