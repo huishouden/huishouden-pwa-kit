@@ -268,8 +268,8 @@ jobs:
           SITE: ${{ vars.STAGING_SITE }}
           REF: ${{ inputs.staging-ref || github.event.pull_request.head.sha || github.sha }}
         run: |
-          npx --yes firebase-tools@14 target:apply hosting "$TARGET" "$SITE" --project huishouden-staging
-          npx --yes firebase-tools@14 deploy --only "hosting:$TARGET" --project huishouden-staging --non-interactive --message "staging $REF"
+          npx --yes firebase-tools@14.27.0 target:apply hosting "$TARGET" "$SITE" --project huishouden-staging
+          npx --yes firebase-tools@14.27.0 deploy --only "hosting:$TARGET" --project huishouden-staging --non-interactive --message "staging $REF"
       - name: Seed the test household
         env:
           HH_STAGING_ACCESS_TOKEN: ${{ steps.gcp.outputs.access_token }}
@@ -351,7 +351,9 @@ jobs:
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SA }}
-      - run: npx --yes firebase-tools@14 deploy --only "hosting:${{ inputs.hosting-target }}" --non-interactive --message "${{ github.sha }}"
+      # An exact version: this step holds production credentials, so it never picks up a release
+      # published since the last change here (Renovate proposes updates to it).
+      - run: npx --yes firebase-tools@14.27.0 deploy --only "hosting:${{ inputs.hosting-target }}" --non-interactive --message "${{ github.sha }}"
 
   smoke:
     # Real-browser checks against the live site, right after it changes. Read-only: it runs installed
