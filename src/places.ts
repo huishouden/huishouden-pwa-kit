@@ -10,6 +10,10 @@
 
 export interface Place {
   name: string;
+  /**
+   * Street address. From a name search it is always filled in; from a `near` search it can be
+   * empty, because many shops in OpenStreetMap carry no address tags (`mapsUrl` still finds them).
+   */
   address: string;
   phone?: string;
   website?: string;
@@ -36,7 +40,7 @@ export function distanceKm(a: NearPoint, b: NearPoint): number {
 }
 
 /** Nominatim `viewbox` (left,top,right,bottom) for a square about `radiusKm` around a point. */
-export function viewbox(p: NearPoint, radiusKm: number): string {
+function viewbox(p: NearPoint, radiusKm: number): string {
   const dLat = radiusKm / 111;
   const dLon = radiusKm / (111 * Math.max(Math.cos((p.lat * Math.PI) / 180), 0.01));
   return [p.lon - dLon, p.lat + dLat, p.lon + dLon, p.lat - dLat].map((n) => n.toFixed(5)).join(',');
@@ -77,6 +81,8 @@ let lastSearch = 0;
 
 export interface SearchPlacesOptions {
   limit?: number;
+  /** For tests: stands in for the network. */
+  fetch?: typeof fetch;
   /**
    * Places within `radiusKm` of this point, nearest first: "dry cleaner" near home rather than
    * anywhere in the world. Uses OpenStreetMap's Overpass API, which finds places by kind (from
@@ -90,7 +96,13 @@ export interface SearchPlacesOptions {
  * Everyday words for kinds of place, as OpenStreetMap tags them. Matched against the search text,
  * so "drop off dry cleaning" or "Drycleaners" finds `shop=dry_cleaning` near you.
  */
-export const PLACE_KINDS: { words: RegExp; tags: string[] }[] = [
+export interface PlaceKind {
+  readonly words: RegExp;
+  /** OpenStreetMap `key=value` tags for this kind of place. */
+  readonly tags: readonly string[];
+}
+
+export const PLACE_KINDS: readonly PlaceKind[] = Object.freeze([
   { words: /dry\s*clean/i, tags: ['shop=dry_cleaning'] },
   { words: /laundr|laundromat/i, tags: ['shop=laundry', 'shop=dry_cleaning'] },
   { words: /tailor|alteration/i, tags: ['shop=tailor', 'craft=tailor'] },
@@ -112,7 +124,7 @@ export const PLACE_KINDS: { words: RegExp; tags: string[] }[] = [
   { words: /hair\s*cut|barber|salon/i, tags: ['shop=hairdresser'] },
   { words: /recycl|dump|transfer station/i, tags: ['amenity=recycling', 'amenity=waste_transfer_station'] },
   { words: /print|copies|fedex|ups store/i, tags: ['shop=copyshop', 'amenity=post_office'] },
-];
+].map((k) => Object.freeze({ ...k, tags: Object.freeze(k.tags) })));
 
 /** The OpenStreetMap tags the text asks for, from `PLACE_KINDS`. */
 export function placeKinds(text: string): string[] {
@@ -122,7 +134,7 @@ export function placeKinds(text: string): string[] {
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\"]/g, '\\$&');
 
 /** Overpass QL for named or kind matches within `radiusKm` of a point. */
-export function overpassQuery(text: string, near: NearPoint, radiusKm: number): string {
+function overpassQuery(text: string, near: NearPoint, radiusKm: number): string {
   const around = `around:${Math.round(radiusKm * 1000)},${near.lat},${near.lon}`;
   const words = text.trim().split(/\s+/).filter((w) => w.length > 1).map(escapeRegex);
   const parts = placeKinds(text).map((t) => {
@@ -143,7 +155,7 @@ interface OverpassElement {
   tags?: Record<string, string>;
 }
 
-export function overpassPlace(e: OverpassElement): Place | null {
+function overpassPlace(e: OverpassElement): Place | null {
   const t = e.tags ?? {};
   const lat = e.lat ?? e.center?.lat;
   const lon = e.lon ?? e.center?.lon;
@@ -167,12 +179,15 @@ export function overpassPlace(e: OverpassElement): Place | null {
 /** Public Overpass servers, tried in order: the main one rate-limits bursts with an HTML page. */
 const OVERPASS_SERVERS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
 
-async function searchOverpass(text: string, near: NearPoint, radiusKm: number): Promise<Place[]> {
+/** A hung server counts as a failure, so the next fallback runs instead of waiting forever. */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+async function searchOverpass(text: string, near: NearPoint, radiusKm: number, fetchImpl: typeof fetch): Promise<Place[]> {
   const body = new URLSearchParams({ data: overpassQuery(text, near, radiusKm) }).toString();
   let failure: Error = new Error('Place search failed');
   for (const server of OVERPASS_SERVERS) {
     try {
-      const res = await fetch(server, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+      const res = await fetchImpl(server, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       if (!res.ok) throw new Error(`[${res.status}] Place search failed`);
       const json = (await res.json()) as { elements?: OverpassElement[]; remark?: string };
       if (json.remark && !json.elements?.length) throw new Error(`Place search failed: ${json.remark}`);
@@ -184,7 +199,7 @@ async function searchOverpass(text: string, near: NearPoint, radiusKm: number): 
   throw failure;
 }
 
-async function searchNominatim(q: string, limit: number, near?: NearPoint, radiusKm = 15): Promise<Place[]> {
+async function searchNominatim(q: string, limit: number, fetchImpl: typeof fetch, near?: NearPoint, radiusKm = 15): Promise<Place[]> {
   const wait = lastSearch + 1000 - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastSearch = Date.now();
@@ -192,7 +207,7 @@ async function searchNominatim(q: string, limit: number, near?: NearPoint, radiu
   const params: Record<string, string> = { q, format: 'jsonv2', extratags: '1', limit: String(limit) };
   if (near) Object.assign(params, { viewbox: viewbox(near, radiusKm), bounded: '1' });
   url.search = new URLSearchParams(params).toString();
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  const res = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`[${res.status}] Place search failed`);
   return ((await res.json()) as NominatimResult[]).map(toPlace);
 }
@@ -201,12 +216,13 @@ async function searchNominatim(q: string, limit: number, near?: NearPoint, radiu
  * Up to `limit` (default 5) places matching the text, e.g. "Riverside Pediatrics Springfield", or
  * with `near`, "dry cleaner" nearest first.
  */
-export async function searchPlaces(query: string, { limit = 5, near, radiusKm = 10 }: SearchPlacesOptions = {}): Promise<Place[]> {
+export async function searchPlaces(query: string, { limit = 5, near, radiusKm = 10, fetch: fetchImpl = fetch }: SearchPlacesOptions = {}): Promise<Place[]> {
   const q = query.trim();
   if (!q) return [];
-  if (!near) return searchNominatim(q, limit);
-  let places = await searchOverpass(q, near, radiusKm).catch(() => [] as Place[]);
-  if (places.length === 0) places = await searchNominatim(q, Math.max(limit, 10), near, radiusKm);
+  if (!near) return searchNominatim(q, limit, fetchImpl);
+  // Overpass down or finding nothing: a bounded name search, which still finds named places.
+  let places = await searchOverpass(q, near, radiusKm, fetchImpl).catch(() => [] as Place[]);
+  if (places.length === 0) places = await searchNominatim(q, Math.max(limit, 10), fetchImpl, near, radiusKm);
   const seen = new Set<string>();
   return places
     .map((p) => ({ ...p, distanceKm: distanceKm(near, p) }))

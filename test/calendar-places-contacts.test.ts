@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { searchPhrases, toMatch } from '../src/calendar';
 import { cleanContact, toContact } from '../src/contacts';
-import { distanceKm, mapsSearchUrl, overpassQuery, placeKinds, searchPlaces, telHref, toPlace, viewbox } from '../src/places';
+import { PLACE_KINDS, distanceKm, mapsSearchUrl, placeKinds, searchPlaces, telHref, toPlace } from '../src/places';
 
 describe('calendar', () => {
   test('search phrases drop chore words, most specific first', () => {
@@ -32,35 +32,64 @@ describe('places', () => {
     expect(p.osmUrl).toBe('https://www.openstreetmap.org/node/42');
     expect(p.mapsUrl).toBe(mapsSearchUrl('Example Pediatrics 1 Example Way, Springfield'));
   });
+  const home = { lat: 40, lon: -75 };
+  const element = (id: number, lat: number, tags: Record<string, string> = { 'addr:street': 'Main St' }) => ({ type: 'node', id, lat, lon: -75, tags: { name: `Cleaner ${id}`, ...tags } });
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+
   test('near searches ask Overpass for the kind of place and come back nearest first', async () => {
-    const home = { lat: 40, lon: -75 };
-    let body = '';
-    const realFetch = globalThis.fetch;
-    globalThis.fetch = (async (_u: string, init?: RequestInit) => {
-      body = decodeURIComponent(String(init?.body));
-      const at = (id: number, lat: number) => ({ type: 'node', id, lat, lon: -75, tags: { name: `Cleaner ${id}`, 'addr:street': 'Main St' } });
-      return new Response(JSON.stringify({ elements: [at(1, 40.05), at(2, 40.01), at(3, 40.1), at(2, 40.01)] }));
+    const bodies: string[] = [];
+    const fake = (async (_u: string | URL, init?: RequestInit) => {
+      bodies.push(decodeURIComponent(String(init?.body)));
+      return json({ elements: [element(1, 40.05), element(2, 40.01), element(3, 40.1), element(2, 40.01)] });
     }) as typeof fetch;
-    try {
-      const found = await searchPlaces('Drycleaners dropoff', { near: home, limit: 2 });
-      expect(found.map((p) => p.name)).toEqual(['Cleaner 2', 'Cleaner 1']);
-      expect(found[0].distanceKm).toBeCloseTo(1.11, 1);
-      expect(body).toContain('"shop"="dry_cleaning"');
-      expect(body).toContain('around:10000,40,-75');
-    } finally {
-      globalThis.fetch = realFetch;
-    }
+    const found = await searchPlaces('Drycleaners dropoff', { near: home, limit: 2, fetch: fake });
+    expect(found.map((p) => p.name)).toEqual(['Cleaner 2', 'Cleaner 1']);
+    expect(found[0].distanceKm).toBeCloseTo(1.11, 1);
+    expect(bodies[0]).toContain('"shop"="dry_cleaning"');
+    expect(bodies[0]).toContain('around:10000,40,-75');
   });
-  test('kinds come from everyday words; unknown words search names only', () => {
+
+  test('a refusing Overpass server is skipped for the next one', async () => {
+    const asked: string[] = [];
+    const fake = (async (u: string | URL) => {
+      asked.push(String(u));
+      return asked.length === 1 ? new Response('<html>rate limited</html>', { status: 429 }) : json({ elements: [element(7, 40.02)] });
+    }) as typeof fetch;
+    const found = await searchPlaces('pharmacy', { near: home, fetch: fake });
+    expect(found.map((p) => p.name)).toEqual(['Cleaner 7']);
+    expect(asked).toHaveLength(2);
+    expect(asked[1]).not.toBe(asked[0]);
+  });
+
+  test('with Overpass down, a bounded Nominatim search answers', async () => {
+    const asked: string[] = [];
+    const fake = (async (u: string | URL) => {
+      asked.push(String(u));
+      if (String(u).includes('nominatim')) return json([{ osm_type: 'node', osm_id: 9, lat: '40.01', lon: '-75', name: 'Example Cleaners', display_name: 'Example Cleaners, 1 Main St' }]);
+      return new Response('down', { status: 503 });
+    }) as typeof fetch;
+    const found = await searchPlaces('Example Cleaners', { near: home, fetch: fake });
+    expect(found.map((p) => p.name)).toEqual(['Example Cleaners']);
+    const nominatim = new URL(asked.find((u) => u.includes('nominatim'))!);
+    expect(nominatim.searchParams.get('bounded')).toBe('1');
+    expect(nominatim.searchParams.get('viewbox')).toBeTruthy();
+  });
+
+  test('a shop without address tags has an empty address and a name-only Maps search', async () => {
+    const fake = (async (_u: string | URL) => json({ elements: [element(4, 40.01, {})] })) as typeof fetch;
+    const [p] = await searchPlaces('dry cleaner', { near: home, fetch: fake });
+    expect(p.address).toBe('');
+    expect(p.mapsUrl).toBe(mapsSearchUrl('Cleaner 4'));
+  });
+
+  test('kinds come from everyday words, and the list cannot be changed by an app', () => {
     expect(placeKinds('pick up prescription')).toEqual(['amenity=pharmacy', 'shop=chemist']);
     expect(placeKinds('Corner Grocer')).toEqual([]);
-    expect(overpassQuery('Corner Grocer', { lat: 1, lon: 2 }, 1)).toBe('[out:json][timeout:20];(nwr(around:1000,1,2)["name"~"Corner.*Grocer",i];);out center tags 40;');
-  });
-  test('viewbox spans about the radius each way', () => {
-    const [left, top, right, bottom] = viewbox({ lat: 0, lon: 0 }, 11.1).split(',').map(Number);
-    expect([left, top, right, bottom]).toEqual([-0.1, 0.1, 0.1, -0.1]);
+    expect(Object.isFrozen(PLACE_KINDS)).toBe(true);
+    expect(Object.isFrozen(PLACE_KINDS[0].tags)).toBe(true);
     expect(distanceKm({ lat: 0, lon: 0 }, { lat: 0.1, lon: 0 })).toBeCloseTo(11.12, 1);
   });
+
   test('tel links keep only digits and plus', () => {
     expect(telHref('+1 (555) 010-0100')).toBe('tel:+15550100100');
   });
