@@ -1,4 +1,4 @@
-import { addDoc, arrayRemove, arrayUnion, collection, doc, getDocs, onSnapshot, query, updateDoc, where, } from 'firebase/firestore';
+import { addDoc, arrayRemove, arrayUnion, collection, doc, getDocs, onSnapshot, setDoc, query, updateDoc, where, } from 'firebase/firestore';
 export const normalizeEmail = (email) => email.trim().toLowerCase();
 const COLLECTION = 'households';
 /**
@@ -65,4 +65,31 @@ export async function markJoined(db, household, email) {
 /** Members who were invited but have not signed in yet. */
 export function pendingMembers(household) {
     return household.members.filter((m) => !household.joined.includes(m));
+}
+/** Records the signed-in member's name and photo; cheap to call on every sign-in. */
+export async function saveMyProfile(db, householdId, user) {
+    if (!user.email)
+        return;
+    const email = normalizeEmail(user.email);
+    const profile = { updatedAt: Date.now() };
+    if (user.displayName)
+        profile.name = user.displayName.slice(0, 100);
+    if (user.photoURL?.startsWith('https://'))
+        profile.photoURL = user.photoURL.slice(0, 500);
+    await setDoc(doc(db, COLLECTION, householdId, 'profiles', email), profile);
+}
+/** Follows the profiles members have recorded, keyed by email. */
+export function watchProfiles(db, householdId, onChange, onError) {
+    return onSnapshot(collection(db, COLLECTION, householdId, 'profiles'), (snap) => onChange(new Map(snap.docs.map((d) => {
+        const data = d.data();
+        return [
+            d.id,
+            {
+                email: d.id,
+                name: typeof data.name === 'string' ? data.name : undefined,
+                photoURL: typeof data.photoURL === 'string' ? data.photoURL : undefined,
+                updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
+            },
+        ];
+    }))), (error) => onError?.(error));
 }

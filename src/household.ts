@@ -6,6 +6,7 @@ import {
   doc,
   getDocs,
   onSnapshot,
+  setDoc,
   query,
   updateDoc,
   where,
@@ -118,4 +119,60 @@ export async function markJoined(db: Firestore, household: Household, email: str
 /** Members who were invited but have not signed in yet. */
 export function pendingMembers(household: Household): string[] {
   return household.members.filter((m) => !household.joined.includes(m));
+}
+
+/**
+ * A member's name and photo as their own Google account reports them. Google has no public lookup
+ * from an email to a profile, so each member records their own on sign-in
+ * (`households/{id}/profiles/{email}`, writable only by that member).
+ */
+export interface Profile {
+  email: string;
+  name?: string;
+  photoURL?: string;
+  updatedAt: number;
+}
+
+/** Records the signed-in member's name and photo; cheap to call on every sign-in. */
+export async function saveMyProfile(
+  db: Firestore,
+  householdId: string,
+  user: { email: string | null; displayName: string | null; photoURL: string | null },
+): Promise<void> {
+  if (!user.email) return;
+  const email = normalizeEmail(user.email);
+  const profile: Record<string, unknown> = { updatedAt: Date.now() };
+  if (user.displayName) profile.name = user.displayName.slice(0, 100);
+  if (user.photoURL?.startsWith('https://')) profile.photoURL = user.photoURL.slice(0, 500);
+  await setDoc(doc(db, COLLECTION, householdId, 'profiles', email), profile);
+}
+
+/** Follows the profiles members have recorded, keyed by email. */
+export function watchProfiles(
+  db: Firestore,
+  householdId: string,
+  onChange: (profiles: Map<string, Profile>) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    collection(db, COLLECTION, householdId, 'profiles'),
+    (snap) =>
+      onChange(
+        new Map(
+          snap.docs.map((d) => {
+            const data = d.data();
+            return [
+              d.id,
+              {
+                email: d.id,
+                name: typeof data.name === 'string' ? data.name : undefined,
+                photoURL: typeof data.photoURL === 'string' ? data.photoURL : undefined,
+                updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
+              },
+            ];
+          }),
+        ),
+      ),
+    (error) => onError?.(error),
+  );
 }
