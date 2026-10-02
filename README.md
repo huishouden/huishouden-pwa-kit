@@ -8,7 +8,7 @@ apps that each live in their own repo. Every piece exists because an app hit the
 | Vite preset | `@piekstra/pwa-kit/vite` | `pwaApp({...})`: manifest, auto-updating service worker, and a navigation fallback that leaves Firebase's `/__/` paths alone (otherwise "Sign in with Google" opens the app in the popup) |
 | Firebase config | `@piekstra/pwa-kit/firebase` | `firebaseConfigFromEnv(import.meta.env, fallback?)` from `VITE_FIREBASE_*`; auth domain defaults to `<project>.firebaseapp.com`, the only redirect the auto-created OAuth client allows |
 | Silent sign-in | `@piekstra/pwa-kit/auth` | `signInSilently(auth, clientId)`: Google One Tap with auto-select into Firebase, so each app signs in without a click once the browser is signed in to Google; reports Google's reason when it can't |
-| Smoke checks | `@piekstra/pwa-kit/e2e` | Playwright helpers: `expectCleanLoad`, `expectInstallable`, `expectGoogleSignInPopup` (no credentials needed) |
+| Smoke checks | `@piekstra/pwa-kit/e2e` | Playwright helpers: `expectCleanLoad`, `expectInstallable`, `expectGoogleSignInPopup` (no credentials needed), `captureScreenshot` (deterministic README screenshots, refreshed by CI after each deploy) |
 | Reusable CI/CD | `.github/workflows/pwa.yml` | leak scan, build and unit tests, keyless deploy to Firebase Hosting, smoke tests against the live site |
 | Leak scan | `actions/leak-scan` | gitleaks on the commits a PR or push adds; secrets plus personal mailbox addresses |
 | Pre-commit hook | `templates/githooks/pre-commit` | the same scan before a commit exists |

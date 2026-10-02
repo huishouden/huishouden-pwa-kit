@@ -12,3 +12,18 @@ export declare function expectInstallable(page: Page, request: APIRequestContext
  * control, which is when a cached-app fallback would hijack the popup. Needs no credentials.
  */
 export declare function expectGoogleSignInPopup(page: Page, context: BrowserContext, openPopup: (page: Page) => Promise<void>, path?: string): Promise<void>;
+export interface ScreenshotOptions {
+    path?: string;
+    /** Freeze the page clock so date-dependent screens render the same on every run. */
+    fixedTime?: string | Date;
+    /** Output directory, relative to the repo root. */
+    dir?: string;
+    /** Runs after load, before the capture (open a dialog, scroll, wait for a chart). */
+    prepare?: (page: Page) => Promise<void>;
+}
+/**
+ * Captures a README screenshot of the live app: animations and the caret off, reduced motion,
+ * optional frozen clock, so the PNG only changes when the app's look does. The reusable workflow
+ * commits docs/screenshots back to main when the bytes change.
+ */
+export declare function captureScreenshot(page: Page, name: string, options?: ScreenshotOptions): Promise<void>;

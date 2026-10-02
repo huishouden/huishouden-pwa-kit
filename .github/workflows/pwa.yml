@@ -3,14 +3,16 @@
 #   jobs:
 #     pwa:
 #       uses: piekstra/pwa-kit/.github/workflows/pwa.yml@v0
-#       permissions: { contents: read, id-token: write }
+#       permissions: { contents: write, id-token: write }
 #       with:
 #         hosting-target: spending
 #         site-url: https://example-spending.web.app
 #
 # Caller repo variables: GCP_WIF_PROVIDER, GCP_DEPLOY_SA (deploy is skipped until both are set),
-# VITE_FIREBASE_* (passed to the build). Optional package.json scripts: test (unit), e2e (Playwright,
-# run against site-url after each deploy).
+# VITE_FIREBASE_* and VITE_GOOGLE_CLIENT_ID (passed to the build). Optional package.json scripts:
+# test (unit), e2e (Playwright smoke tests against site-url after each deploy), screenshots
+# (Playwright, writes docs/screenshots/*.png; committed back to main when they change, which needs
+# contents: write from the caller).
 name: pwa
 
 on:
@@ -88,6 +90,8 @@ jobs:
     # Real-browser checks against the live site, right after it changes.
     needs: deploy
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # commits refreshed README screenshots
     steps:
       - uses: actions/checkout@v4
       - name: Skip without an e2e script
@@ -106,6 +110,20 @@ jobs:
         run: bun run e2e
         env:
           BASE_URL: ${{ inputs.site-url }}
+      - name: Refresh README screenshots
+        if: steps.has-e2e.outputs.present == 'true'
+        env:
+          BASE_URL: ${{ inputs.site-url }}
+        run: |
+          jq -e '.scripts.screenshots' package.json >/dev/null || { echo "no screenshots script"; exit 0; }
+          bun run screenshots
+          git add docs/screenshots
+          if git diff --cached --quiet; then echo "screenshots unchanged"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "docs: refresh screenshots from ${GITHUB_SHA::7}"
+          # Pushes made with GITHUB_TOKEN don't start new workflow runs, so this can't loop.
+          git pull --rebase -q && git push -q || echo "::warning::screenshots not pushed (main moved); next deploy retries"
+
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
