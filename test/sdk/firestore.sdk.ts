@@ -13,7 +13,7 @@ import {
   Timestamp,
   type Firestore,
 } from 'firebase/firestore';
-import { collection, setDoc as rawSetDoc } from 'firebase/firestore';
+import { collection, deleteDoc as rawDeleteDoc, setDoc as rawSetDoc } from 'firebase/firestore';
 import {
   addDoc,
   arrayUnion,
@@ -178,6 +178,22 @@ describe('durable writes', () => {
     expect(storage.length).toBe(0);
     expect((await getDocFromCache(doc(db, 'c/again'))).exists()).toBe(true);
     expect((await getDocFromCache(doc(db, 'c/gone'))).exists()).toBe(false);
+  });
+
+  test('a document the cache knows only as missing gets the set; an update to it is left out', async () => {
+    const storage = new MemoryStorage();
+    leave(storage, { ops: [{ kind: 'set', path: 'c/first', data: { v: 1 } }] }, 1);
+    leave(storage, { ops: [{ kind: 'update', path: 'c/other', data: { v: 2 } }] }, 2);
+    const { db, auth } = await setup(null, storage);
+    void rawDeleteDoc(doc(db, 'c/first'));
+    void rawDeleteDoc(doc(db, 'c/other'));
+    await settle();
+    expect((await getDocFromCache(doc(db, 'c/first'))).exists()).toBe(false);
+    auth.signIn('u1');
+    await settle();
+    expect(storage.length).toBe(0);
+    expect((await getDocFromCache(doc(db, 'c/first'))).data()).toEqual({ v: 1 });
+    expect((await getDocFromCache(doc(db, 'c/other'))).exists()).toBe(false);
   });
 
   test('signed out, writes go to Firestore without a note', async () => {
