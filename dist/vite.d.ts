@@ -14,6 +14,11 @@ export interface PwaAppOptions {
     }[];
     /** Files in public/ to precache besides the build output (icons, favicons). */
     includeAssets?: string[];
+    /**
+     * The app's public address (https://<site>.web.app). Link previews need absolute URLs for the
+     * page and image; without it they fall back to relative ones, which some messengers ignore.
+     */
+    url?: string;
     /** Overrides merged last, for anything app-specific. */
     overrides?: Partial<VitePWAOptions>;
 }
@@ -29,7 +34,19 @@ export declare function pwaApp(options: PwaAppOptions): ({
             'import.meta.env.VITE_BUILD_SHA': string;
         };
     };
+} | {
+    name: string;
+    transformIndexHtml(html: string): string;
 } | import("vite").Plugin<any>)[];
+/**
+ * What a shared link shows (Messages, WhatsApp, Slack...): the page description and Open Graph /
+ * Twitter tags, written from the same name and description as the manifest so there is one source.
+ * Any description or og:/twitter: tags already in index.html are replaced.
+ */
+export declare function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' | 'url'>): {
+    name: string;
+    transformIndexHtml(html: string): string;
+};
 /**
  * Firebase Hosting serves its own pages under /__/ (the sign-in popup at /__/auth/handler, SDK
  * config at /__/firebase/init.json). A service worker that answers those navigations with the

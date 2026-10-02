@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { firebaseConfigFromEnv } from '../src/firebase';
-import { FIREBASE_RESERVED_PATHS, pwaApp } from '../src/vite';
+import { FIREBASE_RESERVED_PATHS, linkPreview, pwaApp } from '../src/vite';
 
 describe('firebaseConfigFromEnv', () => {
   const env = {
@@ -38,5 +38,17 @@ describe('pwaApp', () => {
     const plugins = pwaApp({ name: 'Demo', description: 'd', themeColor: '#000', backgroundColor: '#fff' });
     expect(Array.isArray(plugins)).toBe(true);
     expect(plugins.length).toBeGreaterThan(0);
+  });
+});
+
+describe('linkPreview', () => {
+  test('writes description, Open Graph and Twitter tags from one source, replacing old ones', () => {
+    const html = '<html><head><meta name="description" content="old"><meta property="og:title" content="old"></head></html>';
+    const out = linkPreview({ name: 'Huishouden Example', description: 'Looking after "things"', url: 'https://example.web.app/' }).transformIndexHtml(html);
+    expect(out).not.toContain('content="old"');
+    expect(out).toContain('<meta name="description" content="Looking after &quot;things&quot;" />');
+    expect(out).toContain('<meta property="og:image" content="https://example.web.app/og.png" />');
+    expect(out).toContain('<meta property="og:url" content="https://example.web.app/" />');
+    expect(out).toContain('<meta name="twitter:card" content="summary_large_image" />');
   });
 });
