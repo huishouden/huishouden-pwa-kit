@@ -136,6 +136,23 @@ with `@huishouden/pwa-kit/agenda`; the portal only reads.
 - **Rules**: the `agenda` block in the project's rules file; fields match `AGENDA_FIELDS`, and
   `by` must be the signed-in member.
 
+## Food preferences
+
+Meal suggestions in any app (Tasks' meal ideas, and whatever comes next) plan for the same people.
+The portal's household panel edits one document, `households/{id}/settings/food`, with
+`@huishouden/pwa-kit/food`; other apps only read it with `watchFood`.
+
+- **People, not accounts**: every member is listed (`withMembers`), and people without an account
+  (children, a regular guest) can be added. Each has diets from the fixed `DIETS` list, an `avoid`
+  list of ingredients and a short note.
+- **Constraints in words**: use `householdDietRules(food)` (and `pantryText`) in a prompt or next to
+  a suggestion instead of wording diets per app, so GERD or pregnancy guidance reads the same
+  everywhere. Allergies are strict; dislikes in `avoid` are preferences.
+- **Rules**: the `settings/food` case of the `settings` block checks the document's shape
+  (`FOOD_FIELDS`, list sizes, the pantry, `by` the signed-in member). A request may evaluate only
+  1000 expressions, too few to check every person's fields, so always write with `saveFood` (which
+  clips each person to `FOOD_PERSON_FIELDS` and `FOOD_LIMITS`) and read with `watchFood`.
+
 ## CI/CD
 
 Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@v0`
