@@ -19,6 +19,12 @@ judges the rest, and `expectHuishoudenFrame` checks the running app.
    fields appear only when they fit the thing (no quantity on a chore, no aisle on an errand), and
    the rest stays folded until asked for. Where the app can infer detail from what was typed
    ("before 6", "tomorrow"), it does, and shows what it inferred so it is easy to undo.
+6. **Use where you are.** Much of household life is about places: the shop you are in, the errand
+   on the way home. Apps use location wherever it saves a step (detect the store, find the
+   nearest dry cleaner, mention an errand when you are next to it). Asking for precise or
+   approximate location is fine; ask in context, the first time a feature needs it, and keep
+   working without it. Read it on demand or when the app comes to the foreground, never in the
+   background, and never store anyone's position, only the places they chose.
 
 ## Names
 
