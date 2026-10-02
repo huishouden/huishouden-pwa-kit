@@ -13,6 +13,13 @@
 # test (unit), e2e (Playwright smoke tests against site-url after each deploy), screenshots
 # (Playwright, writes docs/screenshots/*.png; committed back to main when they change, which needs
 # contents: write from the caller).
+#
+# Staging (STANDARD.md "Staging"): with STAGING_GCP_WIF_PROVIDER, STAGING_GCP_DEPLOY_SA,
+# STAGING_SITE and STAGING_VITE_FIREBASE_* set (infra/bootstrap.sh --staging), every same-repo PR
+# that changes more than docs is built against the huishouden-staging project, deployed to
+# https://<STAGING_SITE>.web.app, seeded with the test household and checked with `e2e` plus the
+# optional `e2e:signed-in` script. Pass `staging-ref` from a manual run to deploy any ref there.
+# Without those variables nothing about staging runs.
 name: pwa
 
 on:
@@ -26,6 +33,10 @@ on:
         description: Live URL the smoke tests run against
         type: string
         required: true
+      staging-ref:
+        description: Manual runs only. A branch, tag or SHA to deploy to staging instead of deploying production
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -37,6 +48,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          ref: ${{ inputs.staging-ref }} # a manual staging deploy scans the ref it ships
       - uses: huishouden/pwa-kit/actions/leak-scan@v0
 
   build:
@@ -51,6 +63,8 @@ jobs:
       VITE_VAPID_PUBLIC_KEY: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.staging-ref }} # empty: the event's own commit
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -164,11 +178,156 @@ jobs:
               echo "| ${n%.png} | $before | ![]($raw/after/$n) |"
             done
           } > body.md
-          gh pr comment "$PR" --repo "$REPO" --edit-last --body-file body.md 2>/dev/null || gh pr comment "$PR" --repo "$REPO" --body-file body.md
+          # Found by its marker: the staging comment is ours too, so "edit the last one" could pick it.
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- pr-evidence -->"))) | .id' | tail -1)
+          if [ -n "$id" ]; then gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@body.md >/dev/null; else gh api "repos/$REPO/issues/$PR/comments" -F body=@body.md >/dev/null; fi
+
+  staging-scope:
+    # Whether this run goes to staging: a same-repo PR (never a fork's) that changes more than docs,
+    # or a manual run given staging-ref. Skipped entirely until the staging variables exist.
+    if: >-
+      vars.STAGING_GCP_WIF_PROVIDER != '' && vars.STAGING_SITE != '' && (
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        || (github.event_name == 'workflow_dispatch' && inputs.staging-ref != ''))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      deploy: ${{ steps.scope.outputs.deploy }}
+    steps:
+      - id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "$PR" ]; then echo "deploy=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          code=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename' | grep -vE '^docs/|\.md$|^LICENSE$' || true)
+          if [ -n "$code" ]; then echo "deploy=true" >> "$GITHUB_OUTPUT"; else echo "Docs only: staging skipped"; echo "deploy=false" >> "$GITHUB_OUTPUT"; fi
+
+  staging:
+    # Builds the PR (or staging-ref) against the staging Firebase project, deploys it to the app's
+    # staging site and tests it there, signed in as invented test users. Runs the PR's code, so it
+    # holds only staging credentials and no GitHub write access. One staging deploy per app at a
+    # time; the latest one wins the site.
+    needs: [build, leak-scan, staging-scope]
+    if: needs.staging-scope.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://${{ vars.STAGING_SITE }}.web.app
+    concurrency:
+      group: staging-${{ github.repository }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # keyless auth to the staging project only
+    env:
+      VITE_FIREBASE_API_KEY: ${{ vars.STAGING_VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.STAGING_VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ vars.STAGING_VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_APP_ID: ${{ vars.STAGING_VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_GOOGLE_CLIENT_ID: ${{ vars.STAGING_VITE_GOOGLE_CLIENT_ID }}
+      BASE_URL: https://${{ vars.STAGING_SITE }}.web.app
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.staging-ref }}
+          persist-credentials: false
+      - name: Only ever the staging project
+        run: |
+          if [ "$VITE_FIREBASE_PROJECT_ID" != huishouden-staging ]; then
+            echo "::error::STAGING_VITE_FIREBASE_PROJECT_ID is '$VITE_FIREBASE_PROJECT_ID', not huishouden-staging"; exit 1
+          fi
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - id: gcp
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_DEPLOY_SA }}
+          token_format: access_token
+      - name: Deploy to ${{ vars.STAGING_SITE }}
+        env:
+          TARGET: ${{ inputs.hosting-target }}
+          SITE: ${{ vars.STAGING_SITE }}
+          REF: ${{ inputs.staging-ref || github.event.pull_request.head.sha || github.sha }}
+        run: |
+          npx --yes firebase-tools@14 target:apply hosting "$TARGET" "$SITE" --project huishouden-staging
+          npx --yes firebase-tools@14 deploy --only "hosting:$TARGET" --project huishouden-staging --non-interactive --message "staging $REF"
+      - name: Seed the test household
+        env:
+          HH_STAGING_ACCESS_TOKEN: ${{ steps.gcp.outputs.access_token }}
+        run: |
+          if [ ! -e node_modules/.bin/pwa-staging ]; then echo "::notice::Kit older than 0.29; no test household seeded"; exit 0; fi
+          bunx pwa-staging seed
+      - run: bunx playwright install --with-deps chromium
+      - name: Smoke tests on staging
+        run: if jq -e '.scripts.e2e' package.json >/dev/null; then bun run e2e; else echo "no e2e script"; fi
+      - name: Signed-in tests on staging
+        env:
+          HH_STAGING_ACCESS_TOKEN: ${{ steps.gcp.outputs.access_token }}
+          HH_STAGING_SA: ${{ vars.STAGING_GCP_DEPLOY_SA }}
+        run: if jq -e '.scripts["e2e:signed-in"]' package.json >/dev/null; then bun run e2e:signed-in; else echo "no e2e:signed-in script"; fi
+      - name: Check the site is an authorized sign-in origin
+        if: vars.STAGING_VITE_GOOGLE_CLIENT_ID != ''
+        continue-on-error: true # manual Google sign-in only; the tests above don't need it
+        run: |
+          if [ ! -e node_modules/.bin/pwa-oauth-origins ]; then exit 0; fi
+          bunx pwa-oauth-origins "$VITE_GOOGLE_CLIENT_ID" "$BASE_URL" --project=huishouden-staging
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: staging-playwright-traces
+          path: test-results
+          retention-days: 7
+
+  staging-comment:
+    # One comment per PR with the staging URL and how the run went, updated on every push.
+    # Installs and runs nothing from the PR.
+    needs: [staging-scope, staging]
+    if: always() && github.event_name == 'pull_request' && needs.staging-scope.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RESULT: ${{ needs.staging.result }}
+          URL: https://${{ vars.STAGING_SITE }}.web.app
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          case "$RESULT" in
+            success) status="Deployed and tested: smoke and signed-in checks passed." ;;
+            failure) status="Deployed or tested with failures; see [the run]($RUN)." ;;
+            *) status="Not deployed ($RESULT); see [the run]($RUN)." ;;
+          esac
+          {
+            echo "<!-- staging -->"
+            echo "### Staging (${SHA::7})"
+            echo
+            echo "$URL"
+            echo
+            echo "$status"
+            echo
+            echo "Staging is a separate Firebase project with invented data; nothing here reaches a real household. To try it by hand, sign in with Google and start a household on the staging portal (https://huishouden-staging.web.app). Each app has one staging site, so it shows whichever PR deployed last."
+          } > body.md
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- staging -->"))) | .id' | tail -1)
+          if [ -n "$id" ]; then gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@body.md >/dev/null; else gh api "repos/$REPO/issues/$PR/comments" -F body=@body.md >/dev/null; fi
 
   deploy:
     needs: [build, leak-scan]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.GCP_WIF_PROVIDER != ''
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.GCP_WIF_PROVIDER != '' && inputs.staging-ref == ''
     runs-on: ubuntu-latest
     environment: production
     permissions:
