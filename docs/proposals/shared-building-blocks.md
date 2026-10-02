@@ -372,7 +372,7 @@ Spending `subscribeTransactions`.
 
 ### B4. Feedback: errors, toasts, undo
 
-> **Status, v0.20.0:** `readError`, `popupCancelled`, `popupBlocked` in `./feedback`; `Toast` + `useToast` (Undo) and `ErrorNotice` in `./react/ui`. The toast queue, `friendlyError` and `removeWithUndo` are not built: one toast at a time with Undo covered every app.
+> **Status, v0.21.0:** `readError`, `popupCancelled`, `popupBlocked` in `./feedback`; `Toast` + `useToast` (Undo) and `ErrorNotice` in `./react/ui`. The toast queue, `friendlyError` and `removeWithUndo` are not built: one toast at a time with Undo covered every app.
 
 
 ```ts
@@ -413,7 +413,7 @@ idempotent and other devices see the original document return.
 
 ### B5. Time and due dates
 
-> **Status, v0.20.0:** shipped as `./time` and `./react/clock` (`ClockProvider`, `useClock`). Calendar days and moments share `addDays`/`addMonths`/`daysBetween`; `formatSpan` takes `{ months: 'down' | 'nearest' }` because Car and Home round months differently; `dueState` returns `{ state, days }`; `upcoming` and `createClock` are not built.
+> **Status, v0.21.0:** shipped as `./time` and `./react/clock` (`ClockProvider`, `useClock`). Calendar days and moments share `addDays`/`addMonths`/`daysBetween`; `formatSpan` takes `{ months: 'down' | 'nearest' }` because Car and Home round months differently; `dueState` returns `{ state, days }`; `upcoming` and `createClock` are not built.
 
 
 All pure, all take `now`, so tests pin them and the demo clock works.
@@ -459,7 +459,7 @@ neutral. Every app's "due" badge then matches.
 
 ### B6. Recurring schedules
 
-> **Status, v0.20.0:** shipped as `./schedule` from Home's version (`Schedule`, `firstDue`, `nextDueAfterDone`, `occurrences`, `describeSchedule`), plus Car's usage-based `usageDue` (time or meter, whichever first) and renewals (`nextRenewal`). `snoozedUntil` and `leadDays` are not built.
+> **Status, v0.21.0:** shipped as `./schedule` from Home's version (`Schedule`, `firstDue`, `nextDueAfterDone`, `occurrences`, `describeSchedule`), plus Car's usage-based `usageDue` (time or meter, whichever first) and renewals (`nextRenewal`). `snoozedUntil` and `leadDays` are not built.
 
 
 Bills (manual premiums, tolls), Home (filters, pest control, renewals) and Pet (prevention,
@@ -592,7 +592,7 @@ Editing keeps `by` and `createdAt` from the original logger (Baby's rule). Delet
 
 ### B10. Money and privacy mode
 
-> **Status, v0.20.0:** `./money` ships integer-cents helpers (`parseCents`, `formatCents`) and the decimal-string `Money` (`toDecimal`, `formatMoney`, `sumMoney`). Privacy mode and `<hh-amount>` are not built.
+> **Status, v0.21.0:** `./money` ships integer-cents helpers (`parseCents`, `formatCents`) and the decimal-string `Money` (`toDecimal`, `formatMoney`, `sumMoney`). Privacy mode and `<hh-amount>` are not built.
 
 
 ```ts
@@ -679,7 +679,7 @@ fullscreen toggle and ambient theme; Baby's equivalents as they appear.
 
 ### B13. UI primitives
 
-> **Status, v0.20.0:** `./react/ui` ships the shapes as Tailwind class strings plus `Dialog`, `Chip`, `Field`, `Checkbox`, `StatusPill`, `ErrorNotice`, `Toast`, `SectionTabs`, `PersonBadge`; `./tailwind.css` maps the theme and adds the kit to Tailwind's sources. The `.hh-*` CSS classes for vanilla apps are not built (the portal is the only vanilla app).
+> **Status, v0.21.0:** `./react/ui` ships the shapes as Tailwind class strings plus `Dialog`, `Chip`, `Field`, `Checkbox`, `StatusPill`, `ErrorNotice`, `Toast`, `SectionTabs`, `PersonBadge`; `./tailwind.css` maps the theme and adds the kit to Tailwind's sources. The `.hh-*` CSS classes for vanilla apps are not built (the portal is the only vanilla app).
 
 
 Tasks' `ui.tsx` and Baby's `ui.tsx` define the same dialog, chip, input and button class strings;

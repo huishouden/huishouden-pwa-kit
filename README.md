@@ -47,7 +47,7 @@ The conventions behind these are in [STANDARD.md](STANDARD.md).
 ## Install
 
 ```sh
-bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.20.0
+bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.21.0
 ```
 
 Spell out the package name: `bun add github:huishouden/pwa-kit#…` alone fails with `DependencyLoop`.
