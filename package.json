@@ -5,6 +5,10 @@
   "license": "MIT",
   "type": "module",
   "exports": {
+    "./agenda": {
+      "types": "./dist/agenda.d.ts",
+      "default": "./dist/agenda.js"
+    },
     "./app-bar": {
       "types": "./dist/app-bar.d.ts",
       "default": "./dist/app-bar.js"
