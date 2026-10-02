@@ -9,7 +9,7 @@ apps that each live in their own repo. Every piece exists because an app hit the
 | Firebase config | `@piekstra/pwa-kit/firebase` | `firebaseConfigFromEnv(import.meta.env, fallback?)` from `VITE_FIREBASE_*`; auth domain defaults to `<project>.firebaseapp.com`, the only redirect the auto-created OAuth client allows |
 | Silent sign-in | `@piekstra/pwa-kit/auth` | `signInSilently(auth, clientId)`: Google One Tap with auto-select into Firebase, so each app signs in without a click once the browser is signed in to Google; reports Google's reason when it can't |
 | Household | `@piekstra/pwa-kit/household` | `watchHousehold`, `inviteMember`, `removeMember`, `markJoined`, `createHousehold`: one `households/{id}` document (members by lowercase email) shared by every app; each app keeps its data in subcollections, so one invite opens every app |
-| Theme | `@piekstra/pwa-kit/theme.css` | Shared colours, radius, font and `.hh-button` as CSS variables (works with or without Tailwind) |
+| Theme | `@piekstra/pwa-kit/theme.css` | Shared colours, radius, font, `.hh-button` and `.hh-avatar` (signed-in profile photo) as CSS variables (works with or without Tailwind) |
 | Smoke checks | `@piekstra/pwa-kit/e2e` | Playwright helpers: `expectCleanLoad`, `expectInstallable`, `expectGoogleSignInPopup` (no credentials needed), `captureScreenshot` (deterministic README screenshots, refreshed by CI after each deploy) |
 | Reusable CI/CD | `.github/workflows/pwa.yml` | leak scan, build and unit tests, keyless deploy to Firebase Hosting, smoke tests against the live site |
 | Leak scan | `actions/leak-scan` | gitleaks on the commits a PR or push adds; secrets plus personal mailbox addresses |
@@ -23,7 +23,7 @@ The conventions behind these are in [STANDARD.md](STANDARD.md).
 ## Install
 
 ```sh
-bun add -d @piekstra/pwa-kit@github:piekstra/pwa-kit#v0.5.0
+bun add -d @piekstra/pwa-kit@github:piekstra/pwa-kit#v0.5.1
 ```
 
 Spell out the package name: `bun add github:piekstra/pwa-kit#…` alone fails with `DependencyLoop`.
