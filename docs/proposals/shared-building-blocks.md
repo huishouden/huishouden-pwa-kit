@@ -164,13 +164,13 @@ The wall tablet's ambient view, inside the portal.
 - **Cores are framework-free TypeScript** with `firebase` as the only runtime dependency: pure
   functions and `watch*(…, onChange) → Unsubscribe` subscriptions. The vanilla portal uses these
   directly.
-- **`@piekstra/huishouden-pwa-kit/react`** holds thin hooks over the cores (`useSession`,
+- **`@huishouden/pwa-kit/react`** holds thin hooks over the cores (`useSession`,
   `useCollection`, `useNow`) and the React components. `react` becomes an optional peer
   dependency, like `@playwright/test` is today.
 - **Custom elements** for UI that the portal and the React apps both show: `<hh-app-bar>`,
   `<hh-toast>`, `<hh-amount>`, `<hh-today-card>`. Every app is on React 19, which passes
   properties and listens to custom events on custom elements natively, so no wrappers are needed
-  beyond types. Registered from `@piekstra/huishouden-pwa-kit/elements`. Chrome lives in shadow
+  beyond types. Registered from `@huishouden/pwa-kit/elements`. Chrome lives in shadow
   DOM, styled by `--hh-*` variables (which cross the shadow boundary); app content goes in slots,
   so it stays in light DOM and Tailwind keeps working on it.
 - **CSS component classes** in `theme.css` (`.hh-card`, `.hh-chip`, `.hh-input`,
@@ -208,7 +208,7 @@ the app's name, the app switcher, a slot for the app's own navigation, and the a
 account menu.
 
 ```ts
-// @piekstra/huishouden-pwa-kit/apps
+// @huishouden/pwa-kit/apps
 export interface HouseholdApp {
   id: string;                 // 'spending', 'bills', ...; also the Today summary doc id
   name: string;               // 'Spending'
@@ -223,7 +223,7 @@ export function portalUrlFromEnv(env: Record<string, unknown>): string; // VITE_
 ```
 
 ```html
-<!-- @piekstra/huishouden-pwa-kit/elements -->
+<!-- @huishouden/pwa-kit/elements -->
 <hh-app-bar app="baby" portal="https://example-portal.web.app">
   <nav slot="sections">…the app's tabs, Tailwind as usual…</nav>
   <button slot="actions">…optional app actions…</button>
@@ -263,7 +263,7 @@ The sequence every app writes: init Firebase with an offline cache, try silent s
 auth state, find the household, record the first visit, and branch on the result.
 
 ```ts
-// @piekstra/huishouden-pwa-kit/firebase (additions)
+// @huishouden/pwa-kit/firebase (additions)
 export interface HouseholdFirebase { app: FirebaseApp; auth: Auth; db: Firestore }
 export interface InitOptions {
   /** Persistent multi-tab cache. Default true: apps open with last data and accept writes offline. */
@@ -273,7 +273,7 @@ export interface InitOptions {
 }
 export function initFirebase(config: FirebaseWebConfig, options?: InitOptions): HouseholdFirebase; // idempotent
 
-// @piekstra/huishouden-pwa-kit/session
+// @huishouden/pwa-kit/session
 export type SessionState =
   | { status: 'loading' }
   | { status: 'signed-out'; silentReason?: string }
@@ -291,7 +291,7 @@ export function signInWithGoogle(auth: Auth): Promise<void>;
 /** Disables One Tap auto-select, then signs out. */
 export function signOutEverywhere(auth: Auth): Promise<void>;
 
-// @piekstra/huishouden-pwa-kit/react
+// @huishouden/pwa-kit/react
 export function useSession(fb: HouseholdFirebase, options?: { googleClientId?: string }): SessionState;
 ```
 
@@ -318,7 +318,7 @@ Changes to `./household`:
 ### B3. Firestore subscriptions and typed collections
 
 ```ts
-// @piekstra/huishouden-pwa-kit/firestore
+// @huishouden/pwa-kit/firestore
 export type Live<T> =
   | { status: 'loading' }
   | { status: 'ready'; data: T; fromCache: boolean; pendingWrites: boolean; error: FriendlyError | null };
@@ -348,7 +348,7 @@ export function clean<T>(def: CollectionDef<T>, data: Partial<T>): Partial<T>;
 /** Writes starter docs once per household. Stable ids make two devices seeding at once harmless. */
 export function seedOnce(db: Firestore, householdId: string, key: string, docs: { path: string; data: DocumentData }[]): Promise<void>;
 
-// @piekstra/huishouden-pwa-kit/react
+// @huishouden/pwa-kit/react
 export function useCollection<T>(q: Query<T> | null): Live<(T & { id: string })[]>;
 export function useDocument<T>(ref: DocumentReference<T> | null): Live<(T & { id: string }) | null>;
 ```
@@ -368,7 +368,7 @@ Spending `subscribeTransactions`.
 ### B4. Feedback: errors, toasts, undo
 
 ```ts
-// @piekstra/huishouden-pwa-kit/feedback
+// @huishouden/pwa-kit/feedback
 export interface FriendlyError {
   kind: 'offline' | 'permission' | 'not-found' | 'timeout' | 'quota' | 'unknown';
   message: string;      // "Couldn't save: offline. It will retry when the connection is back."
@@ -408,7 +408,7 @@ idempotent and other devices see the original document return.
 All pure, all take `now`, so tests pin them and the demo clock works.
 
 ```ts
-// @piekstra/huishouden-pwa-kit/time
+// @huishouden/pwa-kit/time
 export const MINUTE: number, HOUR: number, DAY: number;
 export type Ymd = string;                          // 'YYYY-MM-DD', local calendar day
 export function startOfDay(t: number): number;
@@ -456,7 +456,7 @@ vaccinations) all repeat. Two kinds matter:
   from the last dose".
 
 ```ts
-// @piekstra/huishouden-pwa-kit/schedule
+// @huishouden/pwa-kit/schedule
 export type Unit = 'day' | 'week' | 'month' | 'year';
 export type Recurrence =
   | { kind: 'fixed'; every: number; unit: Unit; anchor: Ymd }
@@ -499,7 +499,7 @@ Baby's checklists (grouped by list name, ordered, seeded once from templates) an
 list).
 
 ```ts
-// @piekstra/huishouden-pwa-kit/checklist
+// @huishouden/pwa-kit/checklist
 export interface ChecklistItemData { list: string; text: string; done: boolean; order: number; createdAt: number; by: string }
 export const checklistKeys: readonly (keyof ChecklistItemData)[];
 export interface ChecklistGroup<T extends ChecklistItemData> { list: string; items: T[]; done: number; total: number }
@@ -522,7 +522,7 @@ ordering helpers.
 ### B8. Appointments
 
 ```ts
-// @piekstra/huishouden-pwa-kit/appointments
+// @huishouden/pwa-kit/appointments
 export interface AppointmentData {
   title: string; at: number; allDay?: boolean; durationMin?: number;
   location?: string; notes?: string; createdAt: number; by: string;
@@ -548,7 +548,7 @@ Baby logs feeds and sleeps; Pet logs doses and weights; Home logs service visits
 payment history. One base shape, app-specific fields on top.
 
 ```ts
-// @piekstra/huishouden-pwa-kit/log
+// @huishouden/pwa-kit/log
 export interface LogEventBase<K extends string = string> {
   kind: K;
   at: number;
@@ -579,7 +579,7 @@ Editing keeps `by` and `createdAt` from the original logger (Baby's rule). Delet
 ### B10. Money and privacy mode
 
 ```ts
-// @piekstra/huishouden-pwa-kit/money
+// @huishouden/pwa-kit/money
 /** Same shape as the CLI family's JSON: a decimal string, never a float. */
 export interface Money { amount: string; currency: string }
 export function toMoney(v: number | string | Money, currency?: string): Money; // default 'USD'
@@ -614,7 +614,7 @@ an in-memory store with the same interface as the live one, a clock starting on 
 transactions with a banner.
 
 ```ts
-// @piekstra/huishouden-pwa-kit/demo
+// @huishouden/pwa-kit/demo
 export const DEMO_EPOCH: number;                       // a fixed local time in 2031
 export const DEMO_MEMBERS: readonly string[];          // ['sam@example.com', 'alex@example.com']
 /** Moving "now" that starts at `start` and advances with real time. */
@@ -638,7 +638,7 @@ Spending's sample banner. **Migration:** with the next app.
 ### B12. Device
 
 ```ts
-// @piekstra/huishouden-pwa-kit/device
+// @huishouden/pwa-kit/device
 /** Keeps the screen on; re-acquires when the page becomes visible again. */
 export function holdWakeLock(): () => void;
 export function watchInstallPrompt(onChange: (s: { canInstall: boolean; installed: boolean; install(): Promise<void> }) => void): Unsubscribe;
@@ -668,7 +668,7 @@ Tasks' `ui.tsx` and Baby's `ui.tsx` define the same dialog, chip, input and butt
 - `theme.css` gains `.hh-card`, `.hh-chip` (`[aria-pressed=true]` selected), `.hh-input`,
   `.hh-button--ghost`, `.hh-button--icon`, `.hh-overline`, `.hh-dialog` / `.hh-sheet`, written with
   `--hh-*` variables and dark variants, so the portal uses them without Tailwind.
-- `@piekstra/huishouden-pwa-kit/react/ui`:
+- `@huishouden/pwa-kit/react/ui`:
 
 ```tsx
 export function Dialog(props: { title: string; onClose(): void; children: ReactNode; footer?: ReactNode; wide?: boolean }): JSX.Element;
@@ -689,7 +689,7 @@ export function EmptyState(props: { message: string; action?: ReactNode }): JSX.
 ### B14. People
 
 ```ts
-// @piekstra/huishouden-pwa-kit/people
+// @huishouden/pwa-kit/people
 /** "You", the first name from the profile, or the address's first word. */
 export function personName(email: string, me?: { email?: string | null; displayName?: string | null } | null): string;
 export function personInitial(email: string, me?: { email?: string | null; displayName?: string | null } | null): string;
@@ -721,7 +721,7 @@ Proposal:
   instead of failing in production with `permission-denied`.
 
 ```ts
-// @piekstra/huishouden-pwa-kit/rules-test   (wraps @firebase/rules-unit-testing)
+// @huishouden/pwa-kit/rules-test   (wraps @firebase/rules-unit-testing)
 export function rulesEnv(rulesPath: string): Promise<RulesTestEnvironment>;
 export function asMember(env: RulesTestEnvironment, email: string): Firestore;
 export function asStranger(env: RulesTestEnvironment): Firestore;
@@ -768,7 +768,7 @@ launchd (every N minutes)
 ```
 
 Where it lives: the schema types, adapters and planner are pure TypeScript in the kit
-(`@piekstra/huishouden-pwa-kit/sync`), because the apps read the same types. The runner is a
+(`@huishouden/pwa-kit/sync`), because the apps read the same types. The runner is a
 `bunx hh-sync` bin in the kit. All household-specific choices (household id, project id, which
 CLIs, labels, schedules) live in the local config file and never in a repo.
 
@@ -790,7 +790,7 @@ Two forms:
    of `jq` over existing CLI output.
 
 ```ts
-// @piekstra/huishouden-pwa-kit/sync
+// @huishouden/pwa-kit/sync
 export interface SyncBatch<T = unknown> {
   schema: 'sync-batch/v1';
   collection: SyncCollection;          // allowlist: 'bills' | 'billHistory' | 'calendarEvents' | 'notices' | 'summaries'
@@ -962,7 +962,7 @@ The portal shows every app's "what matters now" without importing any app's code
 collections. Each app publishes one small document; the portal renders all of them.
 
 ```ts
-// @piekstra/huishouden-pwa-kit/summary
+// @huishouden/pwa-kit/summary
 export type Tone = 'normal' | 'attention' | 'done';
 export type Privacy = 'wall' | 'wall-masked' | 'member';
 

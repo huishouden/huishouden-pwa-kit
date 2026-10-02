@@ -19,7 +19,7 @@ judged rather than copied.
 
 - Manifest: `display: standalone`, `start_url` and `scope` `/`, icons at 192 and 512 plus a
   512 maskable icon. Generate PNGs from one SVG (`bunx pwa-icons`).
-- Use `pwaApp()` from `@piekstra/huishouden-pwa-kit/vite`. It sets `registerType: 'autoUpdate'` (installed
+- Use `pwaApp()` from `@huishouden/pwa-kit/vite`. It sets `registerType: 'autoUpdate'` (installed
   copies update on the next launch) and **`navigateFallbackDenylist: [/^\/__\//]`**. Firebase serves its sign-in popup at
   `/__/auth/handler`; without this the service worker answers it with the cached app and
   "Sign in with Google" opens the app instead of Google.
@@ -64,7 +64,7 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 - **Unit tests** (`bun test`) for parsing and money logic, with inputs and expected outputs in
   fixture files (`__fixtures__/`, `fixtures/`), scrubbed of real names, emails and card digits.
 - **Smoke tests** (`bun run e2e`, Playwright, headless Chromium) against the deployed site.
-  Minimum set, from `@piekstra/huishouden-pwa-kit/e2e`:
+  Minimum set, from `@huishouden/pwa-kit/e2e`:
   1. Loads with no runtime errors.
   2. Installable: manifest has a 512 icon, every icon URL loads, a service worker controls the
      page after one reload.
