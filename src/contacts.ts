@@ -5,6 +5,7 @@ import {
   deleteField,
   doc,
   onSnapshot,
+  setDoc,
   updateDoc,
   type Firestore,
   type Unsubscribe,
@@ -108,4 +109,25 @@ export async function updateContact(db: Firestore, householdId: string, id: stri
 
 export async function deleteContact(db: Firestore, householdId: string, id: string): Promise<void> {
   await deleteDoc(doc(contactsOf(db, householdId), id));
+}
+
+/**
+ * What deleting a contact in one app means: it stops showing there, and is only deleted outright
+ * when no other app shows it (the pediatrician stays in a health app after Baby drops it).
+ */
+export async function removeContactFromApp(db: Firestore, householdId: string, contact: Contact, app: string, by: string): Promise<void> {
+  const others = contact.apps.filter((a) => a !== app);
+  if (others.length === 0) return deleteContact(db, householdId, contact.id);
+  await updateDoc(doc(contactsOf(db, householdId), contact.id), { apps: others, updatedAt: Date.now(), by });
+}
+
+/** Puts a deleted contact back under its old id (Undo), so appointments that point at it still do. */
+export async function restoreContact(db: Firestore, householdId: string, contact: Contact): Promise<void> {
+  const { id, createdAt, updatedAt, by, ...input } = contact;
+  await setDoc(doc(contactsOf(db, householdId), id), {
+    ...cleanContact(input),
+    createdAt,
+    ...(updatedAt ? { updatedAt } : {}),
+    by,
+  });
 }
