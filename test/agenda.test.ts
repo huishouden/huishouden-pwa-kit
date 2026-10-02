@@ -230,6 +230,23 @@ describe('Today', () => {
     expect(todayItems(items, NOW, { soonHours: 24 * 3 }).map((e) => e.item.id)).toContain('bday');
   });
 
+  test('an all-day span stays upcoming until its last day has passed', () => {
+    const course = item({ kind: 'medicine', allDay: true, start: allDayStart('2026-09-30'), end: allDayStart('2026-10-03'), status: 'upcoming' });
+    expect(agendaStatus(course, NOW)).toBe('upcoming');
+    expect(todayItems([course], NOW).map((e) => [e.group, e.when])).toEqual([['today', 'Due today']]);
+    expect(agendaStatus(course, at(10, 3, 9))).toBe('overdue');
+  });
+
+  test('feeds and doses from earlier days are missed, not overdue; today\'s still show', () => {
+    const items = [
+      item({ id: 'y', kind: 'feeding', title: 'Dinner', start: at(10, 1, 18), status: 'upcoming' }),
+      item({ id: 'd', kind: 'medicine', title: 'Dose', start: at(10, 1, 20), status: 'overdue' }),
+      item({ id: 't', kind: 'feeding', title: 'Breakfast', start: at(10, 2, 8), status: 'upcoming' }),
+      item({ id: 'b', kind: 'bill', title: 'Water', allDay: true, start: allDayStart('2026-10-01'), status: 'upcoming' }),
+    ];
+    expect(todayItems(items, NOW).map((e) => e.item.id)).toEqual(['b', 't']);
+  });
+
   test('agendaTime', () => {
     expect(agendaTime(item({ allDay: true }))).toBe('All day');
     expect(agendaTime(item({ start: at(10, 2, 15) }))).toBe(formatTime(at(10, 2, 15)));

@@ -110,8 +110,8 @@ export interface AgendaRange {
 export declare function watchAgenda(db: Firestore, householdId: string, range: AgendaRange, onChange: (items: AgendaItem[]) => void): Unsubscribe;
 /**
  * Where an item stands now. Items with a status become overdue once their time passes even if the
- * app that wrote them hasn't been opened since: an all-day one after its day, a timed one after its
- * start. Items without a status (appointments, birthdays) have none.
+ * app that wrote them hasn't been opened since: an all-day one after its last day, a timed one after
+ * its start. Items without a status (appointments, birthdays) have none.
  */
 export declare function agendaStatus(item: AgendaItem, now: number): AgendaStatus | undefined;
 /** "All day", "3:30 PM", "3:30 PM – 4:30 PM". */
@@ -129,7 +129,8 @@ export interface TodayOptions {
 }
 /**
  * What needs attention: overdue things first (oldest first), then today's (all-day first, then by
- * time; finished appointments left out), then the next `soonHours`. Done items are left out.
+ * time; finished appointments left out), then the next `soonHours`. Done items are left out, and so
+ * are feeds and doses from earlier days (`feeding`, `medicine`): those are missed, not overdue.
  */
 export declare function todayItems(items: AgendaItem[], now: number, { soonHours }?: TodayOptions): TodayEntry[];
 export interface AgendaDay {

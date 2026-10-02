@@ -123,7 +123,8 @@ with `@huishouden/pwa-kit/agenda`; the portal only reads.
   birthdays, medicine courses, feeds not given yet. One item per date, `kind` from the fixed list,
   an https deep link to the record, and `status` (`upcoming`, `overdue`, `done`) for things someone
   has to do. Leave out logs of what already happened (a feed given, a payment made): those stay in
-  the app.
+  the app. Feeds and doses (`feeding`, `medicine`) are one item per occasion; one not done by the
+  end of its day drops out of Today as missed rather than staying overdue.
 - **When**: on save, `replaceAgenda(ref, items)` for the record (or `removeAgenda` when it is
   deleted); on open, `syncAgenda(app, items)` with everything the app works out, which repairs what
   another device or an older version left behind. Both write only what changed.
