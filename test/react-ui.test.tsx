@@ -199,7 +199,7 @@ describe('contacts', () => {
     typeInto(box, 'Example Animal Hospital\n4.6 (512)\n1 Example Way, Springfield, IL 62704\n(217) 555-0100\nexample.com\n"Lovely staff, very kind to our dog."');
     click(byText('Fill in'));
     expect(document.body.textContent).toContain('Filled in the name, phone, website and address from the pasted text. Check them before saving.');
-    expect(document.body.textContent).toContain('Not used:');
+    expect(document.querySelector('details:not([open]) summary')?.textContent).toBe("Show the text that wasn't used");
     expect(document.body.textContent).toContain('Lovely staff, very kind to our dog.');
     click(byText('Save'));
     expect(onSave.mock.calls[0][0]).toMatchObject({ name: 'Example Animal Hospital', phone: '(217) 555-0100', website: 'https://example.com', address: '1 Example Way, Springfield, IL 62704', apps: ['pet'] });
