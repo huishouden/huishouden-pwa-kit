@@ -1,15 +1,25 @@
-import { GoogleAuthProvider, reauthenticateWithPopup, type Auth } from 'firebase/auth';
+import type { Auth } from 'firebase/auth';
+import { loadGsi, loadedGsi, type GsiTokenResponse } from './gsi';
 
 /**
- * Google API access tokens for the signed-in member, in the browser, with their own consent. The
- * first time a set of scopes is needed, Google confirms the account in a popup with those scopes
- * added (browsers only allow that popup from a tap). The token lasts an hour; it is kept and reused
- * for any later request it covers, so calendar search, an invite email and a Gmail check each ask
- * once rather than every time.
+ * Google API access tokens (Calendar, Gmail, Sheets) for the signed-in member, with their own
+ * consent, from Google Identity Services' token client. Firebase Auth only says who the member is;
+ * it is not asked for API tokens.
  *
- * Kept in memory by default. `persist: true` keeps it in localStorage for its hour, so reopening the
- * app (the wall tablet, a phone) can use it again without a popup; `cachedGoogleToken` reads it
- * without asking anyone.
+ * `googleAccessToken` opens Google's window, so call it from a tap: browsers block windows opened
+ * any other way. Google shows the consent screen only for scopes the member has not allowed yet;
+ * otherwise the window closes by itself. The token lasts about an hour and is reused, until five
+ * minutes before it ends, for any later request it covers, so a calendar search, an invite email
+ * and a Gmail check each ask once rather than every time. Code that runs when the app opens uses
+ * `cachedGoogleToken`, which never opens anything, so a reopened app never loops windows.
+ *
+ * Setup, once when the app starts: `configureGoogleTokens({ clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID })`
+ * with the OAuth web client (the one Firebase created for Google sign-in, whose Authorized
+ * JavaScript origins list the app). It also loads Google's script early, so a tap can open the
+ * window straight away (Safari blocks a window opened after waiting on a download).
+ *
+ * Kept in memory by default. `persist: true` keeps it in localStorage until it ends, so reopening
+ * the app (the wall tablet, a phone) can use it again without asking.
  */
 
 interface Entry {
@@ -20,10 +30,40 @@ interface Entry {
 }
 
 const STORE_KEY = 'hh-google-tokens';
-/** Google access tokens last an hour; stop using one a little early. */
-const LIFETIME_MS = 55 * 60_000;
+/** Stop using a token this long before Google says it ends. */
+const MARGIN_MS = 5 * 60_000;
+/** Google's tokens last an hour; used when the answer doesn't say. */
+const DEFAULT_LIFETIME_S = 3600;
 
 let memory: Entry[] = [];
+let configuredClientId: string | undefined;
+const pending = new Map<string, Promise<string>>();
+
+/** Why Google gave no token. `code` is what `./feedback` reads to word it. */
+export type GoogleTokenErrorCode = 'popup_closed' | 'popup_failed_to_open' | 'access_denied' | 'not_configured' | 'unavailable' | 'unknown';
+
+export class GoogleTokenError extends Error {
+  constructor(
+    message: string,
+    readonly code: GoogleTokenErrorCode,
+  ) {
+    super(message);
+    this.name = 'GoogleTokenError';
+  }
+}
+
+export interface GoogleTokensConfig {
+  /** The OAuth web client id (`VITE_GOOGLE_CLIENT_ID`). Empty or missing leaves tokens unavailable. */
+  clientId?: string;
+  /** Load Google's script now so the first tap opens the window at once (default true). */
+  preload?: boolean;
+}
+
+/** Call once at startup with the app's OAuth web client id. */
+export function configureGoogleTokens({ clientId, preload = true }: GoogleTokensConfig): void {
+  configuredClientId = clientId || undefined;
+  if (configuredClientId && preload && typeof document !== 'undefined') loadGsi().catch(() => {});
+}
 
 function stored(): Entry[] {
   try {
@@ -43,8 +83,6 @@ function writeStored(list: Entry[]): void {
   }
 }
 
-const sameScopes = (a: Entry, b: Entry) => a.scopes.length === b.scopes.length && a.scopes.every((s) => b.scopes.includes(s));
-
 const covers = (e: Entry, uid: string, scopes: readonly string[], now: number) => e.uid === uid && e.expires > now && scopes.every((s) => e.scopes.includes(s));
 
 /** A still-valid token covering `scopes` for the signed-in member, without asking anyone; null when there is none. */
@@ -58,33 +96,69 @@ export function cachedGoogleToken(auth: Auth, scopes: readonly string[]): string
 }
 
 export interface GoogleTokenOptions {
-  /** Keep the token in localStorage for its hour (default: memory only). */
+  /** Keep the token in localStorage until it ends (default: memory only). */
   persist?: boolean;
-  /** The error message when Google gives no token, e.g. "Google did not grant calendar access." */
+  /** The error message when the member doesn't allow it, e.g. "Google did not grant calendar access." */
   deniedMessage?: string;
+  /** The OAuth web client id, when `configureGoogleTokens` wasn't called. */
+  clientId?: string;
 }
 
 /**
- * A token covering `scopes`: the cached one when there is one, otherwise from Google's popup. Call
- * from a tap the first time. Rejects with Firebase's `auth/popup-*` errors when the popup is
- * closed or blocked (see `popupCancelled` / `popupBlocked` in `./feedback`).
+ * A token covering `scopes`: the cached one when there is one, otherwise from Google's window.
+ * Call from a tap. Rejects with a `GoogleTokenError` when the window is closed (`popup_closed`),
+ * blocked (`popup_failed_to_open`) or the member says no (`access_denied`); `./feedback` words
+ * each (`popupCancelled`, `popupBlocked`, `googleAccessMessage`).
  */
-export async function googleAccessToken(auth: Auth, scopes: readonly string[], { persist = false, deniedMessage = 'Google did not grant access.' }: GoogleTokenOptions = {}): Promise<string> {
+export async function googleAccessToken(auth: Auth, scopes: readonly string[], { persist = false, deniedMessage = 'Google did not grant access.', clientId }: GoogleTokenOptions = {}): Promise<string> {
   const user = auth.currentUser;
   if (!user) throw new Error('Sign in first.');
   const cached = cachedGoogleToken(auth, scopes);
   if (cached) return cached;
-  const provider = new GoogleAuthProvider();
-  for (const scope of scopes) provider.addScope(scope);
-  if (user.email) provider.setCustomParameters({ login_hint: user.email });
-  const result = await reauthenticateWithPopup(user, provider);
-  const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
-  if (!token) throw new Error(deniedMessage);
-  const entry: Entry = { uid: user.uid, scopes: [...scopes], token, expires: Date.now() + LIFETIME_MS };
-  const replaced = (e: Entry) => e.expires <= Date.now() || (e.uid === entry.uid && sameScopes(e, entry));
-  memory = [...memory.filter((e) => !replaced(e)), entry];
-  if (persist) writeStored([...stored().filter((e) => !replaced(e)), entry]);
-  return token;
+  const client_id = clientId || configuredClientId;
+  if (!client_id) throw new GoogleTokenError('Google access is not set up for this app.', 'not_configured');
+
+  const key = `${user.uid} ${[...scopes].sort().join(' ')}`;
+  const inFlight = pending.get(key);
+  if (inFlight) return inFlight;
+
+  const ask = async (): Promise<string> => {
+    const gsi =
+      loadedGsi() ??
+      (await loadGsi().catch(() => {
+        throw new GoogleTokenError("Couldn't reach Google. Check the connection and try again.", 'unavailable');
+      }));
+    const answer = await new Promise<GsiTokenResponse>((resolve, reject) => {
+      const client = gsi.oauth2.initTokenClient({
+        client_id,
+        scope: scopes.join(' '),
+        hint: user.email ?? undefined,
+        include_granted_scopes: true,
+        callback: resolve,
+        error_callback: (e) => {
+          if (e.type === 'popup_closed') reject(new GoogleTokenError('Google’s window was closed.', 'popup_closed'));
+          else if (e.type === 'popup_failed_to_open') reject(new GoogleTokenError('The browser blocked Google’s window.', 'popup_failed_to_open'));
+          else reject(new GoogleTokenError(e.message || 'Google did not answer.', 'unknown'));
+        },
+      });
+      client.requestAccessToken({ prompt: '' });
+    });
+    if (answer.error === 'access_denied') throw new GoogleTokenError(deniedMessage, 'access_denied');
+    if (answer.error) throw new GoogleTokenError(`Google answered: ${answer.error_description || answer.error}`, 'unknown');
+    const granted = answer.scope ? answer.scope.split(/\s+/).filter(Boolean) : [...scopes];
+    // The consent screen lets the member untick a scope; a token without it would only fail later.
+    if (!answer.access_token || !scopes.every((s) => granted.includes(s))) throw new GoogleTokenError(deniedMessage, 'access_denied');
+    const lifetime = Number(answer.expires_in) || DEFAULT_LIFETIME_S;
+    const entry: Entry = { uid: user.uid, scopes: [...new Set([...scopes, ...granted])], token: answer.access_token, expires: Date.now() + lifetime * 1000 - MARGIN_MS };
+    const replaced = (e: Entry) => e.expires <= Date.now() || (e.uid === entry.uid && e.scopes.every((s) => entry.scopes.includes(s)));
+    memory = [...memory.filter((e) => !replaced(e)), entry];
+    if (persist) writeStored([...stored().filter((e) => !replaced(e)), entry]);
+    return entry.token;
+  };
+
+  const request = ask().finally(() => pending.delete(key));
+  pending.set(key, request);
+  return request;
 }
 
 /**

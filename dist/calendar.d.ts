@@ -37,7 +37,7 @@ declare global {
 export declare function searchPhrases(text: string): string[];
 /**
  * A token that can read the signed-in person's calendars. The first time, Google asks to allow
- * access in a popup (call from a tap); the token is then reused for its hour.
+ * access in a window (call from a tap); the token is then reused until it ends.
  */
 export declare function calendarAccessToken(auth: Auth): Promise<string>;
 interface GoogleEvent {

@@ -76,7 +76,12 @@ user of it (dogfooding), never a special case. So:
 - **The kit holds mechanism, the app holds policy.** Generic arithmetic, wording and components go
   in the kit; an app's own roles, search words, limits and labels are passed in as arguments.
 - **Google API scopes go through `googleAccessToken`**, so a token is asked for once and reused for
-  its hour across features, and a revoked one is forgotten on the 401.
+  its hour across features, and a revoked one is forgotten on the 401. Tokens come from Google
+  Identity Services' token client with the app's OAuth web client (`configureGoogleTokens` with
+  `VITE_GOOGLE_CLIENT_ID` at startup), never from Firebase Auth: Firebase signs people in, and a
+  popup re-sign-in for scopes fails whenever its sign-in backend does. Call it from a tap; code that
+  runs when the app opens uses `cachedGoogleToken` and shows a button when there is none, so an
+  app never opens Google's window by itself.
 
 ## Notifications
 

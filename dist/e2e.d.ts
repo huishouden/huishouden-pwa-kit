@@ -40,3 +40,19 @@ export interface FrameOptions {
  * logo linking to the portal, the app's name, and the bar set in Inter.
  */
 export declare function expectHuishoudenFrame(page: Page, { app, portalUrl, path }: FrameOptions): Promise<void>;
+export interface GoogleTokenStubOptions {
+    /** The access token handed out (default "test-token"). */
+    token?: string;
+    /**
+     * How Google answers instead: the window closed (`popup_closed`) or blocked
+     * (`popup_failed_to_open`), or the person refusing (`access_denied`).
+     */
+    fail?: 'popup_closed' | 'popup_failed_to_open' | 'access_denied';
+}
+/**
+ * Serves a stand-in for Google Identity Services (https://accounts.google.com/gsi/client) so
+ * `googleAccessToken` gets a token with no Google account: the token client grants every scope
+ * asked for (or fails as `fail` says), and One Tap reports "not displayed". Each request is
+ * recorded in `window.__gisTokenRequests` (`{ client_id, scope }`). Call before `page.goto`.
+ */
+export declare function stubGoogleTokens(page: Page, { token, fail }?: GoogleTokenStubOptions): Promise<void>;

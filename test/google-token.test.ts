@@ -1,30 +1,37 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import responses from './fixtures/gis/token-responses.json';
 
-// A stand-in for Google's popup: each call hands out a new token for the scopes asked for.
-const popups: string[][] = [];
-class GoogleAuthProvider {
-  scopes: string[] = [];
-  params: Record<string, string> = {};
-  addScope(s: string) {
-    this.scopes.push(s);
-  }
-  setCustomParameters(p: Record<string, string>) {
-    this.params = p;
-  }
-  static credential = (idToken: string) => ({ idToken });
-  static credentialFromResult = (r: { token?: string }) => (r.token ? { accessToken: r.token } : null);
+// A stand-in for Google Identity Services' token client. Each requestAccessToken records what was
+// asked and answers through `answer`: by default a new token carrying exactly the scopes asked for.
+interface TokenConfig {
+  client_id: string;
+  scope: string;
+  hint?: string;
+  include_granted_scopes?: boolean;
+  callback: (r: Record<string, unknown>) => void;
+  error_callback?: (e: { type: string; message?: string }) => void;
 }
-let grant = true;
-mock.module('firebase/auth', () => ({
-  GoogleAuthProvider,
-  reauthenticateWithPopup: async (_user: unknown, provider: GoogleAuthProvider) => {
-    popups.push(provider.scopes);
-    return grant ? { token: `token-${popups.length}` } : {};
+const requests: { clientId: string; scopes: string[]; hint?: string; includeGranted?: boolean; prompt?: string }[] = [];
+let answer: (cfg: TokenConfig) => void;
+const grant = (cfg: TokenConfig, extra: Record<string, unknown> = {}) =>
+  cfg.callback({ ...responses.granted, access_token: `token-${requests.length}`, scope: cfg.scope, ...extra });
+
+const gis = {
+  id: { initialize() {}, prompt() {}, disableAutoSelect() {} },
+  oauth2: {
+    initTokenClient: (cfg: TokenConfig) => ({
+      requestAccessToken(overrides?: { prompt?: string }) {
+        requests.push({ clientId: cfg.client_id, scopes: cfg.scope.split(' '), hint: cfg.hint, includeGranted: cfg.include_granted_scopes, prompt: overrides?.prompt });
+        answer(cfg);
+      },
+    }),
+    hasGrantedAllScopes: () => true,
   },
-  signInWithCredential: async () => ({ user: { uid: 'u1' } }),
-}));
-const { cachedGoogleToken, forgetGoogleToken, googleAccessToken, googleFetch, GoogleApiError } = await import('../src/google-token');
-const { requestGmailToken, storedGmailToken, gmailMailbox, GMAIL_READONLY_SCOPE } = await import('../src/gmail');
+};
+
+const { cachedGoogleToken, configureGoogleTokens, forgetGoogleToken, googleAccessToken, googleFetch, GoogleApiError, GoogleTokenError } = await import('../src/google-token');
+const { requestGmailToken, storedGmailToken, gmailMailbox, gmailError, GMAIL_READONLY_SCOPE } = await import('../src/gmail');
+const { popupBlocked, popupCancelled } = await import('../src/feedback');
 
 const store = new Map<string, string>();
 (globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -36,31 +43,67 @@ const store = new Map<string, string>();
 const auth = (uid = 'u1') => ({ currentUser: { uid, email: `${uid}@example.com` } }) as never;
 const A = 'https://www.googleapis.com/auth/a';
 const B = 'https://www.googleapis.com/auth/b';
+const C = 'https://www.googleapis.com/auth/c';
 
 beforeEach(() => {
+  const g = globalThis as unknown as { window?: { google?: unknown } };
+  g.window ??= globalThis as never;
+  g.window.google = { accounts: gis };
+  configureGoogleTokens({ clientId: 'client-1.apps.googleusercontent.com', preload: false });
   forgetGoogleToken();
-  popups.length = 0;
-  grant = true;
+  store.clear();
+  requests.length = 0;
+  answer = (cfg) => grant(cfg);
 });
 
 describe('googleAccessToken', () => {
-  test('asks once per set of scopes and reuses the token for the hour', async () => {
+  test('asks Google Identity Services once per set of scopes and reuses the token', async () => {
     expect(await googleAccessToken(auth(), [A])).toBe('token-1');
     expect(await googleAccessToken(auth(), [A])).toBe('token-1');
-    expect(popups).toEqual([[A]]);
+    expect(requests).toEqual([{ clientId: 'client-1.apps.googleusercontent.com', scopes: [A], hint: 'u1@example.com', includeGranted: true, prompt: '' }]);
     expect(await googleAccessToken(auth(), [B])).toBe('token-2');
-    expect(popups).toEqual([[A], [B]]);
+    expect(requests.map((r) => r.scopes)).toEqual([[A], [B]]);
   });
 
-  test('a token for more scopes covers a request for fewer', async () => {
+  test("opens Google's window in the same tick as the tap when the script is loaded", () => {
+    void googleAccessToken(auth(), [A]);
+    expect(requests).toHaveLength(1);
+  });
+
+  test('two taps at once share one window', async () => {
+    let finish: () => void = () => {};
+    answer = (cfg) => (finish = () => grant(cfg));
+    const first = googleAccessToken(auth(), [A]);
+    const second = googleAccessToken(auth(), [A]);
+    finish();
+    expect(await first).toBe('token-1');
+    expect(await second).toBe('token-1');
+    expect(requests).toHaveLength(1);
+  });
+
+  test('a token for more scopes covers a request for fewer, including scopes granted earlier', async () => {
     await googleAccessToken(auth(), [A, B]);
     expect(cachedGoogleToken(auth(), [B])).toBe('token-1');
     expect(cachedGoogleToken(auth(), [A, B])).toBe('token-1');
+    answer = (cfg) => grant(cfg, { scope: `${cfg.scope} ${A} ${B}` });
+    await googleAccessToken(auth(), [C]);
+    expect(cachedGoogleToken(auth(), [A, C])).toBe('token-2');
   });
 
   test('tokens are per member', async () => {
     await googleAccessToken(auth('u1'), [A]);
     expect(cachedGoogleToken(auth('u2'), [A])).toBeNull();
+  });
+
+  test('kept until five minutes before Google says it ends', async () => {
+    const before = Date.now();
+    await googleAccessToken(auth(), [A], { persist: true });
+    const [saved] = JSON.parse(store.get('hh-google-tokens')!) as { expires: number }[];
+    expect(saved.expires).toBeGreaterThanOrEqual(before + (3599 - 300) * 1000);
+    expect(saved.expires).toBeLessThanOrEqual(Date.now() + (3599 - 300) * 1000);
+    answer = (cfg) => grant(cfg, { expires_in: '300' });
+    await googleAccessToken(auth(), [B]);
+    expect(cachedGoogleToken(auth(), [B])).toBeNull();
   });
 
   test('memory only unless persisted; persisted ones survive a reload', async () => {
@@ -80,10 +123,42 @@ describe('googleAccessToken', () => {
     expect(store.has('hh-google-tokens')).toBe(false);
   });
 
-  test('signed out or refused', async () => {
+  test('signed out, or no client id', async () => {
     await expect(googleAccessToken({ currentUser: null } as never, [A])).rejects.toThrow('Sign in first.');
-    grant = false;
-    await expect(googleAccessToken(auth(), [A], { deniedMessage: 'No calendar.' })).rejects.toThrow('No calendar.');
+    configureGoogleTokens({ clientId: '' });
+    const e = await googleAccessToken(auth(), [A]).catch((x) => x);
+    expect(e).toBeInstanceOf(GoogleTokenError);
+    expect(e.code).toBe('not_configured');
+    expect(requests).toHaveLength(0);
+    expect(await googleAccessToken(auth(), [A], { clientId: 'client-2' })).toBe('token-1');
+    expect(requests[0].clientId).toBe('client-2');
+  });
+
+  test('refused on the consent screen, or a permission unticked', async () => {
+    answer = (cfg) => cfg.callback(responses.denied);
+    const denied = await googleAccessToken(auth(), [A], { deniedMessage: 'No calendar.' }).catch((x) => x);
+    expect(denied.message).toBe('No calendar.');
+    expect(denied.code).toBe('access_denied');
+    answer = (cfg) => grant(cfg, { scope: A });
+    const partial = await googleAccessToken(auth(), [A, B], { deniedMessage: 'No calendar.' }).catch((x) => x);
+    expect(partial.code).toBe('access_denied');
+    expect(cachedGoogleToken(auth(), [A])).toBeNull();
+    answer = (cfg) => cfg.callback(responses.invalidRequest);
+    expect((await googleAccessToken(auth(), [A]).catch((x) => x)).message).toBe('Google answered: Invalid parameter value for scope.');
+  });
+
+  test('window closed or blocked', async () => {
+    answer = (cfg) => cfg.error_callback!(responses.popupClosed);
+    const closed = await googleAccessToken(auth(), [A]).catch((x) => x);
+    expect(closed.code).toBe('popup_closed');
+    expect(popupCancelled(closed)).toBe(true);
+    answer = (cfg) => cfg.error_callback!(responses.popupFailed);
+    const blocked = await googleAccessToken(auth(), [A]).catch((x) => x);
+    expect(popupBlocked(blocked)).toBe(true);
+    expect(gmailError(blocked)).toBe('The browser blocked Google’s window. Allow popups for this site and try again.');
+    // A failed attempt doesn't stick: the next tap asks again.
+    answer = (cfg) => grant(cfg);
+    expect(await googleAccessToken(auth(), [A])).toBe('token-3');
   });
 });
 
@@ -105,11 +180,12 @@ describe('googleFetch', () => {
 });
 
 describe('Gmail token and mailbox', () => {
-  test('the read-only token is persisted for the hour and found again without a popup', async () => {
+  test('the read-only token is persisted and found again without a window', async () => {
     expect(storedGmailToken(auth())).toBeNull();
     const token = await requestGmailToken(auth());
-    expect(popups).toEqual([[GMAIL_READONLY_SCOPE]]);
+    expect(requests.map((r) => r.scopes)).toEqual([[GMAIL_READONLY_SCOPE]]);
     expect(storedGmailToken(auth())).toBe(token);
+    expect(store.has('hh-google-tokens')).toBe(true);
   });
 
   test('search and get through the REST API; a 401 asks again next time', async () => {
