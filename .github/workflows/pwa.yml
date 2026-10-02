@@ -2,7 +2,7 @@
 #
 #   jobs:
 #     pwa:
-#       uses: piekstra/pwa-kit/.github/workflows/pwa.yml@v0
+#       uses: piekstra/huishouden-pwa-kit/.github/workflows/pwa.yml@v0
 #       permissions: { contents: write, id-token: write }
 #       with:
 #         hosting-target: spending
@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: piekstra/pwa-kit/actions/leak-scan@v0
+      - uses: piekstra/huishouden-pwa-kit/actions/leak-scan@v0
 
   build:
     runs-on: ubuntu-latest
