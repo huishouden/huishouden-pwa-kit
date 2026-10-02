@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   pwa:
-    uses: huishouden/huishouden-pwa-kit/.github/workflows/pwa.yml@v0
+    uses: huishouden/pwa-kit/.github/workflows/pwa.yml@v0
     permissions:
       contents: write # README screenshots, PR evidence branch
       id-token: write
@@ -25,7 +25,7 @@ jobs:
       site-url: https://APP_SITE.web.app
 
   release:
-    uses: huishouden/huishouden-pwa-kit/.github/workflows/release.yml@v0
+    uses: huishouden/pwa-kit/.github/workflows/release.yml@v0
     permissions:
       contents: write
       pull-requests: write

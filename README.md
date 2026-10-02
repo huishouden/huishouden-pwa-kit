@@ -26,10 +26,10 @@ The conventions behind these are in [STANDARD.md](STANDARD.md).
 ## Install
 
 ```sh
-bun add -d @huishouden/pwa-kit@github:huishouden/huishouden-pwa-kit#v0.11.0
+bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.12.0
 ```
 
-Spell out the package name: `bun add github:huishouden/huishouden-pwa-kit#…` alone fails with `DependencyLoop`.
+Spell out the package name: `bun add github:huishouden/pwa-kit#…` alone fails with `DependencyLoop`.
 The package is installed from git, so `dist/` is committed; CI fails if it is stale.
 
 ## Use
@@ -54,7 +54,7 @@ test('installable', ({ page, request }) => expectInstallable(page, request));
 # .github/workflows/ci.yml: see templates/ci.yml
 jobs:
   pwa:
-    uses: huishouden/huishouden-pwa-kit/.github/workflows/pwa.yml@v0
+    uses: huishouden/pwa-kit/.github/workflows/pwa.yml@v0
     permissions: { contents: write, id-token: write }
     with: { hosting-target: groceries, site-url: https://example-groceries.web.app }
 ```
