@@ -10,7 +10,11 @@ export interface RawWrite {
     line: number;
     name: string;
 }
-/** Write functions a source file imports from `firebase/firestore` instead of the kit. */
+/**
+ * Write functions a source file takes from `firebase/firestore` instead of the kit: named imports,
+ * re-exports (a local barrel would pass them on), and namespace imports (`* as fs`), which expose
+ * every write and are reported as `*`.
+ */
 export declare function findRawWrites(source: string): RawWrite[];
 /** App code, not tests: tests may write to Firestore any way they like. */
 export declare const isAppSource: (path: string) => boolean;

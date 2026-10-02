@@ -8,18 +8,23 @@ import { findRawWrites, isAppSource } from '../src/write-check';
 const roots = process.argv.slice(2).length ? process.argv.slice(2) : ['src'];
 const files: string[] = [];
 const walk = (p: string) => {
-  try {
-    if (statSync(p).isDirectory()) for (const e of readdirSync(p)) walk(join(p, e));
-    else if (isAppSource(p)) files.push(p);
-  } catch {}
+  if (statSync(p).isDirectory()) for (const e of readdirSync(p)) walk(join(p, e));
+  else if (isAppSource(p)) files.push(p);
 };
-roots.forEach(walk);
+// A missing or unreadable path fails the check rather than passing it with nothing scanned.
+try {
+  roots.forEach(walk);
+} catch (e) {
+  console.log(`write check: can't read ${(e as NodeJS.ErrnoException).path ?? roots.join(' ')}: ${(e as Error).message}`);
+  process.exit(2);
+}
 
 let count = 0;
 for (const file of files) {
   for (const w of findRawWrites(readFileSync(file, 'utf8'))) {
     count++;
-    console.log(`${file}:${w.line}: ${w.name} from firebase/firestore; import it from @huishouden/pwa-kit/firestore`);
+    const what = w.name === '*' ? 'everything (including writes) imported or exported' : w.name;
+    console.log(`${file}:${w.line}: ${what} from firebase/firestore; take writes from @huishouden/pwa-kit/firestore`);
   }
 }
 if (count) {

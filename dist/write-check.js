@@ -6,15 +6,21 @@
  * can't be noted.
  */
 export const OUTBOX_WRITES = ['setDoc', 'updateDoc', 'deleteDoc', 'addDoc', 'writeBatch', 'arrayUnion', 'arrayRemove', 'increment'];
-const firestoreImport = /import\s+(type\s+)?\{([^}]*)\}\s*from\s*['"]firebase\/firestore['"]/g;
-/** Write functions a source file imports from `firebase/firestore` instead of the kit. */
+const namedFrom = /(import|export)\s+(type\s+)?\{([^}]*)\}\s*from\s*['"]firebase\/firestore['"]/g;
+const namespaceFrom = /(?:import|export)\s+(type\s+)?\*(?:\s+as\s+\w+)?\s+from\s*['"]firebase\/firestore['"]/g;
+const lineAt = (source, index) => source.slice(0, index).split('\n').length;
+/**
+ * Write functions a source file takes from `firebase/firestore` instead of the kit: named imports,
+ * re-exports (a local barrel would pass them on), and namespace imports (`* as fs`), which expose
+ * every write and are reported as `*`.
+ */
 export function findRawWrites(source) {
     const out = [];
-    for (const m of source.matchAll(firestoreImport)) {
-        if (m[1])
+    for (const m of source.matchAll(namedFrom)) {
+        if (m[2])
             continue;
-        const line = source.slice(0, m.index).split('\n').length;
-        for (const part of m[2].split(',')) {
+        const line = lineAt(source, m.index);
+        for (const part of m[3].split(',')) {
             const spec = part.trim();
             if (!spec || spec.startsWith('type '))
                 continue;
@@ -23,7 +29,10 @@ export function findRawWrites(source) {
                 out.push({ line, name });
         }
     }
-    return out;
+    for (const m of source.matchAll(namespaceFrom))
+        if (!m[1])
+            out.push({ line: lineAt(source, m.index), name: '*' });
+    return out.sort((a, b) => a.line - b.line);
 }
 /** App code, not tests: tests may write to Firestore any way they like. */
 export const isAppSource = (path) => /\.(ts|tsx|js|jsx)$/.test(path) && !/\.(test|spec)\.[jt]sx?$/.test(path) && !/(^|\/)(__tests__|__fixtures__)\//.test(path);

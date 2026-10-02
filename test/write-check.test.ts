@@ -29,6 +29,18 @@ describe('write check', () => {
     expect(findRawWrites(src)).toEqual([]);
   });
 
+  test('re-exports and namespace imports are flagged too', () => {
+    const src = [
+      "export { setDoc, doc } from 'firebase/firestore';",
+      "import * as fs from 'firebase/firestore';",
+      "import type * as types from 'firebase/firestore';",
+    ].join('\n');
+    expect(findRawWrites(src)).toEqual([
+      { line: 1, name: 'setDoc' },
+      { line: 2, name: '*' },
+    ]);
+  });
+
   test('tests and fixtures are not app code', () => {
     expect(isAppSource('src/data/useLiveStore.ts')).toBe(true);
     expect(isAppSource('src/App.tsx')).toBe(true);
