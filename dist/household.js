@@ -1,5 +1,6 @@
 import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { addDoc, arrayRemove, arrayUnion, setDoc, updateDoc } from './firestore.js';
+import { observeHousehold } from './observability.js';
 export const normalizeEmail = (email) => email.trim().toLowerCase();
 const COLLECTION = 'households';
 /**
@@ -67,7 +68,11 @@ export async function markJoined(db, household, email) {
 export function pendingMembers(household) {
     return household.members.filter((m) => !household.joined.includes(m));
 }
-/** Records the signed-in member's name and photo; cheap to call on every sign-in. */
+/**
+ * Records the signed-in member's name and photo; cheap to call on every sign-in. Also tags this
+ * visit's usage counts with the household's hash (`./observability`), so active households can be
+ * counted without knowing which.
+ */
 export async function saveMyProfile(db, householdId, user) {
     if (!user.email)
         return;
@@ -77,6 +82,7 @@ export async function saveMyProfile(db, householdId, user) {
         profile.name = user.displayName.slice(0, 100);
     if (user.photoURL?.startsWith('https://'))
         profile.photoURL = user.photoURL.slice(0, 500);
+    void observeHousehold(householdId);
     await setDoc(doc(db, COLLECTION, householdId, 'profiles', email), profile);
 }
 /** Follows the profiles members have recorded, keyed by email. */

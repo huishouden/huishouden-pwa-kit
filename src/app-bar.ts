@@ -59,6 +59,18 @@ export function sameSite(url: string, base: string): boolean {
   }
 }
 
+/** The portal's page saying what the apps collect, linked from every app's account menu. */
+export const PRIVACY_PATH = '/privacy';
+
+/** The privacy page on the portal `portalUrl` points at ("https://example-portal.web.app/privacy"). */
+export function privacyUrl(portalUrl: string, base: string): string {
+  try {
+    return new URL(PRIVACY_PATH, new URL(portalUrl, base)).href;
+  } catch {
+    return PRIVACY_PATH;
+  }
+}
+
 function isGlyph(value: string | null): value is Glyph {
   return !!value && Object.prototype.hasOwnProperty.call(GLYPHS, value);
 }
@@ -408,6 +420,11 @@ export class HhAppBar extends Base {
       all.textContent = 'All apps';
       items.append(all);
     }
+    const privacy = document.createElement('a');
+    privacy.className = 'item';
+    privacy.href = privacyUrl(this.portalUrl, location.href);
+    privacy.textContent = 'Privacy';
+    items.append(privacy);
     const out = document.createElement('button');
     out.type = 'button';
     out.className = 'item';

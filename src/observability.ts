@@ -1,0 +1,291 @@
+/**
+ * Errors, performance and anonymous usage counts from real visits, sent to New Relic Browser (free
+ * tier), so the maintainers hear when something breaks for someone and see which features are used.
+ *
+ * Always on (where configured): JavaScript errors, failed Firestore or Google calls (`reportError`),
+ * page loads and Core Web Vitals. Usage counts: screens and features used (`track`, `trackView`)
+ * and a hash of the household id (`householdTag`), skipped silently when the browser sends Global
+ * Privacy Control or Do Not Track. Nothing is stored on the device: the agent runs with session
+ * tracking off (no cookies, no localStorage id), so every count is per visit and nothing links one
+ * visit to the next. Device and browser type and the country and region come from the request; no
+ * names, emails, household ids, entries, query strings or precise location are sent (`redact` and
+ * the agent's obfuscation rules run over every message, stack trace and URL).
+ *
+ * Nothing at all is sent from automated browsers (Playwright, CI), local builds, hosts other than
+ * the apps' own, or builds without the New Relic variables. The portal's /privacy page says this in
+ * plain words.
+ */
+
+export interface NewRelicConfig {
+  accountId: string;
+  /** The browser application's id: one per app, so each has its own error rate. */
+  appId: string;
+  /** The browser ingest key (`NRJS-…`). Public by design: it can only send data. */
+  browserKey: string;
+}
+
+/** `VITE_NEWRELIC_ACCOUNT_ID`, `VITE_NEWRELIC_APP_ID`, `VITE_NEWRELIC_BROWSER_KEY`; null when any is missing. */
+export function newRelicConfigFromEnv(env: Record<string, unknown>): NewRelicConfig | null {
+  const get = (k: string) => (typeof env[k] === 'string' ? (env[k] as string).trim() : '');
+  const accountId = get('VITE_NEWRELIC_ACCOUNT_ID');
+  const appId = get('VITE_NEWRELIC_APP_ID');
+  const browserKey = get('VITE_NEWRELIC_BROWSER_KEY');
+  return accountId && appId && browserKey ? { accountId, appId, browserKey } : null;
+}
+
+/** Hosting sites the apps are served from. Anything else (localhost, previews) sends nothing. */
+export const DEFAULT_HOSTS = /(^|\.)(web\.app|firebaseapp\.com)$/;
+
+/** Why nothing is sent from this page. */
+export type ObservabilityBlock = 'not-configured' | 'automation' | 'host';
+
+interface Env {
+  navigator?: { doNotTrack?: string | null; globalPrivacyControl?: boolean; webdriver?: boolean };
+  location?: { hostname: string; protocol: string };
+}
+
+const env = (): Env => globalThis as unknown as Env;
+
+/** Why nothing would be sent from this page, or null when errors and performance would be. */
+export function observabilityBlock(config: NewRelicConfig | null, hosts: RegExp = DEFAULT_HOSTS): ObservabilityBlock | null {
+  const { navigator: nav, location: loc } = env();
+  if (!config) return 'not-configured';
+  if (nav?.webdriver) return 'automation';
+  if (!loc || loc.protocol !== 'https:' || !hosts.test(loc.hostname)) return 'host';
+  return null;
+}
+
+/** Whether usage counts may be sent: not when the browser sends Global Privacy Control or Do Not Track. */
+export function usageAllowed(): boolean {
+  const nav = env().navigator;
+  return !(nav?.globalPrivacyControl === true || nav?.doNotTrack === '1');
+}
+
+const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const QUERY = /(https?:\/\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi;
+const ID_PATH = /(households|profiles)\/[^/\s"'<>]+/g;
+const LONG_NUMBER = /\b\d(?:[ -]?\d){9,}\b/g;
+
+/** Rules the agent applies to everything it sends (messages, stack traces, page URLs, attributes). */
+export const OBFUSCATION_RULES = [
+  { regex: EMAIL, replacement: '[email]' },
+  { regex: QUERY, replacement: '$1' },
+  { regex: ID_PATH, replacement: '$1/[id]' },
+  { regex: LONG_NUMBER, replacement: '[number]' },
+];
+
+/** A message or URL with emails, query strings, household paths and long numbers taken out. */
+export function redact(text: string, max = 300): string {
+  return OBFUSCATION_RULES.reduce((s, r) => s.replace(r.regex, r.replacement), text).slice(0, max);
+}
+
+/** A stable, anonymous tag for a household: the first 16 hex digits of SHA-256 over its id. */
+export async function householdTag(householdId: string): Promise<string> {
+  const bytes = new TextEncoder().encode(`huishouden-household:${householdId}`);
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return Array.from(digest.slice(0, 8), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** The part of the New Relic agent this module uses. */
+export interface BrowserAgent {
+  noticeError(error: Error | string, attributes?: object): unknown;
+  addPageAction(name: string, attributes?: object): unknown;
+  setCustomAttribute(name: string, value: string | number | boolean | null, persist?: boolean): unknown;
+  setApplicationVersion(value: string | null): unknown;
+  setErrorHandler(callback: (error: Error | string) => boolean): unknown;
+}
+
+export type AgentLoader = (options: { config: NewRelicConfig; init: object; usage: boolean }) => Promise<BrowserAgent>;
+
+async function loadNewRelic({ config, init, usage }: { config: NewRelicConfig; init: object; usage: boolean }): Promise<BrowserAgent> {
+  const [{ Agent }, { JSErrors }, { PageViewEvent }, { PageViewTiming }, { GenericEvents }] = await Promise.all([
+    import('@newrelic/browser-agent/loaders/agent'),
+    import('@newrelic/browser-agent/features/jserrors'),
+    import('@newrelic/browser-agent/features/page_view_event'),
+    import('@newrelic/browser-agent/features/page_view_timing'),
+    import('@newrelic/browser-agent/features/generic_events'),
+  ]);
+  return new Agent({
+    features: usage ? [JSErrors, PageViewEvent, PageViewTiming, GenericEvents] : [JSErrors, PageViewEvent, PageViewTiming],
+    info: { beacon: 'bam.nr-data.net', errorBeacon: 'bam.nr-data.net', licenseKey: config.browserKey, applicationID: config.appId, sa: 1 },
+    loader_config: { accountID: config.accountId, trustKey: config.accountId, agentID: config.appId, licenseKey: config.browserKey, applicationID: config.appId },
+    init,
+  }) as unknown as BrowserAgent;
+}
+
+/**
+ * Agent settings. `privacy.cookies_enabled: false` turns session tracking off: no cookie and no
+ * localStorage id, so nothing identifies a device between visits and no consent banner is needed.
+ * Replay, traces, AJAX URLs and click tracking are off.
+ */
+export const AGENT_INIT = {
+  obfuscate: OBFUSCATION_RULES,
+  privacy: { cookies_enabled: false },
+  ajax: { enabled: false, autoStart: false },
+  session_replay: { enabled: false },
+  session_trace: { enabled: false },
+  soft_navigations: { enabled: false },
+  user_actions: { enabled: false },
+  performance: { capture_marks: false, capture_measures: false },
+  distributed_tracing: { enabled: false },
+  logging: { enabled: false },
+};
+
+export interface ObservabilityOptions {
+  /** The app's short name (`baby`, `portal`), the `app` attribute on everything sent. */
+  app: string;
+  /** `import.meta.env`: the New Relic variables, `VITE_APP_VERSION` and `VITE_BUILD_SHA`. */
+  env: Record<string, unknown>;
+  /** Hostnames allowed to send (default `*.web.app` and `*.firebaseapp.com`). */
+  hosts?: RegExp;
+  /** Replaces the New Relic loader (tests). */
+  loader?: AgentLoader;
+}
+
+type Queued = { kind: 'error'; error: Error | string; attrs: Record<string, unknown> } | { kind: 'action'; name: string; attrs: Record<string, unknown> };
+
+const MAX_QUEUED = 30;
+const MAX_ERRORS_PER_PAGE = 50;
+const REPEAT_MS = 60_000;
+
+let state: {
+  agent: BrowserAgent | null;
+  queue: Queued[];
+  usage: boolean;
+  household: string | null;
+  errorsSent: number;
+  recent: Map<string, number>;
+} | null = null;
+
+/** Whether this page sends errors and performance. */
+export function observabilityActive(): boolean {
+  return state !== null;
+}
+
+function deliver(item: Queued) {
+  if (!state) return;
+  if (!state.agent) {
+    if (state.queue.length < MAX_QUEUED) state.queue.push(item);
+    return;
+  }
+  if (item.kind === 'error') state.agent.noticeError(item.error, item.attrs);
+  else state.agent.addPageAction(item.name, item.attrs);
+}
+
+const IGNORED_ERRORS = [/ResizeObserver loop/, /^Script error\.?$/, /chrome-extension:|moz-extension:|safari-extension:/];
+
+/**
+ * Starts reporting for this app, once, as early as possible (in `firebase.ts` or `main.tsx`, before
+ * rendering). Does nothing when `observabilityBlock` gives a reason; the agent is downloaded only
+ * when it will be used.
+ */
+export function startObservability(options: ObservabilityOptions): ObservabilityBlock | null {
+  if (state) return null;
+  const config = newRelicConfigFromEnv(options.env);
+  const block = observabilityBlock(config, options.hosts);
+  if (block) return block;
+  const usage = usageAllowed();
+  state = { agent: null, queue: [], usage, household: null, errorsSent: 0, recent: new Map() };
+
+  // Errors thrown while the agent downloads; it catches everything after that itself.
+  const early = (e: ErrorEvent | PromiseRejectionEvent) =>
+    deliver({ kind: 'error', error: 'reason' in e ? toError(e.reason) : (e.error ?? e.message), attrs: { source: 'early' } });
+  const w = globalThis as unknown as { addEventListener?: typeof addEventListener; removeEventListener?: typeof removeEventListener };
+  w.addEventListener?.('error', early as EventListener);
+  w.addEventListener?.('unhandledrejection', early as EventListener);
+
+  const version = typeof options.env.VITE_APP_VERSION === 'string' ? options.env.VITE_APP_VERSION : null;
+  const sha = typeof options.env.VITE_BUILD_SHA === 'string' ? options.env.VITE_BUILD_SHA : '';
+  (options.loader ?? loadNewRelic)({ config: config!, init: AGENT_INIT, usage })
+    .then((agent) => {
+      w.removeEventListener?.('error', early as EventListener);
+      w.removeEventListener?.('unhandledrejection', early as EventListener);
+      if (!state) return;
+      agent.setApplicationVersion(version);
+      agent.setCustomAttribute('app', options.app);
+      if (sha) agent.setCustomAttribute('buildSha', sha);
+      agent.setErrorHandler((e) => IGNORED_ERRORS.some((r) => r.test(typeof e === 'string' ? e : `${e?.message ?? ''} ${e?.stack ?? ''}`)));
+      if (state.household) agent.setCustomAttribute('household', state.household);
+      state.agent = agent;
+      const queued = state.queue;
+      state.queue = [];
+      queued.forEach(deliver);
+    })
+    .catch(() => {
+      // An ad blocker or no network: the app works the same without reports.
+      state = null;
+    });
+  return null;
+}
+
+/**
+ * Tags this visit's usage counts with the household's hash, so active households can be counted
+ * without knowing which. `saveMyProfile` calls it; skipped under Global Privacy Control.
+ */
+export async function observeHousehold(householdId: string): Promise<void> {
+  if (!state?.usage || !householdId) return;
+  const tag = await householdTag(householdId);
+  if (!state) return;
+  state.household = tag;
+  state.agent?.setCustomAttribute('household', tag);
+}
+
+function toError(e: unknown): Error | string {
+  if (e instanceof Error) return e;
+  if (typeof e === 'string') return e;
+  const m = (e as { message?: unknown })?.message;
+  return typeof m === 'string' ? m : 'Unknown error';
+}
+
+type Attrs = Record<string, string | number | boolean | undefined | null>;
+
+function cleanAttrs(attrs: Attrs): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {};
+  for (const [k, v] of Object.entries(attrs).slice(0, 20)) {
+    if (v === undefined || v === null) continue;
+    out[k.slice(0, 40)] = typeof v === 'string' ? redact(v, 120) : v;
+  }
+  return out;
+}
+
+/**
+ * Reports a failure the app handled (a save that failed, a Google call that answered an error),
+ * which the agent cannot see by itself. `context.where` names the action ("save feed"). Firestore's
+ * and Google's codes are kept; messages are redacted. The same failure is sent once a minute at most.
+ */
+export function reportError(e: unknown, context: Attrs = {}): void {
+  if (!state) return;
+  const error = toError(e);
+  const message = redact(typeof error === 'string' ? error : error.message);
+  const code = (e as { code?: unknown })?.code;
+  const status = (e as { status?: unknown })?.status;
+  const key = `${message}|${context.where ?? ''}`;
+  const now = Date.now();
+  if ((state.recent.get(key) ?? 0) > now - REPEAT_MS || state.errorsSent >= MAX_ERRORS_PER_PAGE) return;
+  state.recent.set(key, now);
+  state.errorsSent++;
+  const attrs = cleanAttrs({ ...context, handled: true, ...(typeof code === 'string' ? { code } : {}), ...(typeof status === 'number' ? { status } : {}) });
+  const sent = typeof error === 'string' ? message : Object.assign(new Error(message), { name: error.name, stack: error.stack });
+  deliver({ kind: 'error', error: sent, attrs });
+}
+
+/**
+ * Counts a feature being used ("log feed", "check email"). Name the action, not the data: attributes
+ * are for small facts like `{ kind: 'bottle' }` or `{ count: 3 }`, never names or free text.
+ */
+export function track(action: string, attrs: Attrs = {}): void {
+  if (!state?.usage) return;
+  deliver({ kind: 'action', name: action.slice(0, 60), attrs: cleanAttrs(attrs) });
+}
+
+/** Counts a screen or tab being shown, and labels later errors with it. */
+export function trackView(view: string): void {
+  if (!state) return;
+  state.agent?.setCustomAttribute('view', view.slice(0, 40));
+  track('view', { view });
+}
+
+/** For tests: forget everything started. */
+export function resetObservability(): void {
+  state = null;
+}

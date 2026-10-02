@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.34.0",
+  "version": "0.36.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "MIT",
   "type": "module",
@@ -84,6 +84,10 @@
     "./oauth-origins": {
       "types": "./dist/oauth-origins.d.ts",
       "default": "./dist/oauth-origins.js"
+    },
+    "./observability": {
+      "types": "./dist/observability.d.ts",
+      "default": "./dist/observability.js"
     },
     "./ocr": {
       "types": "./dist/ocr.d.ts",
@@ -201,6 +205,9 @@
     "sharp": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "@newrelic/browser-agent": "^1.323.0"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.14.5",
