@@ -1,0 +1,102 @@
+[
+ {
+  "merchantKey": "hellofresh",
+  "cadence": "weekly",
+  "typicalAmount": 69.99,
+  "amountVaries": false,
+  "lastDate": "2031-05-07",
+  "nextExpected": "2031-05-14",
+  "occurrences": 10,
+  "subscription": true
+ },
+ {
+  "merchantKey": "planet fitness",
+  "cadence": "monthly",
+  "typicalAmount": 24.99,
+  "amountVaries": false,
+  "lastDate": "2031-05-06",
+  "nextExpected": "2031-06-06",
+  "occurrences": 7,
+  "subscription": true
+ },
+ {
+  "merchantKey": "netflix",
+  "cadence": "monthly",
+  "typicalAmount": 22.99,
+  "amountVaries": false,
+  "lastDate": "2031-04-15",
+  "nextExpected": "2031-05-15",
+  "occurrences": 12,
+  "subscription": true
+ },
+ {
+  "merchantKey": "spotify",
+  "cadence": "monthly",
+  "typicalAmount": 11.99,
+  "amountVaries": true,
+  "lastDate": "2031-05-14",
+  "nextExpected": "2031-06-14",
+  "occurrences": 9,
+  "subscription": true
+ },
+ {
+  "merchantKey": "apple#10",
+  "cadence": "monthly",
+  "typicalAmount": 10.99,
+  "amountVaries": false,
+  "lastDate": "2031-04-20",
+  "nextExpected": "2031-05-20",
+  "occurrences": 7,
+  "subscription": true
+ },
+ {
+  "merchantKey": "apple#2",
+  "cadence": "monthly",
+  "typicalAmount": 2.99,
+  "amountVaries": false,
+  "lastDate": "2031-05-03",
+  "nextExpected": "2031-06-03",
+  "occurrences": 8,
+  "subscription": true
+ },
+ {
+  "merchantKey": "geico",
+  "cadence": "quarterly",
+  "typicalAmount": 412.5,
+  "amountVaries": false,
+  "lastDate": "2031-05-09",
+  "nextExpected": "2031-08-09",
+  "occurrences": 4,
+  "subscription": false
+ },
+ {
+  "merchantKey": "amazon prime",
+  "cadence": "yearly",
+  "typicalAmount": 139,
+  "amountVaries": false,
+  "lastDate": "2031-04-11",
+  "nextExpected": "2032-04-11",
+  "occurrences": 2,
+  "subscription": true
+ },
+ {
+  "merchantKey": "example city utilities",
+  "cadence": "monthly",
+  "typicalAmount": 118.75,
+  "amountVaries": true,
+  "lastDate": "2031-04-22",
+  "nextExpected": "2031-05-22",
+  "occurrences": 5,
+  "subscription": false
+ },
+ {
+  "merchantKey": "starbucks store",
+  "cadence": "weekly",
+  "typicalAmount": 5.45,
+  "amountVaries": false,
+  "lastDate": "2031-05-07",
+  "nextExpected": "2031-05-14",
+  "occurrences": 7,
+  "subscription": false
+ }
+]

@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.41.1",
+  "version": "0.42.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "MIT",
   "type": "module",
@@ -160,6 +160,10 @@
     "./react/ui": {
       "types": "./dist/react/ui.d.ts",
       "default": "./dist/react/ui.js"
+    },
+    "./recurring": {
+      "types": "./dist/recurring.d.ts",
+      "default": "./dist/recurring.js"
     },
     "./reminders": {
       "types": "./dist/reminders.d.ts",
