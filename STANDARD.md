@@ -58,7 +58,9 @@ user of it (dogfooding), never a special case. So:
   Drive) shows "unverified app" once per user and counts toward a lifetime cap of 100 users.
   Prefer designs that need no Google API scopes in the browser.
 - Shared data lives in Firestore in the family's project. A project has exactly one rules file,
-  so exactly one repo deploys it; other apps send their rules blocks to that repo.
+  so exactly one repo deploys it: a dedicated rules repo (for Huishouden, `huishouden/rules`),
+  never an app's repo, so one app's failing build can't hold back everyone's rules. Apps send their
+  rules blocks there, with emulator tests next to the others.
 - People, accounts, card numbers and other personal facts are data, not code: keep them in the
   app's data store (a sheet tab, Firestore), never in the repo, including test fixtures (use
   made-up values). A leak scan can't recognise most of these, so this rule is the protection.
