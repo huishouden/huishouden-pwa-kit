@@ -19,6 +19,18 @@ export interface PwaAppOptions {
      * page and image; without it they fall back to relative ones, which some messengers ignore.
      */
     url?: string;
+    /**
+     * Show push notifications (@huishouden/pwa-kit/push): adds `hh-push-sw.js` to the build and
+     * loads it into the generated service worker, which then shows reminders and opens their deep
+     * link when tapped.
+     */
+    push?: boolean;
+    /**
+     * Cache the label-reading engine (@huishouden/pwa-kit/dose `readLabel`) in the service worker
+     * after first use, so reading labels works offline: the tesseract.js worker, WebAssembly core
+     * and English data from jsDelivr, all at pinned versions.
+     */
+    ocr?: boolean;
     /** Overrides merged last, for anything app-specific. */
     overrides?: Partial<VitePWAOptions>;
 }
@@ -37,6 +49,16 @@ export declare function pwaApp(options: PwaAppOptions): ({
 } | {
     name: string;
     transformIndexHtml(html: string): string;
+} | {
+    name: string;
+    apply: "build";
+    generateBundle(this: {
+        emitFile(file: {
+            type: "asset";
+            fileName: string;
+            source: string;
+        }): string;
+    }): void;
 } | import("vite").Plugin<any>)[];
 /**
  * What a shared link shows (Messages, WhatsApp, Slack...): the page description and Open Graph /
@@ -46,6 +68,21 @@ export declare function pwaApp(options: PwaAppOptions): ({
 export declare function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' | 'url'>): {
     name: string;
     transformIndexHtml(html: string): string;
+};
+/** The OCR engine's files; their URLs carry exact versions, so a cached copy never goes stale. */
+export declare const OCR_CACHE: {
+    urlPattern: RegExp;
+    handler: "CacheFirst";
+    options: {
+        cacheName: string;
+        expiration: {
+            maxEntries: number;
+            maxAgeSeconds: number;
+        };
+        cacheableResponse: {
+            statuses: number[];
+        };
+    };
 };
 /**
  * Firebase Hosting serves its own pages under /__/ (the sign-in popup at /__/auth/handler, SDK
