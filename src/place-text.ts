@@ -63,7 +63,11 @@ const LOCALITY = [
 const STATE_END = new RegExp(String.raw`\b(?:${US_STATES})$`);
 const COUNTRY = /^(?:united states(?: of america)?|usa|us|canada|united kingdom|uk|great britain|netherlands|the netherlands|nederland|germany|deutschland|france|belgium|belgië|ireland|australia|new zealand)$/i;
 
-const MAPS_URL = /\bhttps?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|(?:www\.)?google\.[a-z.]+\/maps|maps\.google\.[a-z.]+|maps\.apple\.com|maps\.apple|g\.co\/kgs|share\.google)\/?\S*/i;
+/**
+ * A map link from Google or Apple. The host must end where the pattern says it does, so
+ * "maps.apple.example.com" or "google.example.com/maps" (anyone's site) is not taken for a map.
+ */
+const MAPS_URL = /\bhttps?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|(?:www\.)?google\.(?:com?\.[a-z]{2}|[a-z]{2,3})\/maps|maps\.google\.(?:com?\.[a-z]{2}|[a-z]{2,3})|maps\.apple\.com|maps\.apple|g\.co\/kgs|share\.google)(?=[/?#\s]|$)\S*/i;
 const ANY_URL = /\bhttps?:\/\/\S+/i;
 const LISTING_URL = /^(?:https?:\/\/)?(?:www\.|m\.)?(?:yelp\.[a-z.]+|google\.[a-z.]+\/search|tripadvisor\.[a-z.]+|facebook\.com\/(?:pages|profile)|search\.google\.com)/i;
 const DOMAIN = /^(?:https?:\/\/)?(?:www\.)?(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24}(?::\d+)?(?:[/?#]\S*)?$/i;
