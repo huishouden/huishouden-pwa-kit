@@ -112,6 +112,29 @@ and no household sets anything up.
   match `REMINDER_FIELDS` and `PUSH_SUBSCRIPTION_FIELDS`), with the collection-group index on
   `reminders` (`sent`, `at`) the sender's query needs.
 
+## Agenda
+
+The portal shows one household calendar and a Today view built from every app's dates, without
+reading any app's own collections. Each app publishes its dated things to `households/{id}/agenda`
+with `@huishouden/pwa-kit/agenda`; the portal only reads.
+
+- **What to publish**: anything with a date someone in the household would want on a calendar or
+  in Today: appointments, jobs and services coming due, renewals and expiries, unpaid bills,
+  birthdays, medicine courses, feeds not given yet. One item per date, `kind` from the fixed list,
+  an https deep link to the record, and `status` (`upcoming`, `overdue`, `done`) for things someone
+  has to do. Leave out logs of what already happened (a feed given, a payment made): those stay in
+  the app.
+- **When**: on save, `replaceAgenda(ref, items)` for the record (or `removeAgenda` when it is
+  deleted); on open, `syncAgenda(app, items)` with everything the app works out, which repairs what
+  another device or an older version left behind. Both write only what changed.
+- **Window**: from 30 days ago to 180 days ahead, plus overdue items whatever their age. Repeating
+  things publish their next date, not every future one. Keep `title` and `detail` short (120 and
+  200 characters) and in the app's own words ("Change HVAC filter", "$84.20, autopay off").
+- **Privacy**: every member reads every item, on any device and on the shared wall screen. Publish
+  only what any member may see; a private detail stays in the app.
+- **Rules**: the `agenda` block in the project's rules file; fields match `AGENDA_FIELDS`, and
+  `by` must be the signed-in member.
+
 ## CI/CD
 
 Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@v0`
