@@ -5,40 +5,41 @@
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
- * these files to Tailwind's sources. Icons are lucide-react, like the apps'.
+ * these files to Tailwind's sources. Icons are lucide-react, like the apps'. Each has `dark:` styles
+ * (DESIGN.md "Dark and ambient modes") that apply only under a `.dark` class, for apps with a dark setting.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { personColour, personInitial, personName } from '../people';
 
 export const inputClass =
-  'w-full min-h-11 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-base text-stone-800 outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200';
+  'w-full min-h-11 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-base text-stone-800 outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:border-forest-600 dark:bg-forest-900 dark:text-stone-100 dark:focus:ring-forest-700';
 
 /** A select styled like the inputs. */
 export const selectClass = `${inputClass} appearance-auto`;
 
 export const primaryButton =
-  'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-forest-700 px-4 py-2.5 font-medium text-white transition-colors duration-150 hover:bg-forest-600 disabled:opacity-50';
+  'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-forest-700 px-4 py-2.5 font-medium text-white transition-colors duration-150 hover:bg-forest-600 disabled:opacity-50 dark:bg-forest-400 dark:text-forest-900 dark:hover:bg-forest-300';
 
 export const ghostButton =
-  'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 font-medium text-stone-600 transition-colors duration-150 hover:bg-stone-100';
+  'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 font-medium text-stone-600 transition-colors duration-150 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-forest-700';
 
 /** The second action next to a primary button. */
-export const secondaryButton = `${ghostButton} border border-stone-200 bg-white disabled:opacity-50`;
+export const secondaryButton = `${ghostButton} border border-stone-200 bg-white disabled:opacity-50 dark:border-forest-600 dark:bg-forest-800`;
 
 export const iconButton =
-  'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-stone-600 transition-colors duration-150 hover:bg-stone-100 disabled:opacity-30';
+  'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-stone-600 transition-colors duration-150 hover:bg-stone-100 disabled:opacity-30 dark:text-stone-300 dark:hover:bg-forest-700';
 
 /** Footer button that deletes; the destructive action stays quiet until asked for. */
-export const deleteButton = 'mr-auto inline-flex min-h-11 items-center gap-2 rounded-xl px-3 font-medium text-red-700 hover:bg-stone-100';
+export const deleteButton = 'mr-auto inline-flex min-h-11 items-center gap-2 rounded-xl px-3 font-medium text-red-700 hover:bg-stone-100 dark:text-red-300 dark:hover:bg-forest-700';
 
-export const cardClass = 'rounded-2xl border border-stone-200 bg-white shadow-sm';
+export const cardClass = 'rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-forest-600 dark:bg-forest-800';
 
-export const overline = 'text-xs font-semibold uppercase tracking-wide text-stone-600';
+export const overline = 'text-xs font-semibold uppercase tracking-wide text-stone-600 dark:text-stone-300';
 
 /** A text link with a 44px target: phone numbers, Open in Google Maps, Open in Calendar. */
 export const linkClass =
-  '-mx-2 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 font-medium text-forest-700 underline-offset-4 transition-colors duration-150 hover:bg-forest-50 hover:underline';
+  '-mx-2 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 font-medium text-forest-700 underline-offset-4 transition-colors duration-150 hover:bg-forest-50 hover:underline dark:text-forest-300 dark:hover:bg-forest-700';
 
 export function Chip({ active, onClick, children, label }: { active?: boolean; onClick: () => void; children: ReactNode; label?: string }) {
   return (
@@ -48,7 +49,9 @@ export function Chip({ active, onClick, children, label }: { active?: boolean; o
       aria-pressed={active}
       aria-label={label}
       className={`inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 ${
-        active ? 'border-forest-700 bg-forest-700 text-white' : 'border-stone-200 bg-white text-stone-700 hover:border-forest-400'
+        active
+          ? 'border-forest-700 bg-forest-700 text-white dark:border-forest-300 dark:bg-forest-300 dark:text-forest-900'
+          : 'border-stone-200 bg-white text-stone-700 hover:border-forest-400 dark:border-forest-600 dark:bg-forest-800 dark:text-stone-200'
       }`}
     >
       {children}
@@ -58,9 +61,9 @@ export function Chip({ active, onClick, children, label }: { active?: boolean; o
 
 /**
  * A dialog: bottom sheet on phones, centred on tablets; title and close row; Escape and the scrim
- * close it; the first field (or button) takes focus.
+ * close it; the first field (or button) takes focus. `wide` for a dialog with a table or two columns.
  */
-export function Dialog({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+export function Dialog({ title, onClose, children, footer, wide }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -75,11 +78,11 @@ export function Dialog({ title, onClose, children, footer }: { title: string; on
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="safe-bottom max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:max-w-lg sm:rounded-3xl"
+        className={`safe-bottom max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl dark:bg-forest-800 ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between gap-4">
-          <h2 className="text-xl font-semibold text-stone-800">{title}</h2>
+          <h2 className="text-xl font-semibold text-stone-800 dark:text-stone-100">{title}</h2>
           <button type="button" onClick={onClose} className={iconButton} aria-label="Close">
             <X size={20} />
           </button>
@@ -94,16 +97,16 @@ export function Dialog({ title, onClose, children, footer }: { title: string; on
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-stone-700">{label}</span>
+      <span className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-200">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-sm text-stone-600">{hint}</span>}
+      {hint && <span className="mt-1 block text-sm text-stone-600 dark:text-stone-300">{hint}</span>}
     </label>
   );
 }
 
 export function Checkbox({ checked, onChange, children }: { checked: boolean; onChange: (checked: boolean) => void; children: ReactNode }) {
   return (
-    <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-1 text-base text-stone-800">
+    <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-1 text-base text-stone-800 dark:text-stone-100">
       <input type="checkbox" className="h-5 w-5 shrink-0 accent-forest-700" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span className="min-w-0">{children}</span>
     </label>
@@ -117,14 +120,14 @@ export function StatusPill({ state }: { state: Attention }) {
   if (state === 'overdue')
     return <span className="inline-flex shrink-0 items-center rounded-full bg-terracotta-light px-2.5 py-0.5 text-sm font-semibold text-terracotta-dark">Overdue</span>;
   if (state === 'soon')
-    return <span className="inline-flex shrink-0 items-center rounded-full border border-stone-200 bg-white px-2.5 py-0.5 text-sm font-semibold text-stone-700">Soon</span>;
+    return <span className="inline-flex shrink-0 items-center rounded-full border border-stone-200 bg-white px-2.5 py-0.5 text-sm font-semibold text-stone-700 dark:border-forest-600 dark:bg-forest-800 dark:text-stone-200">Soon</span>;
   return null;
 }
 
 /** A failed action in words, with Try again. */
 export function ErrorNotice({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-red-50 px-3 py-2 text-base text-red-700">
+    <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-red-50 px-3 py-2 text-base text-red-700 dark:bg-forest-800 dark:text-red-300">
       <span className="min-w-0 flex-1">{message}</span>
       <button type="button" className="min-h-11 rounded-xl px-3 font-semibold underline-offset-4 hover:underline" onClick={onRetry}>
         Try again
@@ -149,7 +152,7 @@ export function SectionTabs({ tabs, tab, onTab, compact }: { tabs: Tab[]; tab: s
     <nav
       slot="nav"
       aria-label="Sections"
-      className={`flex w-full overflow-x-auto rounded-2xl border border-stone-200 bg-white p-1 sm:w-auto ${compact ? 'gap-0.5 sm:gap-1' : 'gap-1'}`}
+      className={`flex w-full overflow-x-auto rounded-2xl border border-stone-200 bg-white p-1 sm:w-auto dark:border-forest-600 dark:bg-forest-800 ${compact ? 'gap-0.5 sm:gap-1' : 'gap-1'}`}
     >
       {tabs.map((t) => (
         <button
@@ -158,7 +161,7 @@ export function SectionTabs({ tabs, tab, onTab, compact }: { tabs: Tab[]; tab: s
           onClick={() => onTab(t.id)}
           aria-current={t.id === tab ? 'page' : undefined}
           className={`min-h-11 flex-1 rounded-xl text-sm font-medium whitespace-nowrap transition-colors duration-150 sm:flex-none sm:px-5 sm:text-base ${compact ? 'px-1' : 'px-2'} ${
-            t.id === tab ? 'bg-forest-700 text-white' : 'text-stone-600 hover:bg-stone-100'
+            t.id === tab ? 'bg-forest-700 text-white dark:bg-forest-400 dark:text-forest-900' : 'text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-forest-700'
           }`}
         >
           {t.label}
