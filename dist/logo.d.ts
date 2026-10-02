@@ -6,6 +6,8 @@ export declare const GLYPHS: {
     readonly check: "<path d=\"M176 300 l40 40 l84 -88\" fill=\"none\" stroke=\"#2d6a4f\" stroke-width=\"34\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>";
     /** Spending: a payment card. */
     readonly card: "<rect x=\"166\" y=\"282\" width=\"180\" height=\"116\" rx=\"16\" fill=\"none\" stroke=\"#2d6a4f\" stroke-width=\"24\"/><path d=\"M166 322 h180\" stroke=\"#2d6a4f\" stroke-width=\"22\"/><path d=\"M196 364 h44\" stroke=\"#2d6a4f\" stroke-width=\"18\" stroke-linecap=\"round\"/>";
+    /** Baby: a feeding bottle. */
+    readonly bottle: "<path d=\"M240 272 v-16 a16 16 0 0 1 32 0 v16\" fill=\"none\" stroke=\"#2d6a4f\" stroke-width=\"20\" stroke-linecap=\"round\"/><rect x=\"216\" y=\"272\" width=\"80\" height=\"140\" rx=\"26\" fill=\"none\" stroke=\"#2d6a4f\" stroke-width=\"22\"/><path d=\"M228 318 h56 M228 352 h56\" stroke=\"#2d6a4f\" stroke-width=\"16\" stroke-linecap=\"round\"/>";
     /** Lists: three lines. */
     readonly list: "<path d=\"M184 290 h144 M184 334 h144 M184 378 h96\" stroke=\"#2d6a4f\" stroke-width=\"26\" stroke-linecap=\"round\"/>";
     /** Shopping: a cart. */
