@@ -43,7 +43,8 @@ PROJECT_NUMBER=$(gcloud projects describe "$PROJECT" --format='value(projectNumb
 step "APIs"
 gcloud services enable --project "$PROJECT" \
   firebasehosting.googleapis.com iamcredentials.googleapis.com sts.googleapis.com \
-  identitytoolkit.googleapis.com sheets.googleapis.com drive.googleapis.com
+  identitytoolkit.googleapis.com sheets.googleapis.com drive.googleapis.com \
+  calendar-json.googleapis.com gmail.googleapis.com
 
 step "Deploy service account"
 SA="$SA_NAME@$PROJECT.iam.gserviceaccount.com"
