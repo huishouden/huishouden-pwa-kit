@@ -1,0 +1,41 @@
+{
+  "occurrences": [
+    { "why": "every Thursday", "rule": { "freq": "week", "every": 1, "start": "2031-01-02" }, "from": "2031-10-01", "to": "2031-10-31",
+      "expected": ["2031-10-02", "2031-10-09", "2031-10-16", "2031-10-23", "2031-10-30"], "describe": "Every Thursday" },
+    { "why": "every other Thursday, counted from the start's week", "rule": { "freq": "week", "every": 2, "start": "2031-01-09" }, "from": "2031-10-01", "to": "2031-11-30",
+      "expected": ["2031-10-02", "2031-10-16", "2031-10-30", "2031-11-13", "2031-11-27"], "describe": "Every other Thursday" },
+    { "why": "two weekdays", "rule": { "freq": "week", "every": 1, "start": "2031-10-01", "days": [4, 1] }, "from": "2031-10-01", "to": "2031-10-14",
+      "expected": ["2031-10-02", "2031-10-06", "2031-10-09", "2031-10-13"], "describe": "Every Monday and Thursday" },
+    { "why": "every 3 weeks; nothing before the start", "rule": { "freq": "week", "every": 3, "start": "2031-10-10" }, "from": "2031-09-01", "to": "2031-11-30",
+      "expected": ["2031-10-10", "2031-10-31", "2031-11-21"], "describe": "Every 3 weeks on Friday" },
+    { "why": "weekdays", "rule": { "freq": "week", "every": 1, "start": "2031-10-06", "days": [1, 2, 3, 4, 5] }, "from": "2031-10-10", "to": "2031-10-14",
+      "expected": ["2031-10-10", "2031-10-13", "2031-10-14"], "describe": "Every weekday" },
+    { "why": "monthly on the 31st falls on each month's last day", "rule": { "freq": "month", "every": 1, "start": "2031-01-31" }, "from": "2031-02-01", "to": "2031-05-31",
+      "expected": ["2031-02-28", "2031-03-31", "2031-04-30", "2031-05-31"], "describe": "Every month on the 31st" },
+    { "why": "leap February", "rule": { "freq": "month", "every": 1, "start": "2032-01-30" }, "from": "2032-02-01", "to": "2032-03-31",
+      "expected": ["2032-02-29", "2032-03-30"], "describe": "Every month on the 30th" },
+    { "why": "third Tuesday", "rule": { "freq": "month", "every": 1, "start": "2031-09-16", "nth": 3, "weekday": 2 }, "from": "2031-10-01", "to": "2031-12-31",
+      "expected": ["2031-10-21", "2031-11-18", "2031-12-16"], "describe": "Every month on the third Tuesday" },
+    { "why": "last Friday, every other month", "rule": { "freq": "month", "every": 2, "start": "2031-01-31", "nth": -1, "weekday": 5 }, "from": "2031-02-01", "to": "2031-08-31",
+      "expected": ["2031-03-28", "2031-05-30", "2031-07-25"], "describe": "Every other month on the last Friday" },
+    { "why": "quarterly on the 15th", "rule": { "freq": "month", "every": 3, "start": "2031-01-15" }, "from": "2031-01-01", "to": "2031-12-31",
+      "expected": ["2031-01-15", "2031-04-15", "2031-07-15", "2031-10-15"], "describe": "Every 3 months on the 15th" },
+    { "why": "29 February in other years", "rule": { "freq": "year", "every": 1, "start": "2032-02-29" }, "from": "2032-01-01", "to": "2036-12-31",
+      "expected": ["2032-02-29", "2033-02-28", "2034-02-28", "2035-02-28", "2036-02-29"], "describe": "Every year on February 29" },
+    { "why": "every 2 years", "rule": { "freq": "year", "every": 2, "start": "2030-11-02" }, "from": "2031-01-01", "to": "2035-01-01",
+      "expected": ["2032-11-02", "2034-11-02"], "describe": "Every 2 years on November 2" },
+    { "why": "ends on until", "rule": { "freq": "week", "every": 1, "start": "2031-04-03", "until": "2031-04-24" }, "from": "2031-04-01", "to": "2031-05-31",
+      "expected": ["2031-04-03", "2031-04-10", "2031-04-17", "2031-04-24"], "describe": "Every Thursday" }
+  ],
+  "infer": [
+    { "why": "weekly", "dates": ["2031-10-02", "2031-10-09", "2031-10-16"], "expected": { "freq": "week", "every": 1, "start": "2031-10-02" } },
+    { "why": "weekly with a holiday week missing", "dates": ["2031-12-18", "2032-01-01", "2032-01-08"], "expected": { "freq": "week", "every": 1, "start": "2031-12-18" } },
+    { "why": "every other week", "dates": ["2031-10-03", "2031-10-17", "2031-10-31"], "expected": { "freq": "week", "every": 2, "start": "2031-10-03" } },
+    { "why": "monthly by day", "dates": ["2031-01-15", "2031-02-15", "2031-03-15"], "expected": { "freq": "month", "every": 1, "start": "2031-01-15" } },
+    { "why": "monthly on the second Tuesday", "dates": ["2031-10-14", "2031-11-11", "2031-12-09"], "expected": { "freq": "month", "every": 1, "start": "2031-10-14", "nth": 2, "weekday": 2 } },
+    { "why": "monthly on the last Monday", "dates": ["2031-03-31", "2031-04-28", "2031-05-26"], "expected": { "freq": "month", "every": 1, "start": "2031-03-31", "nth": -1, "weekday": 1 } },
+    { "why": "yearly", "dates": ["2031-06-01", "2032-06-01"], "expected": { "freq": "year", "every": 1, "start": "2031-06-01" } },
+    { "why": "one date is not a pattern", "dates": ["2031-10-02"], "expected": null },
+    { "why": "irregular", "dates": ["2031-10-02", "2031-10-05", "2031-10-19"], "expected": null }
+  ]
+}
