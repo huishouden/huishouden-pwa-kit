@@ -40,7 +40,7 @@ export function calendarAccessToken(auth) {
     return googleAccessToken(auth, CALENDAR_SCOPES, { deniedMessage: 'Google did not grant calendar access.' });
 }
 const localDay = (date) => (([y, m, d]) => new Date(y, m - 1, d).getTime())(date.split('-').map(Number));
-export function toMatch(e, calendarName) {
+export function toMatch(e, calendarName, calendarId) {
     if (e.status === 'cancelled' || (!e.start.dateTime && !e.start.date))
         return null;
     const allDay = !e.start.dateTime;
@@ -56,6 +56,8 @@ export function toMatch(e, calendarName) {
         description: e.description ?? '',
         link: e.htmlLink,
         calendarName,
+        ...(calendarId ? { calendarId } : {}),
+        ...(e.recurringEventId ? { recurringEventId: e.recurringEventId } : {}),
     };
 }
 function api(token, path, params) {
@@ -93,7 +95,7 @@ export async function findCalendarEvents(auth, queries, options = {}) {
             maxResults: String(limit),
             ...window_,
         })
-            .then((r) => (r.items ?? []).map((e) => toMatch(e, c.summaryOverride ?? c.summary)))
+            .then((r) => (r.items ?? []).map((e) => toMatch(e, c.summaryOverride ?? c.summary, c.id)))
             // One unreadable calendar (a removed share, say) should not hide matches in the others.
             .catch(() => [])));
         for (const m of results.flat())
@@ -103,7 +105,26 @@ export async function findCalendarEvents(auth, queries, options = {}) {
         if (!Array.isArray(queries) && found.size > 0)
             break;
     }
-    return [...found.values()].sort((a, b) => a.start - b.start).slice(0, limit);
+    const matches = [...found.values()].sort((a, b) => a.start - b.start).slice(0, limit);
+    if (options.seriesStart)
+        await addSeriesStarts(token, matches);
+    return matches;
+}
+/** The start of the series each repeating match belongs to, fetched once per series; a series that can't be read is left out. */
+async function addSeriesStarts(token, matches) {
+    const starts = new Map();
+    for (const m of matches) {
+        if (!m.recurringEventId || !m.calendarId)
+            continue;
+        const key = `${m.calendarId}|${m.recurringEventId}`;
+        if (!starts.has(key))
+            starts.set(key, api(token, `calendars/${encodeURIComponent(m.calendarId)}/events/${encodeURIComponent(m.recurringEventId)}`, {})
+                .then((master) => toMatch(master, '')?.start)
+                .catch(() => undefined));
+        const start = await starts.get(key);
+        if (start !== undefined)
+            m.seriesStart = start;
+    }
 }
 // ---- Importing events into an app's own records ----
 /**

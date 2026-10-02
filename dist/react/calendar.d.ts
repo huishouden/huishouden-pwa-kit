@@ -1,3 +1,12 @@
+/**
+ * Calendar search in React: the one-search-at-a-time hook, "Find in my calendar" inside a dialog,
+ * the import dialog that lists events not yet in the app, the linked-event row and the one-line
+ * hint before Google's first permission window. Built on `findCalendarEvents` in `../calendar`.
+ *
+ * `app` is the app's short name ("Baby"): it words the hint and keys whether this browser has
+ * already been asked (`<app>-calendar-allowed` in localStorage).
+ */
+import { type ReactNode } from 'react';
 import type { Auth } from 'firebase/auth';
 import { type CalendarMatch, type FindEventsOptions, type ImportedRecord } from '../calendar';
 /**
@@ -55,7 +64,7 @@ export declare function LinkedEvent({ link, onUnlink }: {
  * Add all. `records` are the app's own (appointments, log entries); an added event leaves the
  * list as soon as its record arrives.
  */
-export declare function CalendarImportDialog({ state, records, intro, noneFound, allImported, onRetry, onAdd, onClose }: {
+export declare function CalendarImportDialog({ state, records, intro, noneFound, allImported, onRetry, onAdd, onClose, children }: {
     state: CalendarSearchState;
     records: ImportedRecord[];
     /** What the scan looks for: "Prenatal, midwife, ultrasound and other baby events from last week to a year ahead." */
@@ -67,4 +76,6 @@ export declare function CalendarImportDialog({ state, records, intro, noneFound,
     onRetry: () => void;
     onAdd: (matches: CalendarMatch[]) => void;
     onClose: () => void;
+    /** Shown above the events: an app's own suggestions from the same scan (Pet's birthdays). */
+    children?: ReactNode;
 }): import("react").JSX.Element;
