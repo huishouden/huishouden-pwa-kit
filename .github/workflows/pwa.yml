@@ -34,7 +34,7 @@ jobs:
   leak-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - uses: piekstra/pwa-kit/actions/leak-scan@v0
@@ -49,9 +49,9 @@ jobs:
       VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
       VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-      - uses: actions/cache@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.bun/install/cache
           key: bun-${{ hashFiles('bun.lock') }}
@@ -60,7 +60,7 @@ jobs:
       - name: Unit tests
         run: if jq -e '.scripts.test' package.json >/dev/null; then bun run test; else echo "no test script"; fi
       - run: bun run build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: dist
           path: dist
@@ -75,31 +75,36 @@ jobs:
       contents: read
       id-token: write # keyless auth to Google Cloud via Workload Identity Federation
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: dist
           path: dist
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SA }}
       - run: npx --yes firebase-tools@14 deploy --only "hosting:${{ inputs.hosting-target }}" --non-interactive --message "${{ github.sha }}"
 
   smoke:
-    # Real-browser checks against the live site, right after it changes.
+    # Real-browser checks against the live site, right after it changes. Read-only: it runs installed
+    # packages and test code, so it gets no push rights; screenshots leave as an artifact.
     needs: deploy
     runs-on: ubuntu-latest
     permissions:
-      contents: write # commits refreshed README screenshots
+      contents: read
+    outputs:
+      screenshots: ${{ steps.shots.outputs.taken }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Skip without an e2e script
         id: has-e2e
         run: echo "present=$(jq -e '.scripts.e2e' package.json >/dev/null && echo true || echo false)" >> "$GITHUB_OUTPUT"
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         if: steps.has-e2e.outputs.present == 'true'
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         if: steps.has-e2e.outputs.present == 'true'
         with:
           path: ~/.bun/install/cache
@@ -110,23 +115,44 @@ jobs:
         run: bun run e2e
         env:
           BASE_URL: ${{ inputs.site-url }}
-      - name: Refresh README screenshots
+      - name: Take README screenshots
+        id: shots
         if: steps.has-e2e.outputs.present == 'true'
         env:
           BASE_URL: ${{ inputs.site-url }}
         run: |
-          jq -e '.scripts.screenshots' package.json >/dev/null || { echo "no screenshots script"; exit 0; }
-          bun run screenshots
-          git add docs/screenshots
-          if git diff --cached --quiet; then echo "screenshots unchanged"; exit 0; fi
-          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -m "docs: refresh screenshots from ${GITHUB_SHA::7}"
-          # Pushes made with GITHUB_TOKEN don't start new workflow runs, so this can't loop.
-          git pull --rebase -q && git push -q || echo "::warning::screenshots not pushed (main moved); next deploy retries"
-
-      - uses: actions/upload-artifact@v4
+          if jq -e '.scripts.screenshots' package.json >/dev/null; then bun run screenshots && echo "taken=true" >> "$GITHUB_OUTPUT"; else echo "no screenshots script"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: steps.shots.outputs.taken == 'true'
+        with:
+          name: screenshots
+          path: docs/screenshots/*.png
+          retention-days: 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
           name: playwright-traces
           path: test-results
           retention-days: 7
+
+  screenshots:
+    # The only job with push rights: it installs and runs nothing from the repo, it just commits the
+    # PNGs the smoke job produced when they differ. GITHUB_TOKEN pushes don't trigger workflows.
+    needs: smoke
+    if: needs.smoke.outputs.screenshots == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: screenshots
+          path: docs/screenshots
+      - name: Commit when changed
+        run: |
+          git add docs/screenshots
+          if git diff --cached --quiet; then echo "screenshots unchanged"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "docs: refresh screenshots from ${GITHUB_SHA::7}"
+          git pull --rebase -q && git push -q || echo "::warning::screenshots not pushed (main moved); next deploy retries"

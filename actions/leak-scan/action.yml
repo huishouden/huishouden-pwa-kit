@@ -7,6 +7,9 @@ inputs:
   gitleaks-version:
     description: gitleaks release to install
     default: 8.30.1
+  gitleaks-sha256:
+    description: SHA-256 of gitleaks_<version>_linux_x64.tar.gz (from the release's checksums.txt)
+    default: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
 runs:
   using: composite
   steps:
@@ -14,7 +17,11 @@ runs:
       shell: bash
       env:
         V: ${{ inputs.gitleaks-version }}
-      run: curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${V}/gitleaks_${V}_linux_x64.tar.gz" | tar -xz -C /usr/local/bin gitleaks
+        SHA: ${{ inputs.gitleaks-sha256 }}
+      run: |
+        curl -sSfL -o /tmp/gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${V}/gitleaks_${V}_linux_x64.tar.gz"
+        echo "${SHA}  /tmp/gitleaks.tgz" | sha256sum -c -
+        tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
     - name: Scan
       shell: bash
       env:
@@ -26,10 +33,15 @@ runs:
         # in this job, so put the rules where that path points.
         kit=node_modules/@piekstra/pwa-kit/actions/leak-scan
         [ -f "$kit/gitleaks.toml" ] || { mkdir -p "$kit" && cp "$DEFAULT_CONFIG" "$kit/gitleaks.toml"; }
-        config=.gitleaks.toml
-        [ -f "$config" ] || config="$DEFAULT_CONFIG"
-        if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ]; then
-          gitleaks git . --redact --no-banner --config "$config" --log-opts "$BASE..$HEAD"
-        else
-          gitleaks dir . --redact --no-banner --config "$config"
-        fi
+        # Scan with the kit's rules always, and with the repo's config too when it has one: a change
+        # can't switch off its own scan by adding allowlists.
+        configs=("$DEFAULT_CONFIG")
+        [ -f .gitleaks.toml ] && configs+=(.gitleaks.toml)
+        for config in "${configs[@]}"; do
+          echo "== rules: $config"
+          if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ]; then
+            gitleaks git . --redact --no-banner --config "$config" --log-opts "$BASE..$HEAD"
+          else
+            gitleaks dir . --redact --no-banner --config "$config"
+          fi
+        done

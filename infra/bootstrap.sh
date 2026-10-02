@@ -52,7 +52,10 @@ for role in roles/firebasehosting.admin roles/serviceusage.serviceUsageConsumer 
 done
 echo "$SA"
 
-step "Workload Identity Federation (GitHub OIDC, owner $GITHUB_OWNER only)"
+step "Workload Identity Federation (GitHub OIDC: owner $GITHUB_OWNER, main branch only)"
+# Numeric owner id, not the name: a renamed account's old name could be claimed by someone else.
+OWNER_ID=$(gh api "users/$GITHUB_OWNER" --jq .id)
+WIF_CONDITION="assertion.repository_owner_id == '$OWNER_ID' && assertion.ref == 'refs/heads/main'"
 gcloud iam workload-identity-pools describe "$POOL" --project "$PROJECT" --location global >/dev/null 2>&1 \
   || gcloud iam workload-identity-pools create "$POOL" --project "$PROJECT" --location global --display-name "GitHub Actions"
 gcloud iam workload-identity-pools providers describe "$PROVIDER" --project "$PROJECT" --location global --workload-identity-pool "$POOL" >/dev/null 2>&1 \
@@ -60,7 +63,10 @@ gcloud iam workload-identity-pools providers describe "$PROVIDER" --project "$PR
        --workload-identity-pool "$POOL" --display-name "GitHub" \
        --issuer-uri "https://token.actions.githubusercontent.com" \
        --attribute-mapping "google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
-       --attribute-condition "assertion.repository_owner == '$GITHUB_OWNER'"
+       --attribute-condition "$WIF_CONDITION"
+# Re-applied every run so older providers pick up the stricter condition.
+gcloud iam workload-identity-pools providers update-oidc "$PROVIDER" --project "$PROJECT" --location global \
+  --workload-identity-pool "$POOL" --attribute-condition "$WIF_CONDITION" >/dev/null
 WIF_PROVIDER="projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$POOL/providers/$PROVIDER"
 
 for entry in "${APPS[@]}"; do
@@ -72,7 +78,7 @@ for entry in "${APPS[@]}"; do
       || firebase hosting:sites:create "$site" --project "$PROJECT"
   fi
 
-  # Only main-branch runs of this one repo may impersonate the deploy account.
+  # Each repo is allowed separately; the provider condition limits tokens to main-branch runs.
   gcloud iam service-accounts add-iam-policy-binding "$SA" --project "$PROJECT" \
     --role roles/iam.workloadIdentityUser \
     --member "principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$POOL/attribute.repository/$GITHUB_OWNER/$repo" >/dev/null
@@ -83,6 +89,11 @@ for entry in "${APPS[@]}"; do
   fi
   gh variable set GCP_WIF_PROVIDER --repo "$GITHUB_OWNER/$repo" --body "$WIF_PROVIDER"
   gh variable set GCP_DEPLOY_SA --repo "$GITHUB_OWNER/$repo" --body "$SA"
+  # Deploys run in the production environment; only main may deploy to it.
+  gh api -X PUT "repos/$GITHUB_OWNER/$repo/environments/production" --input - >/dev/null <<'JSON'
+{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
+JSON
+  gh api -X POST "repos/$GITHUB_OWNER/$repo/environments/production/deployment-branch-policies" -f name=main -f type=branch >/dev/null 2>&1 || true
 
   if [[ -n "$app_name" ]]; then
     app_id=$(firebase apps:list WEB --project "$PROJECT" --json | jq -r --arg n "$app_name" '.result[] | select(.displayName == $n) | .appId' | head -1)
