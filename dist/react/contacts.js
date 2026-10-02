@@ -130,11 +130,11 @@ function filledFields(p, hoursToNotes = true) {
         p.hours && hoursToNotes && 'hours (in notes)',
     ].filter((f) => !!f);
 }
-/** What was filled in from a listing and, so nothing is dropped silently, what wasn't used. */
+/** What was filled in from a listing; the text that wasn't used stays one tap away, collapsed. */
 function FillNote({ source, place, filled }) {
     const from = SOURCE_WORDS[source];
     const unparsed = place.unparsed.slice(0, 8);
-    return (_jsxs("div", { role: "status", className: "space-y-1 text-base text-stone-700", children: [filled.length ? (_jsxs("p", { children: ["Filled in the ", listWords(filled), " from ", from, ". Check them before saving."] })) : (_jsxs("p", { children: ["Couldn't find a business's details in ", from, ".", source === 'screenshot' ? ' Try a screenshot that shows the name, address and phone number, or paste the text instead.' : ''] })), unparsed.length > 0 && (_jsxs("div", { className: "text-sm text-stone-600", children: [_jsx("p", { children: "Not used:" }), _jsx("ul", { className: "list-disc pl-5", children: unparsed.map((line, i) => (_jsx("li", { className: "[overflow-wrap:anywhere]", children: line }, i))) }), place.unparsed.length > unparsed.length && _jsxs("p", { children: ["And ", place.unparsed.length - unparsed.length, " more lines."] })] }))] }));
+    return (_jsxs("div", { role: "status", className: "space-y-1 text-base text-stone-700", children: [filled.length ? (_jsxs("p", { children: ["Filled in the ", listWords(filled), " from ", from, ". Check them before saving."] })) : (_jsxs("p", { children: ["Couldn't find a business's details in ", from, ".", source === 'screenshot' ? ' Try a screenshot that shows the name, address and phone number, or paste the text instead.' : ''] })), unparsed.length > 0 && (_jsxs("details", { className: "text-sm text-stone-500", children: [_jsx("summary", { className: "cursor-pointer select-none py-1", children: "Show the text that wasn't used" }), _jsx("ul", { className: "mt-1 list-disc pl-5", children: unparsed.map((line, i) => (_jsx("li", { className: "[overflow-wrap:anywhere]", children: line }, i))) }), place.unparsed.length > unparsed.length && _jsxs("p", { children: ["And ", place.unparsed.length - unparsed.length, " more lines."] })] }))] }));
 }
 /** One contact: role, name, edit and delete, then tap-to-call, email, website, address with a map link, and notes. */
 export function ContactCard({ contact: c, role, onEdit, onDelete }) {
