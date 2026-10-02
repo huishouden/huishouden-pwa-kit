@@ -126,7 +126,9 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
   values to look for: a list of the real addresses or numbers you want kept out is itself a leak.
 - Allowlist by path or rule only, with the reason in the entry. Prefer removing the file.
 - Enable the pre-commit hook (`templates/githooks/pre-commit`, `git config core.hooksPath .githooks`)
-  so a leak is stopped before it is a commit.
+  so a leak is stopped before it is a commit. It fails closed: without gitleaks or a rules file
+  the commit stops. `LEAK_SCAN_SKIP=1` skips it on purpose, and CI still scans the push. In a
+  public repo a pushed branch is already public, so CI only catches what the hook missed.
 - Public repos: GitHub secret scanning and push protection on.
 - The scan covers the commits each PR or push adds. History before the scan existed is audited
   once, at publication, with a fresh-history publish if needed.
