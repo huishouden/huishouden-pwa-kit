@@ -52,11 +52,17 @@ describe('telemetryChunks', () => {
     expect(glob.match(render(name(agent), agent))).toBe(true);
     expect(glob.match(render(name(mixed), mixed))).toBe(false);
     expect(name({ name: 'x', moduleIds: [] })).toBe('assets/[name]-[hash].js');
+    const appChunk = { name: 'nr-utils', moduleIds: ['/app/src/nr-utils.ts'] };
+    expect(glob.match(render(name(appChunk), appChunk))).toBe(false);
+  });
+
+  test('leaves an app with several outputs alone', () => {
+    expect(telemetryChunks().config({ build: { rollupOptions: { output: [{}, {}] } } })).toEqual({});
   });
 
   test("keeps the app's assetsDir and its own chunkFileNames for other chunks", () => {
     const name = telemetryChunks().config({ build: { assetsDir: 'static', rollupOptions: { output: { chunkFileNames: (c: { name: string }) => `static/js/${c.name}.js` } } } }).build.rollupOptions.output.chunkFileNames;
-    expect(name(agent)).toBe('static/nr-[name]-[hash].js');
+    expect(name(agent)).toBe('static/hh-telemetry-[name]-[hash].js');
     expect(name(mixed)).toBe('static/js/index.js');
     expect(new Bun.Glob(TELEMETRY_CHUNKS).match(render(name(agent), agent))).toBe(true);
   });

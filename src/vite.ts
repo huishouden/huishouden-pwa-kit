@@ -130,7 +130,7 @@ export function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' 
 }
 
 /** File-name prefix of the New Relic agent's chunks (`./observability`). */
-export const TELEMETRY_PREFIX = 'nr-';
+export const TELEMETRY_PREFIX = 'hh-telemetry-';
 /** Those chunks, left out of the precache (`globIgnores`), whatever the assets directory. */
 export const TELEMETRY_CHUNKS = `**/${TELEMETRY_PREFIX}*.js`;
 
@@ -138,10 +138,11 @@ type ChunkInfo = { moduleIds: string[]; name: string };
 type ChunkFileNames = string | ((chunk: ChunkInfo) => string);
 
 /**
- * Names the browser agent's lazily loaded chunks `<assetsDir>/nr-*.js`, so the service worker
+ * Names the browser agent's lazily loaded chunks `<assetsDir>/hh-telemetry-*.js`, so the service worker
  * doesn't precache them: about 35 files a device would download on every update for reports that
  * only matter online, and that slow the first install enough to miss "controlled after one
- * reload". Other chunks keep the app's own `chunkFileNames`, or Vite's default.
+ * reload". Other chunks keep the app's own `chunkFileNames`, or Vite's default. An app with several
+ * Rollup outputs is left alone (its agent chunks are then precached).
  */
 export function telemetryChunks() {
   return {
@@ -150,7 +151,8 @@ export function telemetryChunks() {
     config(user: { build?: { assetsDir?: string; rollupOptions?: { output?: unknown } } } = {}) {
       const dir = user.build?.assetsDir ?? 'assets';
       const output = user.build?.rollupOptions?.output;
-      const own = (Array.isArray(output) ? undefined : (output as { chunkFileNames?: ChunkFileNames } | undefined)?.chunkFileNames) ?? `${dir}/[name]-[hash].js`;
+      if (Array.isArray(output)) return {};
+      const own = (output as { chunkFileNames?: ChunkFileNames } | undefined)?.chunkFileNames ?? `${dir}/[name]-[hash].js`;
       return {
         build: {
           rollupOptions: {
