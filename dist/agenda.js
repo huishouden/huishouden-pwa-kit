@@ -1,4 +1,5 @@
-import { collection, doc, getDocs, onSnapshot, query, where, writeBatch, } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
+import { writeBatch } from './firestore.js';
 import { HOUR, daysBetween, dueText, dueWords, formatTime, longDate, startOfDay, toYmd, ymdToTime, addDays } from './time.js';
 export const AGENDA_KINDS = ['appointment', 'due', 'renewal', 'bill', 'birthday', 'medicine', 'feeding', 'task', 'other'];
 export const AGENDA_STATUSES = ['upcoming', 'overdue', 'done'];

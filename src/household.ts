@@ -1,18 +1,5 @@
-import {
-  addDoc,
-  arrayRemove,
-  arrayUnion,
-  collection,
-  doc,
-  getDocs,
-  onSnapshot,
-  setDoc,
-  query,
-  updateDoc,
-  where,
-  type Firestore,
-  type Unsubscribe,
-} from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
+import { addDoc, arrayRemove, arrayUnion, setDoc, updateDoc } from './firestore.js';
 
 /**
  * A household shared by every app in the family: one document per household in

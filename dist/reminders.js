@@ -1,4 +1,5 @@
-import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where, writeBatch, } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
+import { deleteDoc, setDoc, writeBatch } from './firestore.js';
 import { doseSlots } from './dose.js';
 export const REMINDER_FIELDS = ['app', 'title', 'body', 'at', 'url', 'recipients', 'ref', 'sent', 'sentAt', 'createdAt', 'by'];
 const remindersOf = (db, householdId) => collection(db, 'households', householdId, 'reminders');

@@ -1,4 +1,5 @@
-import { addDoc, collection, deleteDoc, deleteField, doc, onSnapshot, setDoc, updateDoc, } from 'firebase/firestore';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
+import { addDoc, deleteDoc, deleteField, setDoc, updateDoc } from './firestore.js';
 export const CONTACT_FIELDS = [
     'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'apps', 'createdAt', 'updatedAt', 'by',
 ];

@@ -1,4 +1,5 @@
-import { collection, deleteDoc, doc, getDoc, setDoc, type Firestore } from 'firebase/firestore';
+import { collection, doc, getDoc, type Firestore } from 'firebase/firestore';
+import { deleteDoc, setDoc } from './firestore.js';
 
 /**
  * Push notifications for reminders, with the browser's own Web Push (VAPID; no Firebase Cloud
