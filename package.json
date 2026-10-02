@@ -1,6 +1,6 @@
 {
   "name": "@piekstra/huishouden-pwa-kit",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "MIT",
   "type": "module",
@@ -29,11 +29,16 @@
     "./design-check": {
       "types": "./dist/design-check.d.ts",
       "default": "./dist/design-check.js"
+    },
+    "./logo": {
+      "types": "./dist/logo.d.ts",
+      "default": "./dist/logo.js"
     }
   },
   "bin": {
     "pwa-icons": "./scripts/icons.ts",
-    "pwa-design-check": "./scripts/design-check.ts"
+    "pwa-design-check": "./scripts/design-check.ts",
+    "pwa-logo": "./scripts/logo.ts"
   },
   "files": [
     "DESIGN.md",

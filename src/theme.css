@@ -17,6 +17,8 @@
   --hh-cream: #faf9f5;
   --hh-terracotta: #c86d51;
   --hh-terracotta-light: #ffdbcf;
+  /* Terracotta for text: 6.7:1 on white, 5.2:1 on terracotta-light (terracotta itself is 3.6:1). */
+  --hh-terracotta-dark: #94452f;
   --hh-ink: #292524;
   --hh-muted: #57534e;
   --hh-radius: 0.75rem;

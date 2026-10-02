@@ -15,7 +15,9 @@ const emoji = /\p{Extended_Pictographic}/gu;
 export const PALETTE_HEX = new Set([
     '#fff', '#ffffff', '#000', '#000000',
     '#f0f7f2', '#d8f3dc', '#b7e4c7', '#95d5b2', '#74c69d', '#40916c', '#2d6a4f', '#1b4332', '#12301f', '#081c15',
-    '#faf9f5', '#c86d51', '#ffdbcf',
+    '#faf9f5', '#c86d51', '#ffdbcf', '#94452f',
+    // red-700 / red-300: errors only
+    '#b91c1c', '#fca5a5',
     '#b08d57', '#5b7a99', '#8a6f9e', '#6f8f72', '#a8735a',
     '#fafaf9', '#f5f5f4', '#e7e5e4', '#d6d3d1', '#a8a29e', '#78716c', '#57534e', '#44403c', '#292524', '#1c1917',
 ]);
