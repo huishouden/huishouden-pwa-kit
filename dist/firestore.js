@@ -1,4 +1,5 @@
-import { arrayRemove as fsArrayRemove, arrayUnion as fsArrayUnion, Bytes, deleteDoc as fsDeleteDoc, deleteField as fsDeleteField, doc, DocumentReference, FieldValue, GeoPoint, getDocFromCache, increment as fsIncrement, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, serverTimestamp as fsServerTimestamp, setDoc as fsSetDoc, Timestamp, updateDoc as fsUpdateDoc, writeBatch as fsWriteBatch, } from 'firebase/firestore';
+import { arrayRemove as fsArrayRemove, arrayUnion as fsArrayUnion, deleteDoc as fsDeleteDoc, deleteField as fsDeleteField, doc, getDocFromCache, increment as fsIncrement, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, serverTimestamp as fsServerTimestamp, setDoc as fsSetDoc, updateDoc as fsUpdateDoc, writeBatch as fsWriteBatch, } from 'firebase/firestore';
+import { decode, encode, pendingEntries, remember, sameJson, TAG, Unencodable, } from './outbox-codec.js';
 /**
  * Firestore for a household app, and writes that survive the app closing at once.
  *
@@ -7,29 +8,29 @@ import { arrayRemove as fsArrayRemove, arrayUnion as fsArrayUnion, Bytes, delete
  * and closes the app (or reloads) inside that gap loses the entry, with no error anywhere. So the
  * write functions here also note each write synchronously in localStorage, which is written before
  * the page can go away, and forget it as soon as Firestore has it locally. A note still there when
- * the app next opens, signed in as the same person, is written again; every write here is safe to
- * repeat (sets and deletes are; `increment` may count twice in that narrow case).
+ * the app next opens, signed in as the same person, is written again, unless the local cache shows
+ * the write already landed or was overtaken (see `stillNeeded`). Notes older than a week are
+ * dropped unread.
  *
  * Use `initFirestore` in place of `initializeFirestore`, and import `setDoc`, `updateDoc`,
  * `deleteDoc`, `addDoc`, `writeBatch` and the field sentinels from here instead of
- * `firebase/firestore`. On a Firestore that didn't come from `initFirestore` they are Firestore's
- * own. A write that can't be noted (a converter, a value with no JSON form) still goes to
- * Firestore, without the note.
+ * `firebase/firestore`. They take the same arguments, except that `updateDoc` and `batch.update`
+ * take an object (no field-path/value pairs) and `writeBatch` returns the kit's `WriteBatch`. On a
+ * Firestore that didn't come from `initFirestore` they are Firestore's own. A write that can't be
+ * noted (a converter, a value with no JSON form) still goes to Firestore, without the note.
+ *
+ * The note holds the written data, in the same browser storage as Firestore's own cache of it.
  */
 const PREFIX = 'hh-outbox:';
 const TAB_LOCK = 'hh-outbox-tab:';
-const TAG = '__hhOutbox';
-/** A replay waits this long for the lock of a page that is just going away. */
-const RECHECK_MS = 5_000;
+const REPLAY_LOCK = 'hh-outbox-replay:';
 const outboxes = new WeakMap();
-class Unencodable extends Error {
-}
 /**
  * `initializeFirestore` with the persistent multi-tab cache every app uses (opens offline, keeps
  * writes made offline), plus the write notes described above. Notes left by a page that closed
  * too soon are written again once `auth` has a signed-in user.
  */
-export function initFirestore(app, { auth, storage, settings }) {
+export function initFirestore(app, { auth, storage, settings, locks, recheckMs = 5_000 }) {
     const db = initializeFirestore(app, {
         localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
         ...settings,
@@ -37,9 +38,19 @@ export function initFirestore(app, { auth, storage, settings }) {
     const store = storage ?? (typeof localStorage === 'undefined' ? undefined : localStorage);
     if (!store)
         return db;
-    const box = { db, auth, storage: store, prefix: `${PREFIX}${app.options.projectId ?? app.name}:`, tab: newTabId(), seq: 0 };
+    const box = {
+        db,
+        auth,
+        storage: store,
+        locks: locks === undefined ? browserLocks() : locks,
+        recheckMs,
+        prefix: `${PREFIX}${app.options.projectId ?? app.name}:`,
+        tab: newTabId(),
+        seq: 0,
+    };
     outboxes.set(db, box);
-    holdTabLock(box.tab);
+    // Held until the page goes away, so other pages can tell this one is still open.
+    void box.locks?.request(TAB_LOCK + box.tab, () => new Promise(() => { })).catch(() => { });
     auth.onAuthStateChanged((user) => {
         if (user)
             void replay(box, user.uid, true);
@@ -99,15 +110,11 @@ export function writeBatch(db) {
     return self;
 }
 // Field sentinels: Firestore's, remembered so a note can repeat them -------------------------------
-const sentinels = new WeakMap();
-function remember(value, encoded) {
-    sentinels.set(value, encoded);
-    return value;
-}
 export const deleteField = () => remember(fsDeleteField(), () => ({ [TAG]: 'deleteField' }));
 export const serverTimestamp = () => remember(fsServerTimestamp(), () => ({ [TAG]: 'serverTimestamp' }));
 export const arrayUnion = (...elements) => remember(fsArrayUnion(...elements), () => ({ [TAG]: 'arrayUnion', v: elements.map(encode) }));
 export const arrayRemove = (...elements) => remember(fsArrayRemove(...elements), () => ({ [TAG]: 'arrayRemove', v: elements.map(encode) }));
+/** An increment replayed after its first copy did land counts twice; only possible within milliseconds of a close. */
 export const increment = (n) => remember(fsIncrement(n), () => ({ [TAG]: 'increment', v: n }));
 // The note ------------------------------------------------------------------------------------------
 function note(db, build) {
@@ -141,9 +148,17 @@ function forgetOnceCached(box, key, path) {
     const forget = () => box.storage.removeItem(key);
     getDocFromCache(doc(box.db, path)).then(forget, forget);
 }
-/** Every note left for `uid` by a page that is no longer open: write it again. */
 async function replay(box, uid, recheck) {
-    const live = await liveTabs();
+    // One page at a time, so two pages opening together don't both repeat a note.
+    const waiting = box.locks
+        ? (await box.locks.request(REPLAY_LOCK + box.prefix, () => replayNow(box, uid)).catch(() => false))
+        : await replayNow(box, uid);
+    if (waiting && recheck)
+        setTimeout(() => void replay(box, uid, false), box.recheckMs);
+}
+/** Writes again every note left for `uid` by a page that is no longer open. True if some page's notes had to wait. */
+async function replayNow(box, uid) {
+    const live = await liveTabs(box.locks);
     let waiting = false;
     for (const { key, entry } of pendingEntries(box.storage, box.prefix)) {
         if (entry.uid !== uid || entry.tab === box.tab)
@@ -152,14 +167,12 @@ async function replay(box, uid, recheck) {
             waiting = true;
             continue;
         }
-        if (box.auth.currentUser?.uid !== uid)
-            return;
-        // Claim it, so a second page opening now doesn't write it too.
-        box.storage.setItem(key, JSON.stringify({ ...entry, tab: box.tab }));
+        let ops;
         let batch;
         try {
+            ops = await stillNeeded(box.db, entry);
             batch = fsWriteBatch(box.db);
-            for (const op of entry.ops)
+            for (const op of ops)
                 applyOp(batch, box.db, op);
         }
         catch (e) {
@@ -167,29 +180,55 @@ async function replay(box, uid, recheck) {
             box.storage.removeItem(key);
             continue;
         }
-        batch.commit().catch((e) => console.warn("Couldn't repeat a write saved before the app closed", e));
-        forgetOnceCached(box, key, entry.ops[0].path);
-    }
-    if (waiting && recheck)
-        setTimeout(() => void replay(box, uid, false), RECHECK_MS);
-}
-/** The notes in `storage`, oldest first. Exported for tests. */
-export function pendingEntries(storage, prefix) {
-    const out = [];
-    for (let i = 0; i < storage.length; i++) {
-        const key = storage.key(i);
-        if (!key?.startsWith(prefix))
+        if (box.auth.currentUser?.uid !== uid)
+            return false;
+        if (!ops.length) {
+            box.storage.removeItem(key);
             continue;
-        try {
-            const entry = JSON.parse(storage.getItem(key) ?? '');
-            if (entry?.v === 1 && Array.isArray(entry.ops) && entry.ops.length)
-                out.push({ key, entry });
         }
-        catch {
-            storage.removeItem(key);
-        }
+        box.storage.setItem(key, JSON.stringify({ ...entry, tab: box.tab }));
+        batch.commit().catch((e) => console.warn("Couldn't repeat a write saved before the app closed", e));
+        forgetOnceCached(box, key, ops[0].path);
     }
-    return out.sort((a, b) => (a.key < b.key ? -1 : 1));
+    return waiting;
+}
+/**
+ * The note's writes that the local cache doesn't show as done. A set whose data is already there
+ * landed before the page closed (only the forgetting was cut short). A document the cache knows
+ * was deleted, or whose `updatedAt` is at or after the note, was changed since: repeating the
+ * write would undo someone's newer edit. A document the cache has never seen gets the write.
+ */
+async function stillNeeded(db, entry) {
+    const out = [];
+    for (const op of entry.ops) {
+        if (op.kind === 'delete') {
+            out.push(op);
+            continue;
+        }
+        const snap = await getDocFromCache(doc(db, op.path)).catch(() => null);
+        if (!snap) {
+            out.push(op);
+            continue;
+        }
+        if (!snap.exists())
+            continue;
+        const data = snap.data();
+        if (typeof data.updatedAt === 'number' && data.updatedAt >= entry.at)
+            continue;
+        if (op.kind === 'set' && !op.merge && !op.mergeFields) {
+            let cached;
+            try {
+                cached = encode(data);
+            }
+            catch {
+                cached = null;
+            }
+            if (cached !== null && sameJson(cached, op.data))
+                continue;
+        }
+        out.push(op);
+    }
+    return out;
 }
 function applyOp(batch, db, op) {
     const ref = doc(db, op.path);
@@ -221,94 +260,19 @@ function plainRef(ref) {
         throw new Unencodable('converter');
     return ref.path;
 }
-// Values ------------------------------------------------------------------------------------------
-/** A Firestore value as JSON, or `Unencodable`. Exported for tests. */
-export function encode(value) {
-    if (value === null || typeof value === 'string' || typeof value === 'boolean')
-        return value;
-    if (typeof value === 'number') {
-        if (!Number.isFinite(value))
-            throw new Unencodable('number');
-        return value;
-    }
-    if (Array.isArray(value))
-        return value.map(encode);
-    if (typeof value !== 'object')
-        throw new Unencodable(typeof value);
-    if (value instanceof FieldValue) {
-        const known = sentinels.get(value);
-        if (known)
-            return known();
-        if (value.isEqual(fsDeleteField()))
-            return { [TAG]: 'deleteField' };
-        if (value.isEqual(fsServerTimestamp()))
-            return { [TAG]: 'serverTimestamp' };
-        throw new Unencodable('FieldValue');
-    }
-    if (value instanceof Timestamp)
-        return { [TAG]: 'ts', s: value.seconds, n: value.nanoseconds };
-    if (value instanceof Date)
-        return encode(Timestamp.fromDate(value));
-    if (value instanceof GeoPoint)
-        return { [TAG]: 'geo', lat: value.latitude, lng: value.longitude };
-    if (value instanceof Bytes)
-        return { [TAG]: 'bytes', v: value.toBase64() };
-    if (value instanceof DocumentReference)
-        return { [TAG]: 'ref', v: value.path };
-    const proto = Object.getPrototypeOf(value);
-    if (proto !== Object.prototype && proto !== null)
-        throw new Unencodable('object');
-    const out = {};
-    for (const [k, v] of Object.entries(value))
-        if (v !== undefined)
-            out[k] = encode(v);
-    return out;
-}
-/** The value `encode` was given back, with Firestore's own types and sentinels. */
-export function decode(value, db) {
-    if (Array.isArray(value))
-        return value.map((v) => decode(v, db));
-    if (value === null || typeof value !== 'object')
-        return value;
-    const tag = value[TAG];
-    if (typeof tag === 'string') {
-        const v = value.v;
-        switch (tag) {
-            case 'deleteField': return fsDeleteField();
-            case 'serverTimestamp': return fsServerTimestamp();
-            case 'arrayUnion': return fsArrayUnion(...v.map((e) => decode(e, db)));
-            case 'arrayRemove': return fsArrayRemove(...v.map((e) => decode(e, db)));
-            case 'increment': return fsIncrement(v);
-            case 'ts': return new Timestamp(value.s, value.n);
-            case 'geo': return new GeoPoint(value.lat, value.lng);
-            case 'bytes': return Bytes.fromBase64String(v);
-            case 'ref':
-                if (!db)
-                    throw new Error('a document reference needs the Firestore it belongs to');
-                return doc(db, v);
-        }
-    }
-    const out = {};
-    for (const [k, v] of Object.entries(value))
-        out[k] = decode(v, db);
-    return out;
-}
 // Pages -------------------------------------------------------------------------------------------
 function newTabId() {
     return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
-const locks = () => (typeof navigator === 'undefined' ? undefined : navigator.locks);
-/** Held until the page goes away: other pages can tell this one is still open. */
-function holdTabLock(tab) {
-    void locks()?.request(TAB_LOCK + tab, () => new Promise(() => { })).catch(() => { });
+function browserLocks() {
+    return typeof navigator === 'undefined' ? null : (navigator.locks ?? null);
 }
-/** Pages open right now, or null when the browser can't tell (then every note is replayed). */
-async function liveTabs() {
-    const l = locks();
-    if (!l)
+/** Pages open right now, or null when that can't be told (then every note is replayed). */
+async function liveTabs(locks) {
+    if (!locks)
         return null;
     try {
-        const { held = [] } = await l.query();
+        const { held = [] } = await locks.query();
         return new Set(held.map((h) => h.name ?? '').filter((n) => n.startsWith(TAB_LOCK)).map((n) => n.slice(TAB_LOCK.length)));
     }
     catch {

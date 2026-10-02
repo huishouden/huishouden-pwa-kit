@@ -13,22 +13,20 @@ import {
   Timestamp,
   type Firestore,
 } from 'firebase/firestore';
+import { collection, setDoc as rawSetDoc } from 'firebase/firestore';
 import {
   addDoc,
   arrayUnion,
-  decode,
   deleteDoc,
   deleteField,
-  encode,
   increment,
   initFirestore,
-  pendingEntries,
   setDoc,
   updateDoc,
   writeBatch,
-  type OutboxEntry,
+  type LockManagerLike,
 } from '../../src/firestore';
-import { collection } from 'firebase/firestore';
+import { decode, encode, pendingEntries, type OutboxEntry } from '../../src/outbox-codec';
 
 class MemoryStorage {
   private items = new Map<string, string>();
@@ -61,10 +59,20 @@ const PREFIX = 'hh-outbox:demo-outbox:';
 let open: { app: FirebaseApp; db: Firestore }[] = [];
 let n = 0;
 
-async function setup(uid: string | null, storage = new MemoryStorage()) {
+/** Web Locks with only the tab locks other pages hold; `release` lets one go. */
+function fakeLocks(held: string[]): LockManagerLike & { release(tab: string): void } {
+  const names = new Set(held.map((t) => `hh-outbox-tab:${t}`));
+  return {
+    request: async (name, cb) => (name.startsWith('hh-outbox-tab:') ? undefined : cb()),
+    query: async () => ({ held: [...names].map((name) => ({ name })) }),
+    release: (tab) => names.delete(`hh-outbox-tab:${tab}`),
+  };
+}
+
+async function setup(uid: string | null, storage = new MemoryStorage(), locks: LockManagerLike | null = null) {
   const app = initializeApp({ apiKey: 'demo', projectId: 'demo-outbox', appId: 'demo' }, `outbox-${n++}`);
   const auth = fakeAuth(uid);
-  const db = initFirestore(app, { auth: auth as never, storage, settings: { localCache: memoryLocalCache() } });
+  const db = initFirestore(app, { auth: auth as never, storage, locks, recheckMs: 100, settings: { localCache: memoryLocalCache() } });
   await disableNetwork(db);
   open.push({ app, db });
   return { db, auth, storage };
@@ -80,6 +88,10 @@ afterEach(async () => {
 
 const settle = () => new Promise((r) => setTimeout(r, 50));
 const entries = (s: MemoryStorage) => pendingEntries(s, PREFIX).map((e) => e.entry);
+const leave = (s: MemoryStorage, entry: Partial<OutboxEntry> & Pick<OutboxEntry, 'ops'>, seq = 1) => {
+  const full: OutboxEntry = { v: 1, uid: 'u1', tab: 'closed-page', at: Date.now() - 1000, ...entry };
+  s.setItem(`${PREFIX}${String(seq).padStart(10, '0')}-0000-${full.tab}`, JSON.stringify(full));
+};
 
 describe('durable writes', () => {
   test('a write is noted before setDoc returns and forgotten once Firestore has it locally', async () => {
@@ -97,7 +109,7 @@ describe('durable writes', () => {
   test('a note left by a page that closed too soon is written again for the same person', async () => {
     const storage = new MemoryStorage();
     const left: OutboxEntry = {
-      v: 1, uid: 'u1', tab: 'closed-page', at: 1,
+      v: 1, uid: 'u1', tab: 'closed-page', at: Date.now() - 1000,
       ops: [
         { kind: 'set', path: 'households/h/babyEvents/e2', data: { kind: 'feed', amountMl: 120, at: { __hhOutbox: 'ts', s: 10, n: 0 } } },
         { kind: 'delete', path: 'households/h/babyEvents/old' },
@@ -115,13 +127,42 @@ describe('durable writes', () => {
 
   test('nothing is replayed until someone signs in', async () => {
     const storage = new MemoryStorage();
-    storage.setItem(`${PREFIX}0000000001-0000-gone`, JSON.stringify({ v: 1, uid: 'u2', tab: 'gone', at: 1, ops: [{ kind: 'set', path: 'a/b', data: { x: 1 } }] }));
+    storage.setItem(`${PREFIX}0000000001-0000-gone`, JSON.stringify({ v: 1, uid: 'u2', tab: 'gone', at: Date.now(), ops: [{ kind: 'set', path: 'a/b', data: { x: 1 } }] }));
     const { auth } = await setup(null, storage);
     await settle();
     expect(storage.length).toBe(1);
     auth.signIn('u2');
     await settle();
     expect(storage.length).toBe(0);
+  });
+
+  test("a still-open page's note is left to it, and replayed once that page has gone", async () => {
+    const storage = new MemoryStorage();
+    leave(storage, { tab: 'open-page', ops: [{ kind: 'set', path: 'c/live', data: { x: 1 } }] });
+    const locks = fakeLocks(['open-page']);
+    const { db } = await setup('u1', storage, locks);
+    await settle();
+    expect(storage.length).toBe(1);
+    locks.release('open-page');
+    await new Promise((r) => setTimeout(r, 200));
+    expect(storage.length).toBe(0);
+    expect((await getDocFromCache(doc(db, 'c/live'))).data()).toEqual({ x: 1 });
+  });
+
+  test("a note is not replayed over a newer edit, and a week-old note is dropped", async () => {
+    const storage = new MemoryStorage();
+    const at = Date.now() - 60_000;
+    leave(storage, { at, ops: [{ kind: 'set', path: 'c/edited', data: { v: 'old', updatedAt: at - 5 } }] }, 1);
+    leave(storage, { at: Date.now() - 8 * 86_400_000, ops: [{ kind: 'set', path: 'c/ancient', data: { v: 1 } }] }, 2);
+    const { db, auth } = await setup(null, storage);
+    // Someone else's edit, newer than the note, already in this device's cache.
+    void rawSetDoc(doc(db, 'c/edited'), { v: 'new', updatedAt: at + 1000 });
+    await settle();
+    auth.signIn('u1');
+    await settle();
+    expect(storage.length).toBe(0);
+    expect((await getDocFromCache(doc(db, 'c/edited'))).data()).toEqual({ v: 'new', updatedAt: at + 1000 });
+    await expect(getDocFromCache(doc(db, 'c/ancient'))).rejects.toThrow();
   });
 
   test('signed out, writes go to Firestore without a note', async () => {

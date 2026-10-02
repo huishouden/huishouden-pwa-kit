@@ -1,34 +1,17 @@
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth } from 'firebase/auth';
-import { DocumentReference, FieldValue, type CollectionReference, type DocumentData, type Firestore, type FirestoreSettings, type PartialWithFieldValue, type SetOptions, type UpdateData, type WithFieldValue } from 'firebase/firestore';
-type Json = null | boolean | number | string | Json[] | {
-    [key: string]: Json;
-};
-type Op = {
-    kind: 'set';
-    path: string;
-    data: Json;
-    merge?: true;
-    mergeFields?: string[];
-} | {
-    kind: 'update';
-    path: string;
-    data: Json;
-} | {
-    kind: 'delete';
-    path: string;
-};
-/** One write (or one batch) not yet in Firestore's local cache, as stored in localStorage. */
-export interface OutboxEntry {
-    v: 1;
-    uid: string;
-    /** The page that wrote it; another page leaves it alone while that page is open. */
-    tab: string;
-    at: number;
-    ops: Op[];
-}
+import { type CollectionReference, type DocumentData, type DocumentReference, type FieldValue, type Firestore, type FirestoreSettings, type PartialWithFieldValue, type SetOptions, type UpdateData, type WithFieldValue } from 'firebase/firestore';
+import { type StorageLike } from './outbox-codec.js';
 type AuthLike = Pick<Auth, 'currentUser' | 'onAuthStateChanged'>;
-type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'key' | 'length'>;
+/** The part of the Web Locks API the outbox uses. */
+export interface LockManagerLike {
+    request(name: string, callback: () => Promise<unknown>): Promise<unknown>;
+    query(): Promise<{
+        held?: {
+            name?: string;
+        }[];
+    }>;
+}
 export interface InitFirestoreOptions {
     /** Whose writes these are: a note is replayed only for the person who made it. */
     auth: AuthLike;
@@ -36,13 +19,20 @@ export interface InitFirestoreOptions {
     storage?: StorageLike;
     /** Extra settings; the default cache is persistent (IndexedDB), shared by every open tab. */
     settings?: FirestoreSettings;
+    /**
+     * Defaults to `navigator.locks`: tells which pages are still open (their notes are theirs to
+     * finish) and lets one page at a time replay. With `null`, every page replays every note.
+     */
+    locks?: LockManagerLike | null;
+    /** How long a replay waits for a page that is just closing to let go. Default 5 s. */
+    recheckMs?: number;
 }
 /**
  * `initializeFirestore` with the persistent multi-tab cache every app uses (opens offline, keeps
  * writes made offline), plus the write notes described above. Notes left by a page that closed
  * too soon are written again once `auth` has a signed-in user.
  */
-export declare function initFirestore(app: FirebaseApp, { auth, storage, settings }: InitFirestoreOptions): Firestore;
+export declare function initFirestore(app: FirebaseApp, { auth, storage, settings, locks, recheckMs }: InitFirestoreOptions): Firestore;
 export declare function setDoc<A, D extends DocumentData>(ref: DocumentReference<A, D>, data: WithFieldValue<A>): Promise<void>;
 export declare function setDoc<A, D extends DocumentData>(ref: DocumentReference<A, D>, data: PartialWithFieldValue<A>, options: SetOptions): Promise<void>;
 export declare function updateDoc<A, D extends DocumentData>(ref: DocumentReference<A, D>, data: UpdateData<D>): Promise<void>;
@@ -62,14 +52,6 @@ export declare const deleteField: () => FieldValue;
 export declare const serverTimestamp: () => FieldValue;
 export declare const arrayUnion: (...elements: unknown[]) => FieldValue;
 export declare const arrayRemove: (...elements: unknown[]) => FieldValue;
+/** An increment replayed after its first copy did land counts twice; only possible within milliseconds of a close. */
 export declare const increment: (n: number) => FieldValue;
-/** The notes in `storage`, oldest first. Exported for tests. */
-export declare function pendingEntries(storage: StorageLike, prefix: string): {
-    key: string;
-    entry: OutboxEntry;
-}[];
-/** A Firestore value as JSON, or `Unencodable`. Exported for tests. */
-export declare function encode(value: unknown): Json;
-/** The value `encode` was given back, with Firestore's own types and sentinels. */
-export declare function decode(value: Json, db?: Firestore): unknown;
 export {};
