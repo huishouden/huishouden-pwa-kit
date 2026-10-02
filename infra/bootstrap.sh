@@ -98,6 +98,11 @@ for entry in "${APPS[@]}"; do
     gh variable set VITE_FIREBASE_PROJECT_ID --repo "$GITHUB_OWNER/$repo" --body "$PROJECT"
     gh variable set VITE_FIREBASE_APP_ID --repo "$GITHUB_OWNER/$repo" --body "$app_id"
     gh variable set VITE_FIREBASE_MESSAGING_SENDER_ID --repo "$GITHUB_OWNER/$repo" --body "$(jq -r .messagingSenderId <<<"$config")"
+    # For silent One Tap sign-in (@piekstra/pwa-kit/auth): the OAuth client Firebase created for
+    # Google sign-in. Public, like the rest of the web config. Empty until Google sign-in is enabled.
+    client_id=$(curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "x-goog-user-project: $PROJECT" \
+      "https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/defaultSupportedIdpConfigs/google.com" | jq -r '.clientId // empty')
+    [[ -n "$client_id" ]] && gh variable set VITE_GOOGLE_CLIENT_ID --repo "$GITHUB_OWNER/$repo" --body "$client_id"
   fi
 done
 
@@ -117,8 +122,10 @@ fi
 
 step "Done"
 cat <<EOF
-Manual steps the APIs don't cover (Firebase console, project $PROJECT):
-  1. Authentication > Get started > Sign-in method > Google > Enable
+Manual steps the APIs don't cover (project $PROJECT):
+  1. Firebase console > Authentication > Get started > Sign-in method > Google > Enable
      (initialises Auth on the free plan and creates the OAuth web client; no supported API does either)
-  2. Google Auth Platform > Audience > Test users > add every household member's Google account
+  2. Google Cloud console > Google Auth Platform > Clients > the "Web client (auto created by Google
+     Service)" > Authorized JavaScript origins: add https://<site>.web.app for each app using silent
+     sign-in (@piekstra/pwa-kit/auth). Then re-run this script so apps get VITE_GOOGLE_CLIENT_ID.
 EOF
