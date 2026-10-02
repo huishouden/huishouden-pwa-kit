@@ -558,6 +558,8 @@ is first.
 
 ### B9. Event log
 
+> **Status, v0.44.0:** `./log` has `latest`, `running`, `onDay`, `recent`, `dailyCounts`, `spans`, `timeWithin` over any entry with `at` (and `endAt` for timed ones), with a `match` predicate instead of a `kind` argument. No React hooks: `useClock` already gives `now`, and each would be a one-line wrapper. Deletes use the app's Undo (`./store` `changes`).
+
 Baby logs feeds and sleeps; Pet logs doses and weights; Home logs service visits; Bills keeps
 payment history. One base shape, app-specific fields on top.
 
@@ -624,6 +626,8 @@ privacy setting already does. A blurred figure would still be partly readable fr
 ---
 
 ### B11. Demo mode
+
+> **Status, v0.44.0:** `./store` (`Op`, `changes` with Undo, `memoryStore`) and `./react/store` (`useSampleStore`), with `commitOps` in `./firestore` and `sampleContacts` / `householdContacts` in `./contacts`: one set of actions over a Firestore or a memory backend. Demo clock and members stay per app.
 
 Signed-out visitors (and screenshots) see a working app with invented data. Baby does this well:
 an in-memory store with the same interface as the live one, a clock starting on a fixed day in
@@ -1092,6 +1096,8 @@ kit closely; moving it before it ships costs less than migrating it later.
 Reuse only lasts if copying is harder than importing. Proposed checks, cheapest first:
 
 ### `pwa-reuse-check` in the shared CI
+
+> **Status, v0.44.0:** built as a similarity check rather than the pattern list below: each top-level app declaration is compared with every kit export (token runs, Jaccard 0.7 and up), so any copied kit code is caught without a rule per pattern. Warnings in `pwa.yml`; `--strict` fails.
 
 A second scanner next to `pwa-design-check`, run by `pwa.yml` in the build job, with the same
 `file:line rule` output and the same comment and fixture exclusions. Each rule names the kit

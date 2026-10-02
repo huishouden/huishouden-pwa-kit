@@ -17,6 +17,7 @@ import { collection, deleteDoc as rawDeleteDoc, setDoc as rawSetDoc } from 'fire
 import {
   addDoc,
   arrayUnion,
+  commitOps,
   deleteDoc,
   deleteField,
   increment,
@@ -244,5 +245,32 @@ describe('encode and decode', () => {
   });
   test('a Date is stored as the Timestamp Firestore would store', () => {
     expect(decode(encode(new Date(1500)))).toEqual(new Timestamp(1, 500_000_000));
+  });
+});
+
+describe('commitOps', () => {
+  test('writes ./store ops as one noted batch: sets, merges and deletes under the base path', async () => {
+    const { db, storage } = await setup('u1');
+    void rawSetDoc(doc(db, 'households/h/carVehicles/v1'), { name: 'Van', notes: 'keep' }).catch(() => {});
+    await settle();
+    const done = commitOps(
+      db,
+      'households/h',
+      [
+        { col: 'vehicles', id: 'v2', data: { name: 'Hatchback' } },
+        { col: 'vehicles', id: 'v1', data: { name: 'Family van' }, merge: true },
+        { col: 'visits', id: 'gone', data: null },
+      ],
+      (col) => (col === 'vehicles' ? 'carVehicles' : 'carServiceLog'),
+    );
+    void done.catch(() => {});
+    expect(entries(storage)[0].ops.map((o) => `${o.kind} ${o.path}`)).toEqual([
+      'set households/h/carVehicles/v2',
+      'set households/h/carVehicles/v1',
+      'delete households/h/carServiceLog/gone',
+    ]);
+    await settle();
+    expect((await getDocFromCache(doc(db, 'households/h/carVehicles/v1'))).data()).toEqual({ name: 'Family van', notes: 'keep' });
+    expect((await getDocFromCache(doc(db, 'households/h/carVehicles/v2'))).data()).toEqual({ name: 'Hatchback' });
   });
 });
