@@ -195,16 +195,24 @@ const OCCASIONS = ['feeding', 'medicine'];
  * What needs attention: overdue things first (oldest first), then today's (all-day first, then by
  * time; finished appointments left out), then the next `soonHours`. Done items are left out, and so
  * are feeds and doses from earlier days (`feeding`, `medicine`): those are missed, not overdue.
+ * Ongoing spans (all-day, several days, no status: a medicine course, a trip) are context for the
+ * calendar, not something to do today, so they are left out too. With `includeDone`, today's
+ * finished items come back as the 'done' group, last.
  */
-export function todayItems(items, now, { soonHours = 48 } = {}) {
+export function todayItems(items, now, { soonHours = 48, includeDone = false } = {}) {
     const today = toYmd(now);
     const soonUntil = now + soonHours * HOUR;
     const out = [];
     for (const item of items) {
         const status = agendaStatus(item, now);
-        if (status === 'done')
-            continue;
         const first = toYmd(item.start);
+        if (status === 'done') {
+            if (includeDone && first <= today && lastDay(item) >= today)
+                out.push({ item, group: 'done', when: 'Done' });
+            continue;
+        }
+        if (item.allDay && !status && lastDay(item) > first)
+            continue;
         if (status === 'overdue') {
             const due = item.allDay ? lastDay(item) : first;
             if (due < today && OCCASIONS.includes(item.kind))
@@ -225,7 +233,7 @@ export function todayItems(items, now, { soonHours = 48 } = {}) {
             out.push({ item, group: 'soon', when: item.allDay ? day : `${day}, ${formatTime(item.start)}` });
         }
     }
-    const rank = { overdue: 0, today: 1, soon: 2 };
+    const rank = { overdue: 0, today: 1, soon: 2, done: 3 };
     return out.sort((a, b) => rank[a.group] - rank[b.group] || byStart(a.item, b.item));
 }
 /** The longest span an item is shown on every day of; longer ones show on their first day only. */

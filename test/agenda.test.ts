@@ -222,12 +222,29 @@ describe('Today', () => {
     expect(todayItems(items, NOW).map((e) => [e.item.id, e.group, e.when])).toEqual([
       ['late', 'overdue', 'Overdue by 3 days'],
       ['feed', 'overdue', `Overdue since ${formatTime(at(10, 2, 8))}`],
-      ['trip', 'today', 'Today'],
       ['bill', 'today', 'Due today'],
       ['visit', 'today', `${formatTime(at(10, 2, 15))} – ${formatTime(at(10, 2, 16))}`],
       ['soon', 'soon', `Tomorrow, ${formatTime(at(10, 3, 9))}`],
     ]);
     expect(todayItems(items, NOW, { soonHours: 24 * 3 }).map((e) => e.item.id)).toContain('bday');
+  });
+
+  test('an ongoing span (several days, no status) is calendar context, not something to do today', () => {
+    const course = item({ id: 'course', kind: 'medicine', allDay: true, start: allDayStart('2026-09-30'), end: allDayStart('2026-10-05') });
+    expect(todayItems([course], NOW)).toEqual([]);
+  });
+
+  test("with includeDone, today's finished items come back last as 'done'", () => {
+    const items = [
+      item({ id: 'fed', kind: 'feeding', start: at(10, 2, 8), status: 'done' }),
+      item({ id: 'yesterday', kind: 'feeding', start: at(10, 1, 8), status: 'done' }),
+      item({ id: 'pm', kind: 'feeding', start: at(10, 2, 19), status: 'upcoming' }),
+    ];
+    expect(todayItems(items, NOW).map((e) => e.item.id)).toEqual(['pm']);
+    expect(todayItems(items, NOW, { includeDone: true }).map((e) => [e.item.id, e.group])).toEqual([
+      ['pm', 'today'],
+      ['fed', 'done'],
+    ]);
   });
 
   test('an all-day span stays upcoming until its last day has passed', () => {
