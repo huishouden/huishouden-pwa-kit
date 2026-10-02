@@ -1,0 +1,36 @@
+{
+  "name": "@piekstra/pwa-kit",
+  "version": "0.1.0",
+  "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
+  "license": "PolyForm-Shield-1.0.0",
+  "type": "module",
+  "exports": {
+    "./vite": { "types": "./dist/vite.d.ts", "default": "./dist/vite.js" },
+    "./firebase": { "types": "./dist/firebase.d.ts", "default": "./dist/firebase.js" },
+    "./e2e": { "types": "./dist/e2e.d.ts", "default": "./dist/e2e.js" }
+  },
+  "bin": { "pwa-icons": "./scripts/icons.ts" },
+  "files": ["dist", "scripts", "templates", "infra"],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "lint": "tsc --noEmit",
+    "test": "bun test test"
+  },
+  "peerDependencies": {
+    "@playwright/test": ">=1.45",
+    "sharp": ">=0.33",
+    "vite-plugin-pwa": ">=1.0"
+  },
+  "peerDependenciesMeta": {
+    "@playwright/test": { "optional": true },
+    "sharp": { "optional": true }
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/bun": "latest",
+    "sharp": "^0.35.5",
+    "typescript": "^5.9.0",
+    "vite": "^8.3.0",
+    "vite-plugin-pwa": "^1.3.0"
+  }
+}

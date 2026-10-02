@@ -1,0 +1,113 @@
+# Reusable CI/CD for a PWA on Firebase Hosting. Callers:
+#
+#   jobs:
+#     pwa:
+#       uses: piekstra/pwa-kit/.github/workflows/pwa.yml@v0
+#       permissions: { contents: read, id-token: write }
+#       with:
+#         hosting-target: spending
+#         site-url: https://example-spending.web.app
+#
+# Caller repo variables: GCP_WIF_PROVIDER, GCP_DEPLOY_SA (deploy is skipped until both are set),
+# VITE_FIREBASE_* (passed to the build). Optional package.json scripts: test (unit), e2e (Playwright,
+# run against site-url after each deploy).
+name: pwa
+
+on:
+  workflow_call:
+    inputs:
+      hosting-target:
+        description: Firebase Hosting target from the caller's .firebaserc
+        type: string
+        required: true
+      site-url:
+        description: Live URL the smoke tests run against
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  leak-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: piekstra/pwa-kit/actions/leak-scan@v0
+
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - name: Unit tests
+        run: if jq -e '.scripts.test' package.json >/dev/null; then bun run test; else echo "no test script"; fi
+      - run: bun run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 1
+
+  deploy:
+    needs: [build, leak-scan]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.GCP_WIF_PROVIDER != ''
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write # keyless auth to Google Cloud via Workload Identity Federation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - run: npx --yes firebase-tools@14 deploy --only "hosting:${{ inputs.hosting-target }}" --non-interactive --message "${{ github.sha }}"
+
+  smoke:
+    # Real-browser checks against the live site, right after it changes.
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip without an e2e script
+        id: has-e2e
+        run: echo "present=$(jq -e '.scripts.e2e' package.json >/dev/null && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - uses: oven-sh/setup-bun@v2
+        if: steps.has-e2e.outputs.present == 'true'
+      - uses: actions/cache@v4
+        if: steps.has-e2e.outputs.present == 'true'
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ hashFiles('bun.lock') }}
+      - if: steps.has-e2e.outputs.present == 'true'
+        run: bun install --frozen-lockfile && bunx playwright install --with-deps chromium
+      - if: steps.has-e2e.outputs.present == 'true'
+        run: bun run e2e
+        env:
+          BASE_URL: ${{ inputs.site-url }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results
+          retention-days: 7
