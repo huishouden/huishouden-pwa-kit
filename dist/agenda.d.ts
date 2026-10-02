@@ -116,7 +116,7 @@ export declare function watchAgenda(db: Firestore, householdId: string, range: A
 export declare function agendaStatus(item: AgendaItem, now: number): AgendaStatus | undefined;
 /** "All day", "3:30 PM", "3:30 PM – 4:30 PM". */
 export declare function agendaTime(item: AgendaItem): string;
-export type TodayGroup = 'overdue' | 'today' | 'soon';
+export type TodayGroup = 'overdue' | 'today' | 'soon' | 'done';
 export interface TodayEntry {
     item: AgendaItem;
     group: TodayGroup;
@@ -126,13 +126,18 @@ export interface TodayEntry {
 export interface TodayOptions {
     /** How far ahead "soon" reaches. Default 48. */
     soonHours?: number;
+    /** Also return today's finished items, as the 'done' group, so a screen can show what's been done. */
+    includeDone?: boolean;
 }
 /**
  * What needs attention: overdue things first (oldest first), then today's (all-day first, then by
  * time; finished appointments left out), then the next `soonHours`. Done items are left out, and so
  * are feeds and doses from earlier days (`feeding`, `medicine`): those are missed, not overdue.
+ * Ongoing spans (all-day, several days, no status: a medicine course, a trip) are context for the
+ * calendar, not something to do today, so they are left out too. With `includeDone`, today's
+ * finished items come back as the 'done' group, last.
  */
-export declare function todayItems(items: AgendaItem[], now: number, { soonHours }?: TodayOptions): TodayEntry[];
+export declare function todayItems(items: AgendaItem[], now: number, { soonHours, includeDone }?: TodayOptions): TodayEntry[];
 export interface AgendaDay {
     day: Ymd;
     /** "Today", "Tomorrow", "Yesterday", or "Tuesday, November 4" (with the year when it isn't this year's). */
