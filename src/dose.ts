@@ -534,7 +534,7 @@ function resolveFrequency({ course, frequencies }: State): void {
 
 /**
  * How much of a usable course was found, 0..1: a schedule (0.4), a dose (0.2), a length or "until
- * gone" (0.15), a name (0.15), nothing left unparsed (0.1); each assumption costs 0.1.
+ * gone" (0.15), a name (0.15), and with any of those, nothing left unparsed (0.1); each assumption costs 0.1.
  */
 export function confidenceOf(c: ParsedCourse): number {
   let score = 0;
@@ -542,7 +542,7 @@ export function confidenceOf(c: ParsedCourse): number {
   if (c.dose) score += 0.2;
   if (c.days || c.untilGone || c.asNeeded) score += 0.15;
   if (c.name) score += 0.15;
-  if (c.unparsed.length === 0) score += 0.1;
+  if (c.unparsed.length === 0 && score > 0) score += 0.1;
   score -= 0.1 * c.assumptions.length;
   return Math.max(0, Math.min(1, Math.round(score * 100) / 100));
 }

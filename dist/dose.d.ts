@@ -92,7 +92,7 @@ export declare function formatDose(amount: number, unit: string): string;
 export declare function parseDirections(text: string): ParsedCourse;
 /**
  * How much of a usable course was found, 0..1: a schedule (0.4), a dose (0.2), a length or "until
- * gone" (0.15), a name (0.15), nothing left unparsed (0.1); each assumption costs 0.1.
+ * gone" (0.15), a name (0.15), and with any of those, nothing left unparsed (0.1); each assumption costs 0.1.
  */
 export declare function confidenceOf(c: ParsedCourse): number;
 /** Clock times ("HH:MM", local) the household uses for each part of the day. */

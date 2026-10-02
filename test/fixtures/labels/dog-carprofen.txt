@@ -1,0 +1,10 @@
+Example Valley Veterinary Clinic
+100 Sample Rd, Exampleton 555-0100
+Rx# 004512   Date: 03/14/2026
+Pet: Biscuit (Canine)   Owner: Example
+CARPROFEN 75 MG CHEWABLE TABLETS
+Give 1 tablet by mouth every 12 hours
+with food for 7 days.
+Qty: 14   Refills: 0
+Dr. A. Sample DVM
+For veterinary use only. Keep out of reach of children.

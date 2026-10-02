@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { VitePWA, type VitePWAOptions } from 'vite-plugin-pwa';
+import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
 
 export interface PwaAppOptions {
   name: string;
@@ -16,6 +17,18 @@ export interface PwaAppOptions {
    * page and image; without it they fall back to relative ones, which some messengers ignore.
    */
   url?: string;
+  /**
+   * Show push notifications (@huishouden/pwa-kit/push): adds `hh-push-sw.js` to the build and
+   * loads it into the generated service worker, which then shows reminders and opens their deep
+   * link when tapped.
+   */
+  push?: boolean;
+  /**
+   * Cache the label-reading engine (@huishouden/pwa-kit/dose `readLabel`) in the service worker
+   * after first use, so reading labels works offline: the tesseract.js worker, WebAssembly core
+   * and English data from jsDelivr, all at pinned versions.
+   */
+  ocr?: boolean;
   /** Overrides merged last, for anything app-specific. */
   overrides?: Partial<VitePWAOptions>;
 }
@@ -26,7 +39,8 @@ export interface PwaAppOptions {
  */
 export function pwaApp(options: PwaAppOptions) {
   const { overrides = {} } = options;
-  return [buildStamp(), linkPreview(options), ...VitePWA({
+  const { importScripts = [], runtimeCaching = [], ...workboxOverrides } = overrides.workbox ?? {};
+  return [buildStamp(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...VitePWA({
     registerType: 'autoUpdate',
     includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
     ...overrides,
@@ -52,7 +66,9 @@ export function pwaApp(options: PwaAppOptions) {
       globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
       navigateFallback: '/index.html',
       navigateFallbackDenylist: FIREBASE_RESERVED_PATHS,
-      ...(overrides.workbox || {}),
+      importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...importScripts],
+      runtimeCaching: [...(options.ocr ? [OCR_CACHE] : []), ...runtimeCaching],
+      ...workboxOverrides,
     },
   })];
 }
@@ -90,6 +106,28 @@ export function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' 
     },
   };
 }
+
+/** Emits the push handlers next to the service worker (see push-sw.ts). */
+function pushServiceWorkerFile() {
+  return {
+    name: 'huishouden-push-sw',
+    apply: 'build' as const,
+    generateBundle(this: { emitFile(file: { type: 'asset'; fileName: string; source: string }): string }) {
+      this.emitFile({ type: 'asset', fileName: PUSH_SW_FILE, source: pushServiceWorkerSource() });
+    },
+  };
+}
+
+/** The OCR engine's files; their URLs carry exact versions, so a cached copy never goes stale. */
+export const OCR_CACHE = {
+  urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/(?:tesseract\.js|tesseract\.js-core|@tesseract\.js-data\/eng)@v?\d/,
+  handler: 'CacheFirst' as const,
+  options: {
+    cacheName: 'hh-ocr',
+    expiration: { maxEntries: 20, maxAgeSeconds: 365 * 86_400 },
+    cacheableResponse: { statuses: [0, 200] },
+  },
+};
 
 /**
  * Firebase Hosting serves its own pages under /__/ (the sign-in popup at /__/auth/handler, SDK

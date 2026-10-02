@@ -1,0 +1,11 @@
+{
+  "parsed": {
+    "name": "Carprofen", "strength": "75 mg", "form": "chewable tablets", "patient": "Biscuit",
+    "dose": "1 tablet", "timesPerDay": 2, "intervalHours": 12, "days": 7, "withFood": true,
+    "route": "by mouth", "unparsed": [], "assumptions": [], "confidence": 1
+  },
+  "course": {
+    "name": "Carprofen 75 mg", "dose": "1 tablet", "timesPerDay": 2, "times": ["08:00", "20:00"],
+    "startDate": "2026-03-14", "days": 7, "withFood": true, "notes": "Every 12 hours"
+  }
+}
