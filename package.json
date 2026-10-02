@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "MIT",
   "type": "module",
@@ -33,9 +33,21 @@
       "types": "./dist/e2e.d.ts",
       "default": "./dist/e2e.js"
     },
+    "./feedback": {
+      "types": "./dist/feedback.d.ts",
+      "default": "./dist/feedback.js"
+    },
     "./firebase": {
       "types": "./dist/firebase.d.ts",
       "default": "./dist/firebase.js"
+    },
+    "./gmail": {
+      "types": "./dist/gmail.d.ts",
+      "default": "./dist/gmail.js"
+    },
+    "./google-token": {
+      "types": "./dist/google-token.d.ts",
+      "default": "./dist/google-token.js"
     },
     "./household": {
       "types": "./dist/household.d.ts",
@@ -49,9 +61,17 @@
       "types": "./dist/logo.d.ts",
       "default": "./dist/logo.js"
     },
+    "./money": {
+      "types": "./dist/money.d.ts",
+      "default": "./dist/money.js"
+    },
     "./oauth-origins": {
       "types": "./dist/oauth-origins.d.ts",
       "default": "./dist/oauth-origins.js"
+    },
+    "./people": {
+      "types": "./dist/people.d.ts",
+      "default": "./dist/people.js"
     },
     "./places": {
       "types": "./dist/places.d.ts",
@@ -69,11 +89,36 @@
       "types": "./dist/react/app-bar.d.ts",
       "default": "./dist/react/app-bar.js"
     },
+    "./react/calendar": {
+      "types": "./dist/react/calendar.d.ts",
+      "default": "./dist/react/calendar.js"
+    },
+    "./react/clock": {
+      "types": "./dist/react/clock.d.ts",
+      "default": "./dist/react/clock.js"
+    },
+    "./react/contacts": {
+      "types": "./dist/react/contacts.d.ts",
+      "default": "./dist/react/contacts.js"
+    },
+    "./react/ui": {
+      "types": "./dist/react/ui.d.ts",
+      "default": "./dist/react/ui.js"
+    },
     "./reminders": {
       "types": "./dist/reminders.d.ts",
       "default": "./dist/reminders.js"
     },
+    "./schedule": {
+      "types": "./dist/schedule.d.ts",
+      "default": "./dist/schedule.js"
+    },
+    "./tailwind.css": "./src/tailwind.css",
     "./theme.css": "./src/theme.css",
+    "./time": {
+      "types": "./dist/time.d.ts",
+      "default": "./dist/time.js"
+    },
     "./vite": {
       "types": "./dist/vite.d.ts",
       "default": "./dist/vite.js"
@@ -90,6 +135,7 @@
     "dist",
     "infra",
     "scripts",
+    "src/tailwind.css",
     "src/theme.css",
     "templates"
   ],
@@ -100,23 +146,27 @@
   },
   "peerDependencies": {
     "@playwright/test": ">=1.45",
-    "sharp": ">=0.33",
-    "vite-plugin-pwa": ">=1.0",
     "firebase": ">=11",
+    "lucide-react": ">=0.400",
     "react": ">=19",
-    "tesseract.js": ">=7 <8"
+    "sharp": ">=0.33",
+    "tesseract.js": ">=7 <8",
+    "vite-plugin-pwa": ">=1.0"
   },
   "peerDependenciesMeta": {
     "@playwright/test": {
       "optional": true
     },
-    "sharp": {
-      "optional": true
-    },
     "firebase": {
       "optional": true
     },
+    "lucide-react": {
+      "optional": true
+    },
     "react": {
+      "optional": true
+    },
+    "sharp": {
       "optional": true
     },
     "tesseract.js": {
@@ -131,6 +181,7 @@
     "@types/react-dom": "^19.3.0",
     "firebase": "^12",
     "happy-dom": "^20.14.5",
+    "lucide-react": "^1.50.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "sharp": "^0.35.5",

@@ -1,0 +1,37 @@
+{
+  "addInterval": [
+    { "from": "2031-01-31", "every": 1, "unit": "month", "expected": "2031-02-28", "why": "clamps to the end of February" },
+    { "from": "2032-01-31", "every": 1, "unit": "month", "expected": "2032-02-29", "why": "leap year" },
+    { "from": "2031-02-28", "every": 1, "unit": "month", "day": 31, "expected": "2031-03-31", "why": "the anchor's 31st comes back" },
+    { "from": "2031-11-15", "every": 3, "unit": "month", "expected": "2032-02-15", "why": "across a year end" },
+    { "from": "2032-02-29", "every": 1, "unit": "year", "expected": "2033-02-28", "why": "leap day plus a year" },
+    { "from": "2031-10-16", "every": 2, "unit": "week", "expected": "2031-10-30" },
+    { "from": "2031-12-31", "every": 1, "unit": "day", "expected": "2032-01-01" },
+    { "from": "2031-03-08", "every": 1, "unit": "day", "expected": "2031-03-09", "why": "over a DST change" }
+  ],
+  "fixed": [
+    { "schedule": { "kind": "fixed", "every": 1, "unit": "month", "anchor": "2031-01-31" }, "onOrAfter": "2031-04-01", "expected": "2031-04-30", "why": "month end each month" },
+    { "schedule": { "kind": "fixed", "every": 1, "unit": "month", "anchor": "2031-01-31" }, "onOrAfter": "2031-05-01", "expected": "2031-05-31" },
+    { "schedule": { "kind": "fixed", "every": 3, "unit": "month", "anchor": "2031-01-28" }, "onOrAfter": "2031-10-16", "expected": "2031-10-28" },
+    { "schedule": { "kind": "fixed", "every": 3, "unit": "month", "anchor": "2031-01-28" }, "onOrAfter": "2031-10-28", "expected": "2031-10-28", "why": "on the day counts" },
+    { "schedule": { "kind": "fixed", "every": 1, "unit": "year", "anchor": "2029-02-01" }, "onOrAfter": "2031-10-16", "expected": "2032-02-01" },
+    { "schedule": { "kind": "fixed", "every": 2, "unit": "week", "anchor": "2031-03-07" }, "onOrAfter": "2031-10-16", "expected": "2031-10-17" },
+    { "schedule": { "kind": "fixed", "every": 1, "unit": "year", "anchor": "2035-06-01" }, "onOrAfter": "2031-10-16", "expected": "2035-06-01", "why": "an anchor in the future is the first date" }
+  ],
+  "done": [
+    { "schedule": { "kind": "after-done", "every": 3, "unit": "month" }, "due": "2031-10-20", "doneOn": "2031-10-16", "expected": "2032-01-16", "why": "after-done counts from the day it was done" },
+    { "schedule": { "kind": "after-done", "every": 6, "unit": "month" }, "due": "2031-10-11", "doneOn": "2031-10-16", "expected": "2032-04-16", "why": "late, still from the day it was done" },
+    { "schedule": { "kind": "fixed", "every": 1, "unit": "month", "anchor": "2031-01-01" }, "due": "2031-11-01", "doneOn": "2031-10-28", "expected": "2031-12-01", "why": "early covers the coming date" },
+    { "schedule": { "kind": "fixed", "every": 1, "unit": "month", "anchor": "2031-01-01" }, "due": "2031-09-01", "doneOn": "2031-10-05", "expected": "2031-11-01", "why": "overdue: once covers the missed dates" },
+    { "schedule": { "kind": "fixed", "every": 1, "unit": "year", "anchor": "2030-11-02" }, "due": "2031-11-02", "doneOn": "2031-11-02", "expected": "2032-11-02", "why": "on the day" }
+  ],
+  "describe": [
+    { "schedule": { "kind": "after-done", "every": 3, "unit": "month" }, "expected": "Every 3 months" },
+    { "schedule": { "kind": "after-done", "every": 1, "unit": "week" }, "expected": "Every week" },
+    { "schedule": { "kind": "fixed", "every": 1, "unit": "month", "anchor": "2031-01-01" }, "expected": "Every month on the 1st" },
+    { "schedule": { "kind": "fixed", "every": 3, "unit": "month", "anchor": "2031-01-22" }, "expected": "Every 3 months on the 22nd" },
+    { "schedule": { "kind": "fixed", "every": 1, "unit": "year", "anchor": "2030-11-02" }, "expected": "Every year on November 2" },
+    { "schedule": { "kind": "fixed", "every": 2, "unit": "week", "anchor": "2031-03-07" }, "expected": "Every 2 weeks on Friday" },
+    { "schedule": { "kind": "fixed", "every": 10, "unit": "day", "anchor": "2031-03-07" }, "expected": "Every 10 days" }
+  ]
+}

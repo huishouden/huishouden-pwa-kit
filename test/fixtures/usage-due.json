@@ -1,0 +1,108 @@
+{
+  "now": "2031-04-15T09:30:00",
+  "latest": {
+    "date": "2031-04-12",
+    "reading": 41400
+  },
+  "pace": 34,
+  "cases": [
+    {
+      "label": "both known, distance and time both ahead",
+      "item": {
+        "everyMonths": 6,
+        "everyMeter": 5000,
+        "lastDate": "2030-11-08",
+        "lastReading": 37000
+      },
+      "state": "soon",
+      "daysLeft": 23,
+      "meterLeft": 600
+    },
+    {
+      "label": "far off on both",
+      "item": {
+        "everyMonths": 6,
+        "everyMeter": 6000,
+        "lastDate": "2031-01-20",
+        "lastReading": 38600
+      },
+      "state": "ok",
+      "daysLeft": 96,
+      "meterLeft": 3200
+    },
+    {
+      "label": "time only, passed",
+      "item": {
+        "everyMonths": 12,
+        "lastDate": "2030-03-28"
+      },
+      "state": "overdue",
+      "daysLeft": -18,
+      "meterLeft": null
+    },
+    {
+      "label": "distance passed, time not yet",
+      "item": {
+        "everyMonths": 6,
+        "everyMeter": 3000,
+        "lastDate": "2031-01-02",
+        "lastReading": 38000
+      },
+      "state": "overdue",
+      "daysLeft": 78,
+      "meterLeft": -400
+    },
+    {
+      "label": "both passed",
+      "item": {
+        "everyMonths": 3,
+        "everyMeter": 3000,
+        "lastDate": "2030-12-01",
+        "lastReading": 37000
+      },
+      "state": "overdue",
+      "daysLeft": -45,
+      "meterLeft": -1400
+    },
+    {
+      "label": "distance only, with a pace estimate",
+      "item": {
+        "everyMeter": 7500,
+        "lastDate": "2031-01-10",
+        "lastReading": 39000
+      },
+      "state": "ok",
+      "daysLeft": null,
+      "meterLeft": 5100
+    },
+    {
+      "label": "distance runs out within the soon window at this pace",
+      "item": {
+        "everyMeter": 10000,
+        "lastReading": 32200
+      },
+      "state": "soon",
+      "daysLeft": null,
+      "meterLeft": 800
+    },
+    {
+      "label": "time due today",
+      "item": {
+        "everyMonths": 12,
+        "lastDate": "2030-04-15"
+      },
+      "state": "soon",
+      "daysLeft": 0,
+      "meterLeft": null
+    },
+    {
+      "label": "never recorded",
+      "item": {
+        "everyMonths": 12
+      },
+      "state": "unknown",
+      "daysLeft": null,
+      "meterLeft": null
+    }
+  ]
+}
