@@ -6,7 +6,8 @@
  * Signed-in tests don't use Google: CI mints Firebase custom tokens for invented test users with
  * the staging deploy service account (IAM `signJwt`, keyless through Workload Identity Federation),
  * and the page signs in with `signInWithCustomToken`. The seed gives those users verified emails
- * (the rules require `email_verified`) and one household they both belong to.
+ * (the rules require `email_verified`) and one household they all belong to: test-a its admin
+ * (the creator, first), test-b a member and test-helper a helper (`./roles`).
  *
  * Runs in Node or bun (CI, Playwright), never in an app bundle.
  */
@@ -15,11 +16,13 @@ export const STAGING_PROJECT = 'huishouden-staging';
 export const TEST_USERS = [
     { uid: 'test-a', email: 'test-a@example.com', name: 'Test A' },
     { uid: 'test-b', email: 'test-b@example.com', name: 'Test B' },
+    { uid: 'test-helper', email: 'test-helper@example.com', name: 'Test Helper' },
 ];
 export const TEST_HOUSEHOLD = {
     id: 'test-household',
     name: 'Test household',
     members: TEST_USERS.map((u) => u.email),
+    roles: { 'test-a@example.com': 'admin', 'test-b@example.com': 'member', 'test-helper@example.com': 'helper' },
     // Fixed and old, so `pickHousehold` always chooses it over anything a test creates.
     createdAt: Date.UTC(2026, 0, 1),
 };
@@ -77,6 +80,7 @@ export function seedRequests() {
                     name: str(TEST_HOUSEHOLD.name),
                     members,
                     joined: members,
+                    roles: { mapValue: { fields: Object.fromEntries(Object.entries(TEST_HOUSEHOLD.roles).map(([e, r]) => [e, str(r)])) } },
                     createdAt: { integerValue: String(TEST_HOUSEHOLD.createdAt) },
                 },
             },

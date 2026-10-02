@@ -16,6 +16,8 @@ const docsOf = (q: { path: string; w: Where[] }) =>
     .filter(([p, d]) => p.startsWith(`${q.path}/`) && !p.slice(q.path.length + 1).includes('/') && q.w.every((w) => matches(d, w)))
     .map(([p, d]) => ({ id: p.split('/').pop()!, ref: ref(p), data: () => d }));
 let listener: (() => void) | null = null;
+// Paths the stand-in refuses like the rules would (a helper writing over an item without the flag).
+const refuse = new Set<string>();
 mock.module('firebase/firestore', () => ({
   ...real,
   collection: (_db: unknown, ...parts: string[]) => ({ path: parts.join('/') }),
@@ -30,10 +32,12 @@ mock.module('firebase/firestore', () => ({
   },
   writeBatch: () => {
     const ops: (() => void)[] = [];
+    const paths: string[] = [];
     return {
-      set: (r: Ref, d: Record<string, unknown>) => ops.push(() => (writes++, store.set(r.path, d))),
-      delete: (r: Ref) => ops.push(() => (writes++, store.delete(r.path))),
+      set: (r: Ref, d: Record<string, unknown>) => (paths.push(r.path), ops.push(() => (writes++, store.set(r.path, d)))),
+      delete: (r: Ref) => (paths.push(r.path), ops.push(() => (writes++, store.delete(r.path)))),
       commit: async () => {
+        if (paths.some((p) => refuse.has(p))) throw Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
         ops.forEach((op) => op());
         listener?.();
       },
@@ -58,6 +62,7 @@ const url = 'https://home.example.com/jobs/j1';
 const stored = () => [...store.entries()].filter(([p]) => p.startsWith(`households/${H}/agenda/`)).map(([p, d]) => toAgendaItem(p.split('/').pop()!, d));
 const reset = () => {
   store.clear();
+  refuse.clear();
   writes = 0;
 };
 
@@ -173,6 +178,49 @@ describe('syncAgenda', () => {
     reset();
     await syncAgenda(db, H, 'bills', [job({ kind: 'bill', ref: 'bill:b1', title: 'Electric' })], BY);
     expect(await syncAgenda(db, H, 'bills', [], BY)).toEqual({ written: 0, deleted: 1, unchanged: 0 });
+  });
+});
+
+describe('private items', () => {
+  const path = (ref: string) => `households/${H}/agenda/${agendaId('pet', ref, job().start)}`;
+
+  test('every item is written with the flag, private only when asked', () => {
+    expect(agendaDoc('home', job(), 'a@example.com').private).toBe(false);
+    expect(agendaDoc('home', job({ private: true }), 'a@example.com').private).toBe(true);
+    expect(AGENDA_FIELDS).toContain('private');
+    // Spending's and Bills' are money: always private, as the rules require.
+    expect(agendaDoc('bills', job(), 'a@example.com').private).toBe(true);
+  });
+
+  test("an admin's or member's sync writes the flag on items saved before it", async () => {
+    reset();
+    const { private: _p, ...legacy } = agendaDoc('pet', job({ ref: 'feed:1' }), 'a@example.com', NOW);
+    store.set(path('feed:1'), legacy);
+    expect(await syncAgenda(db, H, 'pet', [job({ ref: 'feed:1' })], BY)).toEqual({ written: 1, deleted: 0, unchanged: 0 });
+    expect(store.get(path('feed:1'))?.private).toBe(false);
+  });
+
+  test("a helper's sync reads and writes only open items, and one refused write doesn't stop the rest", async () => {
+    reset();
+    await syncAgenda(db, H, 'pet', [job({ ref: 'vet:1', private: true }), job({ ref: 'feed:1' }), job({ ref: 'feed:2' })], BY);
+    const { private: _p, ...legacy } = agendaDoc('pet', job({ ref: 'feed:3' }), 'a@example.com', NOW);
+    store.set(path('feed:3'), legacy);
+    refuse.add(path('feed:3'));
+    // The helper's device can't see the private vet visit, so it neither publishes nor deletes it.
+    const result = await syncAgenda(db, H, 'pet', [job({ ref: 'feed:1', status: 'done' }), job({ ref: 'feed:3' })], { ...BY, restricted: true });
+    expect(result).toEqual({ written: 2, deleted: 1, unchanged: 0 });
+    expect(store.has(path('vet:1'))).toBe(true);
+    expect(store.get(path('feed:1'))?.status).toBe('done');
+    expect(store.has(path('feed:2'))).toBe(false);
+    expect(store.get(path('feed:3'))?.private).toBeUndefined();
+  });
+
+  test('a helper watches only open items', async () => {
+    reset();
+    await syncAgenda(db, H, 'pet', [job({ ref: 'vet:1', title: 'Vet', private: true }), job({ ref: 'feed:1', title: 'Feed' })], BY);
+    let seen: AgendaItem[] = [];
+    watchAgenda(db, H, { from: at(10, 1), to: at(11, 1), restricted: true }, (items) => (seen = items));
+    expect(seen.map((i) => i.title)).toEqual(['Feed']);
   });
 });
 
