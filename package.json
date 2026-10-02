@@ -1,38 +1,50 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "MIT",
   "type": "module",
   "exports": {
-    "./vite": {
-      "types": "./dist/vite.d.ts",
-      "default": "./dist/vite.js"
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "default": "./dist/auth.js"
     },
-    "./firebase": {
-      "types": "./dist/firebase.d.ts",
-      "default": "./dist/firebase.js"
+    "./calendar": {
+      "types": "./dist/calendar.d.ts",
+      "default": "./dist/calendar.js"
+    },
+    "./contacts": {
+      "types": "./dist/contacts.d.ts",
+      "default": "./dist/contacts.js"
+    },
+    "./design-check": {
+      "types": "./dist/design-check.d.ts",
+      "default": "./dist/design-check.js"
     },
     "./e2e": {
       "types": "./dist/e2e.d.ts",
       "default": "./dist/e2e.js"
     },
-    "./auth": {
-      "types": "./dist/auth.d.ts",
-      "default": "./dist/auth.js"
+    "./firebase": {
+      "types": "./dist/firebase.d.ts",
+      "default": "./dist/firebase.js"
     },
     "./household": {
       "types": "./dist/household.d.ts",
       "default": "./dist/household.js"
     },
-    "./theme.css": "./src/theme.css",
-    "./design-check": {
-      "types": "./dist/design-check.d.ts",
-      "default": "./dist/design-check.js"
-    },
     "./logo": {
       "types": "./dist/logo.d.ts",
       "default": "./dist/logo.js"
+    },
+    "./places": {
+      "types": "./dist/places.d.ts",
+      "default": "./dist/places.js"
+    },
+    "./theme.css": "./src/theme.css",
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "default": "./dist/vite.js"
     }
   },
   "bin": {
