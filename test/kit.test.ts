@@ -42,12 +42,15 @@ describe('pwaApp', () => {
 });
 
 describe('telemetryChunks', () => {
+  type Namer = (chunk: { name: string; moduleIds: string[] }) => string;
+  const namer = (user?: Parameters<ReturnType<typeof telemetryChunks>['config']>[0]) =>
+    (telemetryChunks().config(user) as { build: { rollupOptions: { output: { chunkFileNames: Namer } } } }).build.rollupOptions.output.chunkFileNames;
   const agent = { name: 'jserrors', moduleIds: ['/app/node_modules/@newrelic/browser-agent/src/features/jserrors/index.js'] };
   const mixed = { name: 'index', moduleIds: ['/app/src/App.tsx', '/app/node_modules/@newrelic/browser-agent/src/x.js'] };
   const render = (template: string, chunk: { name: string }) => template.replace('[name]', chunk.name).replace('[hash]', 'abc123');
 
   test('names chunks made only of the New Relic agent so the precache glob skips them', () => {
-    const name = telemetryChunks().config().build.rollupOptions.output.chunkFileNames;
+    const name = namer();
     const glob = new Bun.Glob(TELEMETRY_CHUNKS);
     expect(glob.match(render(name(agent), agent))).toBe(true);
     expect(glob.match(render(name(mixed), mixed))).toBe(false);
@@ -61,7 +64,7 @@ describe('telemetryChunks', () => {
   });
 
   test("keeps the app's assetsDir and its own chunkFileNames for other chunks", () => {
-    const name = telemetryChunks().config({ build: { assetsDir: 'static', rollupOptions: { output: { chunkFileNames: (c: { name: string }) => `static/js/${c.name}.js` } } } }).build.rollupOptions.output.chunkFileNames;
+    const name = namer({ build: { assetsDir: 'static', rollupOptions: { output: { chunkFileNames: (c: { name: string }) => `static/js/${c.name}.js` } } } });
     expect(name(agent)).toBe('static/hh-telemetry-[name]-[hash].js');
     expect(name(mixed)).toBe('static/js/index.js');
     expect(new Bun.Glob(TELEMETRY_CHUNKS).match(render(name(agent), agent))).toBe(true);
