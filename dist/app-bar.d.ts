@@ -18,6 +18,10 @@ export declare function isSuite(app: string): boolean;
 export declare function versionLabel(app: string, version: string): string;
 /** Whether `url` points at the page's own site, where an "All apps" link would go nowhere new. */
 export declare function sameSite(url: string, base: string): boolean;
+/** The portal's page saying what the apps collect, linked from every app's account menu. */
+export declare const PRIVACY_PATH = "/privacy";
+/** The privacy page on the portal `portalUrl` points at ("https://example-portal.web.app/privacy"). */
+export declare function privacyUrl(portalUrl: string, base: string): string;
 declare const Base: typeof HTMLElement;
 export declare class HhAppBar extends Base {
     #private;
