@@ -210,6 +210,21 @@ describe('useCalendarSuggestions', () => {
     expect(card()).toBeNull();
   });
 
+  test('looks on open even before Firebase reports the member, and again for a restored session', async () => {
+    let report: (u: unknown) => void = () => {};
+    const restoring = { currentUser: null as typeof user | null, onAuthStateChanged: (cb: (u: unknown) => void) => ((report = cb), () => {}) } as unknown as { currentUser: typeof user | null };
+    window.__mockCalendarToken = 'test-token';
+    window.__mockCalendarEvents = [match('m1', 'Vet — Biscuit', at(20, 15)), match('m2', 'Groomer', at(21, 9))];
+    dismissEvent('Pet', 'u1', 'm1');
+    render(<Harness auth={restoring as never} />);
+    await settle();
+    expect(state!.suggestions.map((m) => m.id)).toEqual(['m1', 'm2']);
+    restoring.currentUser = user;
+    act(() => report(user));
+    await settle();
+    expect(state!.suggestions.map((m) => m.id)).toEqual(['m2']);
+  });
+
   test('browser tests stand in with __mockCalendarEvents and __mockCalendarToken, signed out', async () => {
     window.__mockCalendarEvents = [match('m1', 'Vet — Biscuit', at(20, 15)), match('old', 'Vet', at(1, 9)), match('far', 'Vet', at(14, 9) + 90 * 86_400_000)];
     window.__mockCalendarToken = 'test-token';

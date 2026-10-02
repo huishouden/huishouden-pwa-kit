@@ -137,13 +137,21 @@ export function useCalendarSuggestions({ auth, words, isImported, app, horizonDa
                 setCanScan(!!cachedCalendarToken(auth));
         }
     }, [auth]);
-    useEffect(() => auth.onAuthStateChanged((user) => {
-        const who = user?.uid ?? GUEST;
-        setMember(who);
-        setDismissed(dismissedEvents(app, who));
-        setMatches([]);
-        void scan();
-    }), [auth, app, scan]);
+    // On open, then again whenever the signed-in member changes (a restored session arrives after mount).
+    const looked = useRef(null);
+    useEffect(() => {
+        const lookFor = (who) => {
+            if (looked.current === who)
+                return;
+            looked.current = who;
+            setMember(who);
+            setDismissed(dismissedEvents(app, who));
+            setMatches([]);
+            void scan();
+        };
+        lookFor(auth.currentUser?.uid ?? GUEST);
+        return auth.onAuthStateChanged((user) => lookFor(user?.uid ?? GUEST));
+    }, [auth, app, scan]);
     useEffect(() => {
         const onShow = () => {
             if (document.visibilityState === 'visible' && Date.now() - lastScan.current >= SUGGESTION_RESCAN_MS)
