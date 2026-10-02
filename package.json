@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.38.2",
+  "version": "0.39.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "PolyForm-Shield-1.0.0",
   "type": "module",
@@ -60,6 +60,10 @@
     "./google-token": {
       "types": "./dist/google-token.d.ts",
       "default": "./dist/google-token.js"
+    },
+    "./google-tasks": {
+      "types": "./dist/google-tasks.d.ts",
+      "default": "./dist/google-tasks.js"
     },
     "./household": {
       "types": "./dist/household.d.ts",
@@ -129,6 +133,10 @@
       "types": "./dist/react/contacts.d.ts",
       "default": "./dist/react/contacts.js"
     },
+    "./react/google-tasks": {
+      "types": "./dist/react/google-tasks.d.ts",
+      "default": "./dist/react/google-tasks.js"
+    },
     "./react/photo": {
       "types": "./dist/react/photo.d.ts",
       "default": "./dist/react/photo.js"
@@ -136,6 +144,10 @@
     "./react/push": {
       "types": "./dist/react/push.d.ts",
       "default": "./dist/react/push.js"
+    },
+    "./react/suggestions": {
+      "types": "./dist/react/suggestions.d.ts",
+      "default": "./dist/react/suggestions.js"
     },
     "./react/ui": {
       "types": "./dist/react/ui.d.ts",
@@ -152,6 +164,10 @@
     "./staging": {
       "types": "./dist/staging.d.ts",
       "default": "./dist/staging.js"
+    },
+    "./suggestions": {
+      "types": "./dist/suggestions.d.ts",
+      "default": "./dist/suggestions.js"
     },
     "./tailwind.css": "./src/tailwind.css",
     "./theme.css": "./src/theme.css",

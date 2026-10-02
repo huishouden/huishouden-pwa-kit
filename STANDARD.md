@@ -88,6 +88,9 @@ user of it (dogfooding), never a special case. So:
   same 60 days three ways.
 - **The kit holds mechanism, the app holds policy.** Generic arithmetic, wording and components go
   in the kit; an app's own roles, search words, limits and labels are passed in as arguments.
+- **Suggestions from Google services** (new calendar events, new Google Tasks) use `useSuggestions`
+  (`./react/suggestions`): they look only with a token the device already has, never open Google's
+  window, and say plainly that they stop an hour after the member last connected on that device.
 - **Google API scopes go through `googleAccessToken`**, so a token is asked for once and reused for
   its hour across features, and a revoked one is forgotten on the 401. Tokens come from Google
   Identity Services' token client with the app's OAuth web client (`configureGoogleTokens` with
