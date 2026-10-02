@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+    # Release PRs (release-please, opened by github-actions[bot]) touch only these two files. GitHub
+    # holds runs for bot-opened PRs until someone approves them, and an unapproved run expires as a
+    # failure with no jobs; skipping them here means no run is created at all. A job-level `if:`
+    # can't do this: the approval gate is on the whole run, before any job is evaluated. The merge
+    # to main still runs everything (push has no path filter).
+    paths-ignore: [CHANGELOG.md, package.json]
   workflow_dispatch:
 
 concurrency:

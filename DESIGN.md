@@ -128,7 +128,8 @@ neon or saturated accents.
 
 ## Components
 
-Use these shapes (class strings mirror the tasks app's `ui.tsx`):
+React apps take these from `@huishouden/pwa-kit/react/ui` (with `@huishouden/pwa-kit/tailwind.css`)
+rather than copying the class strings; the shapes are:
 
 - **Primary button:** forest-700 fill, white text, `rounded-xl px-4 py-2.5 font-medium`, min height
   44px. One per screen region.
@@ -140,6 +141,10 @@ Use these shapes (class strings mirror the tasks app's `ui.tsx`):
 - **List row:** full-width, 44px+ tall, stone-200 divider, primary text stone-800, meta stone-600.
 - **Card:** white, `rounded-2xl`, stone-200 border or `shadow-sm`, 20–24px padding, one heading.
 - **Icons:** lucide-react, stroke 2–2.2, 16/20/24px, coloured by text colour; no emoji as icons.
+- **Toast:** one at a time at the bottom, stone-800 (red-700 for errors), with Undo for anything
+  cheap to reverse; 6 seconds, 9 for errors (`Toast`, `useToast`).
+- **Due wording:** "Due in 3 weeks", "Overdue by 5 days", "Overdue: gutter cleaning" from
+  `@huishouden/pwa-kit/time`, so every app says the same distance the same way.
 - **Empty and loading states:** one sentence and, if useful, one action. No spinners longer than a
   second without text.
 

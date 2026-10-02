@@ -63,6 +63,19 @@ user of it (dogfooding), never a special case. So:
   app's data store (a sheet tab, Firestore), never in the repo, including test fixtures (use
   made-up values). A leak scan can't recognise most of these, so this rule is the protection.
 
+## Shared code
+
+- **Copy once, then extract.** When a second app needs code another app already has, it moves into
+  the kit instead of being copied: time and due wording (`/time`), schedules (`/schedule`), money
+  (`/money`), Google tokens (`/google-token`, `/gmail`), calendar import (`/calendar`,
+  `/react/calendar`), contacts (`/contacts`, `/react/contacts`) and the React UI primitives
+  (`/react/ui`, `/react/clock`) already have. Copies drift: before extraction four apps worded the
+  same 60 days three ways.
+- **The kit holds mechanism, the app holds policy.** Generic arithmetic, wording and components go
+  in the kit; an app's own roles, search words, limits and labels are passed in as arguments.
+- **Google API scopes go through `googleAccessToken`**, so a token is asked for once and reused for
+  its hour across features, and a revoked one is forgotten on the 401.
+
 ## Notifications
 
 Reminders reach people as push notifications through one shared sender,
@@ -102,6 +115,9 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 - Repo variables (not secrets; the Firebase web config is public by design): `GCP_WIF_PROVIDER`,
   `GCP_DEPLOY_SA`, `VITE_FIREBASE_*`. The bootstrap sets them.
 - Deploy waits on `leak-scan` and `build`. `concurrency: cancel-in-progress` on every workflow.
+- `pull_request` ignores `CHANGELOG.md` and `package.json`-only changes (`templates/ci.yml`): release
+  PRs are opened by github-actions[bot], and GitHub holds a bot-opened PR's run for approval and
+  fails it with no jobs when nobody approves. The release commit still runs everything on main.
 - Real secrets (test account passwords, API tokens) go in GitHub Actions secrets and are read
   only in the jobs that need them. Never in argv, logs, or the repo.
 

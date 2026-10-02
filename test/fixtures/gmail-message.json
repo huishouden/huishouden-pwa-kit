@@ -1,0 +1,57 @@
+{
+  "id": "msg-0001",
+  "threadId": "thr-0001",
+  "internalDate": "1935493200000",
+  "payload": {
+    "mimeType": "multipart/mixed",
+    "headers": [
+      {
+        "name": "From",
+        "value": "Example Power Co <billing@power.example.com>"
+      },
+      {
+        "name": "Subject",
+        "value": "Your bill is ready"
+      },
+      {
+        "name": "Date",
+        "value": "Fri, 2 May 2031 13:00:00 +0000"
+      }
+    ],
+    "body": {
+      "size": 0
+    },
+    "parts": [
+      {
+        "mimeType": "multipart/alternative",
+        "body": {
+          "size": 0
+        },
+        "parts": [
+          {
+            "mimeType": "text/plain",
+            "body": {
+              "size": 40,
+              "data": "QW1vdW50IGR1ZTogJDEyMC4wMApEdWUgZGF0ZTogTWF5IDIwLCAyMDMxCg"
+            }
+          },
+          {
+            "mimeType": "text/html",
+            "body": {
+              "size": 80,
+              "data": "PHRhYmxlPjx0cj48dGQ-QW1vdW50IGR1ZTwvdGQ-PHRkPiQxMjAuMDA8L3RkPjwvdHI-PHRyPjx0ZD5EdWUgZGF0ZTwvdGQ-PHRkPk1heSAyMCwgMjAzMTwvdGQ-PC90cj48L3RhYmxlPg"
+            }
+          }
+        ]
+      },
+      {
+        "mimeType": "application/pdf",
+        "filename": "statement.pdf",
+        "body": {
+          "attachmentId": "att-0001",
+          "size": 1000
+        }
+      }
+    ]
+  }
+}

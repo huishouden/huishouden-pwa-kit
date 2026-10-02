@@ -1,4 +1,6 @@
-import { GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth';
+import { popupBlocked, popupCancelled } from './feedback';
+import { googleAccessToken, googleFetch } from './google-token';
+import { toYmd } from './time';
 /**
  * Finds Google Calendar events that match a piece of household data (a task, an appointment), so
  * an app can fill in its date, time and place from the calendar instead of retyping them.
@@ -30,29 +32,12 @@ export function searchPhrases(text) {
         phrases.push(longest);
     return [...new Set(phrases)].slice(0, 4);
 }
-let cached = null;
 /**
- * A short-lived token that can read the signed-in person's calendars. Re-confirms their Google
- * account in a popup with the calendar scopes added; the first time, Google asks to allow access.
+ * A token that can read the signed-in person's calendars. The first time, Google asks to allow
+ * access in a popup (call from a tap); the token is then reused for its hour.
  */
-export async function calendarAccessToken(auth) {
-    const user = auth.currentUser;
-    if (!user)
-        throw new Error('Sign in first.');
-    if (cached && cached.uid === user.uid && cached.expires > Date.now())
-        return cached.token;
-    const provider = new GoogleAuthProvider();
-    for (const scope of CALENDAR_SCOPES)
-        provider.addScope(scope);
-    if (user.email)
-        provider.setCustomParameters({ login_hint: user.email });
-    const result = await reauthenticateWithPopup(user, provider);
-    const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
-    if (!token)
-        throw new Error('Google did not grant calendar access.');
-    // Google access tokens last an hour; refresh a little early.
-    cached = { uid: user.uid, token, expires: Date.now() + 55 * 60_000 };
-    return token;
+export function calendarAccessToken(auth) {
+    return googleAccessToken(auth, CALENDAR_SCOPES, { deniedMessage: 'Google did not grant calendar access.' });
 }
 const localDay = (date) => (([y, m, d]) => new Date(y, m - 1, d).getTime())(date.split('-').map(Number));
 export function toMatch(e, calendarName) {
@@ -73,18 +58,11 @@ export function toMatch(e, calendarName) {
         calendarName,
     };
 }
-async function api(token, path, params) {
+function api(token, path, params) {
     const url = new URL(`https://www.googleapis.com/calendar/v3/${path}`);
     for (const [k, v] of Object.entries(params))
         url.searchParams.set(k, v);
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 401)
-        cached = null;
-    if (!res.ok) {
-        const body = (await res.json().catch(() => ({})));
-        throw new Error(`[${res.status}] Calendar: ${body.error?.message ?? res.statusText}`);
-    }
-    return (await res.json());
+    return googleFetch(token, url, { label: 'Calendar' });
 }
 /**
  * Events in any of the person's calendars matching one of the queries, soonest first. Each query
@@ -126,4 +104,54 @@ export async function findCalendarEvents(auth, queries, options = {}) {
             break;
     }
     return [...found.values()].sort((a, b) => a.start - b.start).slice(0, limit);
+}
+// ---- Importing events into an app's own records ----
+/**
+ * Calendar descriptions often arrive as HTML: line breaks kept, tags dropped, common entities
+ * decoded, at most `max` characters (cut with "…") so notes stay within the app's rules.
+ */
+export function plainText(description, max = Number.POSITIVE_INFINITY) {
+    const text = description
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|li)>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    if (text.length <= max)
+        return text;
+    return `${text.slice(0, max - 1).trimEnd()}…`;
+}
+const sameTitle = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+/** Whether a record already stands for this event: the same event id or link, or the same title at the same time (or on the same day). */
+export function isImported(m, records) {
+    return records.some((r) => (r.calendarEventId && r.calendarEventId === m.id) ||
+        (r.calendarLink && r.calendarLink === m.link) ||
+        (((r.at !== undefined && r.at === m.start) || (r.date !== undefined && r.date === toYmd(m.start))) && sameTitle(r.title, m.title)));
+}
+/** Events not yet imported, each once, soonest first. */
+export function notImported(matches, records) {
+    const seen = new Set();
+    return matches
+        .filter((m) => {
+        if (seen.has(m.id) || isImported(m, records))
+            return false;
+        seen.add(m.id);
+        return true;
+    })
+        .sort((a, b) => a.start - b.start);
+}
+/** A readable reason for a failed calendar search; every case offers Try again. */
+export function calendarError(e) {
+    if (popupCancelled(e))
+        return 'Calendar access was not allowed. Try again when you are ready.';
+    if (popupBlocked(e))
+        return 'The browser blocked the Google window. Allow pop-ups for this site and try again.';
+    return "Couldn't search your calendar. Check the connection and try again.";
 }
