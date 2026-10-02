@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test';
+import { CONTENT_SECURITY_POLICY, permissionsPolicy } from './security-headers.js';
 import { mintCustomToken, stagingCredentialsFromEnv, stagingWebConfig, testUser } from './staging.js';
 /** Loads `path` and fails on any uncaught page error. Returns the errors seen for further checks. */
 export async function expectCleanLoad(page, path = '/') {
@@ -38,6 +39,50 @@ export async function expectGoogleSignInPopup(page, context, openPopup, path = '
     expect(redirect).toMatch(/\/__\/auth\/handler$/);
     await expect(popup.locator('body')).not.toContainText('redirect_uri_mismatch');
     await expect(popup.locator('body')).toContainText(/Sign in|Choose an account/);
+}
+/**
+ * The site's security headers as served (STANDARD.md "Security headers"): `url` (default `/`) is
+ * frame-denied, sniff-proof and sends only the device permissions in `features`, while the same
+ * origin's `/__/auth/handler` is not frame-denied, so Google sign-in keeps working.
+ */
+export async function expectSecurityHeaders(request, url = '/', features = {}) {
+    const res = await request.get(url);
+    expect(res.ok(), `${url} loads`).toBe(true);
+    const h = res.headers();
+    expect(h['x-frame-options'], 'X-Frame-Options').toBe('DENY');
+    for (const part of CONTENT_SECURITY_POLICY.split('; '))
+        expect(h['content-security-policy'] ?? '', 'Content-Security-Policy').toContain(part);
+    expect(h['referrer-policy'], 'Referrer-Policy').toBe('strict-origin-when-cross-origin');
+    expect(h['x-content-type-options'], 'X-Content-Type-Options').toBe('nosniff');
+    expect(h['permissions-policy'], 'Permissions-Policy').toBe(permissionsPolicy(features));
+    const handler = await request.get(new URL('/__/auth/handler', res.url()).href);
+    expect(handler.ok(), '/__/auth/handler loads').toBe(true);
+    expect(handler.headers()['x-frame-options'], '/__/auth/handler is not frame-denied').toBeUndefined();
+    expect(handler.headers()['content-security-policy'] ?? '', '/__/auth/handler has no frame-ancestors').not.toContain('frame-ancestors');
+}
+/**
+ * The "Sample data" banner (`SampleBanner` from `/react/ui`) stays one line on a 390px phone: the
+ * chip and the short text side by side. Restores the viewport afterwards.
+ */
+export async function expectCompactSampleBanner(page, path) {
+    const before = page.viewportSize();
+    await page.setViewportSize({ width: 390, height: 844 });
+    try {
+        if (path !== undefined)
+            await page.goto(path, { waitUntil: 'networkidle' });
+        const line = page.locator('[data-sample-banner] [data-sample-line]').first();
+        await expect(line, 'sample banner').toBeVisible();
+        const chip = await line.locator('[data-sample-chip]').boundingBox();
+        const text = await line.locator('[data-sample-short]').boundingBox();
+        const box = await line.boundingBox();
+        expect(chip && text && box, 'banner parts laid out').toBeTruthy();
+        expect(Math.abs(chip.y + chip.height / 2 - (text.y + text.height / 2)), 'chip and text on one line').toBeLessThan(8);
+        expect(box.height, 'one line tall').toBeLessThanOrEqual(48);
+    }
+    finally {
+        if (before)
+            await page.setViewportSize(before);
+    }
 }
 /**
  * Captures a README screenshot of the live app: animations and the caret off, reduced motion,

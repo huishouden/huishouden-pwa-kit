@@ -12,7 +12,7 @@ if (typeof document === 'undefined') GlobalRegistrator.register({ url: 'https://
 afterAll(() => GlobalRegistrator.unregister());
 const { createRoot } = await import('react-dom/client');
 
-const { Dialog, SectionTabs, Toast, StatusPill, useToast } = await import('../src/react/ui');
+const { Dialog, SampleBanner, SectionTabs, Toast, StatusPill, useToast } = await import('../src/react/ui');
 const { ClockProvider, useClock } = await import('../src/react/clock');
 const { CalendarImportDialog, CalendarHint } = await import('../src/react/calendar');
 const { ContactDialog, ContactCard } = await import('../src/react/contacts');
@@ -316,5 +316,30 @@ describe('NotificationsCard', () => {
     expect(byText('Turn on')).toBeNull();
     expect(document.querySelector('section[aria-label="Notifications on this device"] p')?.textContent?.length).toBeGreaterThan(10);
     act(() => second.root.unmount());
+  });
+});
+
+describe('SampleBanner', () => {
+
+  test('phones: the chip and the short text, the sentence on a tap; wider: the sentence beside the chip', () => {
+    const { root } = render(<SampleBanner text="Two invented pets. Nothing is saved. Sign in to use your household’s own." />);
+    const short = document.querySelector('[data-sample-short]') as HTMLButtonElement;
+    expect(document.querySelector('[data-sample-chip]')!.textContent).toBe('Sample data');
+    expect(short.textContent).toContain('Nothing is saved.');
+    expect(short.className).toContain('sm:hidden');
+    const wide = Array.from(document.querySelectorAll('p')).find((p) => p.className.includes('sm:block'))!;
+    expect(wide.textContent).toContain('Two invented pets.');
+    expect(short.getAttribute('aria-expanded')).toBe('false');
+    click(short);
+    expect(short.getAttribute('aria-expanded')).toBe('true');
+    expect(Array.from(document.querySelectorAll('p')).filter((p) => p.textContent?.includes('Two invented pets.'))).toHaveLength(2);
+    act(() => root.unmount());
+  });
+
+  test('a sign-in error takes the text’s place at every width', () => {
+    const { root } = render(<SampleBanner text="An invented house." notice="Sign-in was cancelled." />);
+    expect(document.querySelector('[data-sample-short]')).toBeNull();
+    expect(document.querySelector('[role="note"]')!.textContent).toBe('Sample dataSign-in was cancelled.');
+    act(() => root.unmount());
   });
 });

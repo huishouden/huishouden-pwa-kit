@@ -146,6 +146,10 @@ rather than copying the class strings; the shapes are:
   cheap to reverse; 6 seconds, 9 for errors (`Toast`, `useToast`).
 - **Due wording:** "Due in 3 weeks", "Overdue by 5 days", "Overdue: gutter cleaning" from
   `@huishouden/pwa-kit/time`, so every app says the same distance the same way.
+- **Sample data banner:** above a signed-out app's invented household, `SampleBanner` from
+  `/react/ui`: the terracotta "Sample data" chip and one sentence (what it is, that nothing is
+  saved, what signing in shows). On phones one line, the chip and a short "Nothing is saved." that
+  opens the sentence on a tap.
 - **Empty and loading states:** one sentence and, if useful, one action. No spinners longer than a
   second without text.
 
