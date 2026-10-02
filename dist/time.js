@@ -269,3 +269,39 @@ export function fromLocalInput(value) {
     const t = new Date(value).getTime();
     return Number.isNaN(t) ? null : Math.round(t);
 }
+const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+export const isHhmm = (s) => typeof s === 'string' && HHMM.test(s);
+/** Minutes after midnight of an 'HH:MM'; throws on anything else. */
+export function hhmmMinutes(s) {
+    const m = HHMM.exec(s);
+    if (!m)
+        throw new Error(`Not a time: ${s}`);
+    return Number(m[1]) * 60 + Number(m[2]);
+}
+/**
+ * A day at a time of day, local, as a moment: 19:00 on the day the clocks change is still 19:00 on
+ * the wall. Without a time, local midnight. On the one hour a spring-forward day skips, the moment
+ * after the gap (02:30 becomes 03:30).
+ */
+export function atTime(day, time) {
+    const p = ymdParts(day);
+    if (!p)
+        throw new Error(`Not a date: ${day}`);
+    if (time === undefined)
+        return new Date(p.y, p.m - 1, p.d).getTime();
+    const min = hhmmMinutes(time);
+    return new Date(p.y, p.m - 1, p.d, Math.floor(min / 60), min % 60).getTime();
+}
+/** The local 'HH:MM' of a moment. */
+export function toHhmm(t) {
+    const d = new Date(t);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+/** "7 PM", "7:30 AM", "12 PM" (noon), "12 AM" (midnight): how a time is said on a household screen. */
+export function clockWords(time) {
+    const min = hhmmMinutes(time);
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'AM' : 'PM'}`;
+}

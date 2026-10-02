@@ -312,6 +312,13 @@ describe('Today', () => {
     expect(todayItems(items, NOW).map((e) => e.item.id)).toEqual(['b', 't']);
   });
 
+  test('a timed task whose window has closed is missed, not overdue; until then it is overdue', () => {
+    const bins = item({ id: 'bins', kind: 'task', title: 'Put the bins out', start: at(10, 1, 19), end: at(10, 1, 23, 59), status: 'upcoming' });
+    const tonight = item({ id: 'tonight', kind: 'task', title: 'Put the bins out', start: at(10, 2, 7), end: at(10, 2, 23, 59), status: 'upcoming' });
+    expect(todayItems([bins, tonight], NOW).map((e) => [e.item.id, e.group])).toEqual([['tonight', 'overdue']]);
+    expect(todayItems([bins], at(10, 1, 21)).map((e) => [e.item.id, e.group])).toEqual([['bins', 'overdue']]);
+  });
+
   test('agendaTime', () => {
     expect(agendaTime(item({ allDay: true }))).toBe('All day');
     expect(agendaTime(item({ start: at(10, 2, 15) }))).toBe(formatTime(at(10, 2, 15)));

@@ -1,7 +1,8 @@
 import type { Auth } from 'firebase/auth';
 import { googleAccessMessage, popupBlocked, popupCancelled } from './feedback';
 import { cachedGoogleToken, googleAccessToken, googleFetch } from './google-token';
-import { formatDayShort, formatTime, startOfDay, toYmd } from './time';
+import { inferRule, type EventRule } from './schedule';
+import { formatDayShort, formatTime, startOfDay, toHhmm, toYmd, type Hhmm } from './time';
 import { dismissId, dismissedIds } from './suggestions';
 
 /**
@@ -312,4 +313,45 @@ export function suggestionWhen(m: CalendarMatch, now: number): string {
     days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : thisWeek ? new Date(m.start).toLocaleDateString(undefined, { weekday: 'short' }) : formatDayShort(m.start);
   if (m.allDay) return thisWeek ? `${day}, all day` : day;
   return thisWeek ? `${day} ${formatTime(m.start)}` : `${day}, ${formatTime(m.start)}`;
+}
+
+// ---- Repeating events: offer a schedule instead of one record per occurrence ----
+
+/** Occurrences of one repeating calendar event, with the schedule they follow. */
+export interface CalendarSeries {
+  /** The series id (`recurringEventId`), or the lowercased title when the calendar gave none. */
+  key: string;
+  title: string;
+  /** Soonest first. */
+  matches: CalendarMatch[];
+  rule: EventRule;
+  /** 'HH:MM' when every occurrence starts at the same time; all day or varying times give none. */
+  time?: Hhmm;
+}
+
+const seriesKey = (m: CalendarMatch) => m.recurringEventId ?? `title:${m.title.trim().toLowerCase().replace(/\s+/g, ' ')}`;
+
+/**
+ * Splits matches into repeating events and the rest: occurrences of one series (or, without a
+ * series id, with the same title), at least two of them, on dates a schedule fits (`inferRule`).
+ * "Garbage pickup" every Thursday becomes one series to add as a regular event; a one-off visit,
+ * or a series with a single occurrence in the window, stays in `rest`.
+ */
+export function recurringSeries(matches: CalendarMatch[]): { series: CalendarSeries[]; rest: CalendarMatch[] } {
+  const groups = new Map<string, CalendarMatch[]>();
+  for (const m of matches) groups.set(seriesKey(m), [...(groups.get(seriesKey(m)) ?? []), m]);
+  const series: CalendarSeries[] = [];
+  const rest: CalendarMatch[] = [];
+  for (const [key, list] of groups) {
+    const sorted = [...list].sort((a, b) => a.start - b.start);
+    const rule = sorted.length >= 2 ? inferRule(sorted.map((m) => toYmd(m.start))) : null;
+    if (!rule) {
+      rest.push(...sorted);
+      continue;
+    }
+    const times = new Set(sorted.map((m) => (m.allDay ? '' : toHhmm(m.start))));
+    const time = times.size === 1 ? [...times][0] : '';
+    series.push({ key, title: sorted[0].title.trim(), matches: sorted, rule, ...(time ? { time } : {}) });
+  }
+  return { series: series.sort((a, b) => a.matches[0].start - b.matches[0].start), rest: rest.sort((a, b) => a.start - b.start) };
 }

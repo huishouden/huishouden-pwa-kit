@@ -111,3 +111,18 @@ export declare const formatYmd: (s: Ymd, options?: Intl.DateTimeFormatOptions) =
 export declare function toLocalInput(t: number): string;
 /** An <input type="datetime-local"> value back to a moment; null when empty or malformed. */
 export declare function fromLocalInput(value: string): number | null;
+/** 'HH:MM', 24-hour local time of day: '07:00', '19:30'. */
+export type Hhmm = string;
+export declare const isHhmm: (s: unknown) => s is Hhmm;
+/** Minutes after midnight of an 'HH:MM'; throws on anything else. */
+export declare function hhmmMinutes(s: Hhmm): number;
+/**
+ * A day at a time of day, local, as a moment: 19:00 on the day the clocks change is still 19:00 on
+ * the wall. Without a time, local midnight. On the one hour a spring-forward day skips, the moment
+ * after the gap (02:30 becomes 03:30).
+ */
+export declare function atTime(day: Ymd, time?: Hhmm): number;
+/** The local 'HH:MM' of a moment. */
+export declare function toHhmm(t: number): Hhmm;
+/** "7 PM", "7:30 AM", "12 PM" (noon), "12 AM" (midnight): how a time is said on a household screen. */
+export declare function clockWords(time: Hhmm): string;
