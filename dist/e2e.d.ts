@@ -8,6 +8,16 @@ export declare function expectCleanLoad(page: Page, path?: string): Promise<stri
  */
 export declare function expectInstallable(page: Page, request: APIRequestContext, path?: string): Promise<void>;
 /**
+ * Shares a contact card into the app the way Android's Share menu does (`pwaApp({ shareTarget:
+ * { contacts: true } })`): a multipart POST to the manifest's share target, which the service
+ * worker receives, then opens the page it sends the app to (`?share=contact`). Loads `path` and
+ * waits for the service worker to be in control first.
+ */
+export declare function shareContactCard(page: Page, card: string, { name, path }?: {
+    name?: string;
+    path?: string;
+}): Promise<void>;
+/**
  * Clicks through to the Google sign-in popup and checks it reaches Google with a Firebase
  * /__/auth/handler redirect that Google accepts. Runs on a second load so the service worker is in
  * control, which is when a cached-app fallback would hijack the popup. Needs no credentials.
