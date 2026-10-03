@@ -28,6 +28,32 @@ export async function expectInstallable(page: Page, request: APIRequestContext, 
 }
 
 /**
+ * Shares a contact card into the app the way Android's Share menu does (`pwaApp({ shareTarget:
+ * { contacts: true } })`): a multipart POST to the manifest's share target, which the service
+ * worker receives, then opens the page it sends the app to (`?share=contact`). Loads `path` and
+ * waits for the service worker to be in control first.
+ */
+export async function shareContactCard(page: Page, card: string, { name = 'contact.vcf', path = '/' }: { name?: string; path?: string } = {}) {
+  await page.goto(path, { waitUntil: 'networkidle' });
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) await page.reload({ waitUntil: 'networkidle' });
+  const target = await page.evaluate(
+    async ({ card, name }) => {
+      const href = (document.querySelector('link[rel="manifest"]') as HTMLLinkElement).href;
+      const target = (await (await fetch(href)).json()).share_target as { action: string; method: string; params: { files?: { name: string }[] } };
+      if (target?.method !== 'POST' || !target.params.files?.length) throw new Error('The manifest has no share target for files.');
+      const form = new FormData();
+      form.append(target.params.files[0].name, new File([card], name, { type: 'text/x-vcard' }));
+      const res = await fetch(new URL(target.action, href), { method: 'POST', body: form });
+      return res.url;
+    },
+    { card, name },
+  );
+  expect(new URL(target).searchParams.get('share'), 'the service worker took the card').toBe('contact');
+  await page.goto(target);
+}
+
+/**
  * Clicks through to the Google sign-in popup and checks it reaches Google with a Firebase
  * /__/auth/handler redirect that Google accepts. Runs on a second load so the service worker is in
  * control, which is when a cached-app fallback would hijack the popup. Needs no credentials.

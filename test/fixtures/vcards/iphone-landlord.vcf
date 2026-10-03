@@ -1,0 +1,23 @@
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//iPhone OS 17.5//EN
+N:Example;Jordan;;;
+FN:Jordan Example
+ORG:Example Property Management;
+TITLE:Landlord
+item1.EMAIL;type=INTERNET;type=pref:jordan@example.com
+item2.EMAIL;type=INTERNET:rent@example.com
+item2.X-ABLabel:Rent
+item3.TEL;type=pref:(555) 010-0142
+item3.X-ABLabel:_$!<Mobile>!$_
+TEL;type=WORK;type=VOICE:(555) 010-0143
+TEL;type=WORK;type=FAX:(555) 010-0144
+item4.ADR;type=HOME;type=pref:;;12 Example Street\nApt 3;Springfield;IL;62704;United States
+item4.X-ABADR:us
+item5.URL;type=pref:https://rentals.example.com
+item5.X-ABLabel:_$!<HomePage>!$_
+NOTE:Call before 8 pm.\nMaintenance requests by email\, please.
+PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a
+ HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIy
+ MjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIA
+END:VCARD

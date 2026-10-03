@@ -1,0 +1,52 @@
+[
+  {
+    "card": {
+      "name": "Sam Demo",
+      "phones": [
+        {
+          "value": "+1-555-010-0192",
+          "label": "Mobile"
+        },
+        {
+          "value": "+1-555-010-0191",
+          "label": "Home"
+        }
+      ],
+      "emails": [
+        {
+          "value": "sam.demo@example.com",
+          "label": "Work"
+        }
+      ],
+      "address": "1 Example Way, Springfield, IL 62704",
+      "organization": "Example Clinic, Pediatrics",
+      "title": "Pediatrician",
+      "website": "https://clinic.example.com/dr-demo"
+    },
+    "fill": {
+      "name": "Sam Demo",
+      "phone": "+1-555-010-0192",
+      "email": "sam.demo@example.com",
+      "website": "https://clinic.example.com/dr-demo",
+      "address": "1 Example Way, Springfield, IL 62704",
+      "role": "Pediatrician, Example Clinic, Pediatrics",
+      "notes": "Other phones: +1-555-010-0191 (home)"
+    }
+  },
+  {
+    "card": {
+      "name": "Example Lawn Care",
+      "phones": [
+        {
+          "value": "+1-555-010-0193",
+          "label": "Work"
+        }
+      ],
+      "emails": []
+    },
+    "fill": {
+      "name": "Example Lawn Care",
+      "phone": "+1-555-010-0193"
+    }
+  }
+]

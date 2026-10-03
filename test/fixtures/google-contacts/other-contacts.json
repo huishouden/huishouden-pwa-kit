@@ -1,0 +1,23 @@
+{
+  "results": [
+    {
+      "person": {
+        "resourceName": "otherContacts/c2001",
+        "names": [{ "metadata": { "primary": true }, "displayName": "Jordan Example" }],
+        "emailAddresses": [{ "metadata": { "primary": true }, "value": "jordan@example.com" }],
+        "phoneNumbers": [{ "metadata": { "primary": true }, "value": "(555) 010-0142" }]
+      }
+    },
+    {
+      "person": {
+        "resourceName": "otherContacts/c2002",
+        "emailAddresses": [{ "metadata": { "primary": true }, "value": "jordan.repairs@example.com" }]
+      }
+    },
+    {
+      "person": {
+        "resourceName": "otherContacts/c2003"
+      }
+    }
+  ]
+}

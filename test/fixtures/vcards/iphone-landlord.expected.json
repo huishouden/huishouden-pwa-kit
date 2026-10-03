@@ -1,0 +1,44 @@
+[
+  {
+    "card": {
+      "name": "Jordan Example",
+      "phones": [
+        {
+          "value": "(555) 010-0142",
+          "label": "Mobile"
+        },
+        {
+          "value": "(555) 010-0143",
+          "label": "Work"
+        },
+        {
+          "value": "(555) 010-0144",
+          "label": "Work fax"
+        }
+      ],
+      "emails": [
+        {
+          "value": "jordan@example.com"
+        },
+        {
+          "value": "rent@example.com",
+          "label": "Rent"
+        }
+      ],
+      "address": "12 Example Street, Apt 3, Springfield, IL 62704, United States",
+      "organization": "Example Property Management",
+      "title": "Landlord",
+      "website": "https://rentals.example.com",
+      "note": "Call before 8 pm.\nMaintenance requests by email, please."
+    },
+    "fill": {
+      "name": "Jordan Example",
+      "phone": "(555) 010-0142",
+      "email": "jordan@example.com",
+      "website": "https://rentals.example.com",
+      "address": "12 Example Street, Apt 3, Springfield, IL 62704, United States",
+      "role": "Landlord, Example Property Management",
+      "notes": "Other phones: (555) 010-0143 (work), (555) 010-0144 (work fax)\nOther emails: rent@example.com (rent)\nCall before 8 pm.\nMaintenance requests by email, please."
+    }
+  }
+]
