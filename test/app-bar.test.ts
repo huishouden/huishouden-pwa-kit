@@ -161,17 +161,17 @@ describe('<hh-app-bar>', () => {
     localStorage.removeItem('hh-theme');
   });
 
-  test('signed out: a Settings button opens the theme choice and Privacy', () => {
+  test('signed out: a "Theme and privacy" button opens the theme choice and Privacy', () => {
     const { bar, $ } = mount();
     bar.user = null;
     const trigger = $('.menu-button') as HTMLButtonElement;
-    expect(trigger.getAttribute('aria-label')).toBe('Settings');
+    expect(trigger.getAttribute('aria-label')).toBe('Theme and privacy');
     expect(trigger.getAttribute('aria-controls')).toBe($('.menu')!.id);
     expect($('.menu')!.hidden).toBe(true);
     trigger.click();
     const menu = $('.menu')!;
     expect(menu.hidden).toBe(false);
-    expect(menu.getAttribute('aria-label')).toBe('Settings');
+    expect(menu.getAttribute('aria-label')).toBe('Theme and privacy');
     expect(Array.from(menu.querySelectorAll('.mode')).map((b) => b.textContent)).toEqual(['Automatic', 'Light', 'Dark']);
     expect(Array.from(menu.querySelectorAll('a.item')).map((a) => a.textContent)).toEqual(['Privacy']);
     expect(menu.querySelector('button.item')).toBeNull();

@@ -424,12 +424,13 @@ export class HhAppBar extends Base {
         button.innerHTML = '<span>Sign in<span class="long">&nbsp;with Google</span></span>';
       }
       button.addEventListener('click', () => this.#emit(SIGN_IN_EVENT));
-      // Signed out there is no avatar, so the theme and Privacy sit behind a small settings button.
+      // Signed out there is no avatar, so the theme and Privacy sit behind a small sliders button. Its name
+      // is not "Settings", which apps use for their own settings button.
       const trigger = document.createElement('button');
       trigger.type = 'button';
       trigger.className = 'menu-button';
       trigger.setAttribute('part', 'menu-button');
-      trigger.setAttribute('aria-label', 'Settings');
+      trigger.setAttribute('aria-label', 'Theme and privacy');
       trigger.innerHTML = SETTINGS_ICON; // trusted: static markup
       this.#wireTrigger(trigger);
       const menu = this.#menu();
@@ -524,7 +525,7 @@ export class HhAppBar extends Base {
     menu.setAttribute('part', 'menu');
     menu.hidden = !this.#open;
     menu.setAttribute('role', 'group');
-    menu.setAttribute('aria-label', this.#user ? 'Account' : 'Settings');
+    menu.setAttribute('aria-label', this.#user ? 'Account' : 'Theme and privacy');
     return menu;
   }
 

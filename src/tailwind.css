@@ -84,6 +84,13 @@
   button {
     cursor: pointer;
   }
+
+  /* Checkboxes, radios and sliders in the primary colour, forest-400 in dark like the buttons. */
+  input[type='checkbox'],
+  input[type='radio'],
+  input[type='range'] {
+    accent-color: var(--hh-primary);
+  }
 }
 
 /*
