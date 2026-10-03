@@ -33,18 +33,36 @@ export function Chip({ active, onClick, children, label }) {
 }
 /**
  * A dialog: bottom sheet on phones, centred on tablets; title and close row; Escape and the scrim
- * close it; the first field (or button) takes focus. `wide` for a dialog with a table or two columns.
+ * close it. `wide` for a dialog with a table or two columns.
+ *
+ * Focus is placed once, when it opens, and never again: re-renders (a clock tick, a snapshot, a
+ * new `onClose` arrow from the parent) leave it where the person put it. With a mouse the first
+ * field takes it (or a field already focused with `autoFocus`); on a touch screen the dialog
+ * itself does, so the keyboard only opens when a field is tapped.
  */
 export function Dialog({ title, onClose, children, footer, wide }) {
     const panel = useRef(null);
+    const close = useRef(onClose);
+    close.current = onClose;
     useEffect(() => {
-        const onKey = (e) => e.key === 'Escape' && onClose();
+        const onKey = (e) => e.key === 'Escape' && close.current();
         window.addEventListener('keydown', onKey);
-        panel.current?.querySelector('input, select, textarea, button:not([aria-label="Close"])')?.focus();
         return () => window.removeEventListener('keydown', onKey);
-    }, [onClose]);
-    return (_jsx("div", { className: "fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6", onClick: onClose, children: _jsxs("div", { ref: panel, role: "dialog", "aria-modal": "true", "aria-label": title, className: `safe-bottom max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl dark:bg-forest-800 ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`, onClick: (e) => e.stopPropagation(), children: [_jsxs("div", { className: "mb-5 flex items-center justify-between gap-4", children: [_jsx("h2", { className: "text-xl font-semibold text-stone-800 dark:text-stone-100", children: title }), _jsx("button", { type: "button", onClick: onClose, className: iconButton, "aria-label": "Close", children: _jsx(X, { size: 20 }) })] }), children, footer && _jsx("div", { className: "mt-6 flex flex-wrap items-center justify-end gap-2", children: footer })] }) }));
+    }, []);
+    useEffect(() => {
+        const el = panel.current;
+        if (!el)
+            return;
+        if (touchScreen())
+            return el.focus({ preventScroll: true });
+        if (el.contains(document.activeElement))
+            return;
+        el.querySelector('input, select, textarea, button:not([aria-label="Close"])')?.focus();
+    }, []);
+    return (_jsx("div", { className: "fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6", onClick: onClose, children: _jsxs("div", { ref: panel, role: "dialog", "aria-modal": "true", "aria-label": title, tabIndex: -1, className: `safe-bottom outline-none max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl dark:bg-forest-800 ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`, onClick: (e) => e.stopPropagation(), children: [_jsxs("div", { className: "mb-5 flex items-center justify-between gap-4", children: [_jsx("h2", { className: "text-xl font-semibold text-stone-800 dark:text-stone-100", children: title }), _jsx("button", { type: "button", onClick: onClose, className: iconButton, "aria-label": "Close", children: _jsx(X, { size: 20 }) })] }), children, footer && _jsx("div", { className: "mt-6 flex flex-wrap items-center justify-end gap-2", children: footer })] }) }));
 }
+/** A touch screen, where focusing a text field opens the on-screen keyboard. */
+const touchScreen = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 export function Field({ label, children, hint }) {
     return (_jsxs("label", { className: "block", children: [_jsx("span", { className: "mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-200", children: label }), children, hint && _jsx("span", { className: "mt-1 block text-sm text-stone-600 dark:text-stone-300", children: hint })] }));
 }
