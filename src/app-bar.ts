@@ -1,7 +1,8 @@
 /**
  * `<hh-app-bar>`: the Huishouden frame every app opens in (DESIGN.md "Frame"). Family logo and
  * "Huishouden" over the app's name, linking to the portal; a `nav` slot for the app's own tabs or
- * switchers; an `actions` slot for app buttons; and the account area: "Sign in with Google" while
+ * switchers (on phones it collapses when everything in it carries `data-bottom-nav`, as the kit's
+ * `SectionTabs` does, whose phone tabs sit in a bar at the bottom of the screen); an `actions` slot for app buttons; and the account area: "Sign in with Google" while
  * signed out, the profile photo with a small account menu while signed in.
  *
  * The element never calls Firebase. It dispatches `hh-sign-in` and `hh-sign-out` (bubbling,
@@ -146,6 +147,8 @@ header {
 .suite { display: block; margin: 0; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--bar-overline); }
 h1 { margin: 0; font-size: 18px; line-height: 1.25; font-weight: 700; letter-spacing: -0.025em; color: var(--bar-title); }
 .nav { order: 3; display: flex; width: 100%; min-width: 0; }
+/* Phones: section tabs that move to the bottom bar (SectionTabs) leave the bar to logo, name and account. */
+@media (max-width: 639px) { :host([bottom-nav]) .nav { display: none; } }
 .end { display: flex; align-items: center; gap: 12px; }
 .account { position: relative; display: flex; }
 @media (min-width: 640px) {
@@ -348,7 +351,9 @@ export class HhAppBar extends Base {
 
   #syncNav() {
     const slot = this.#root.querySelector<HTMLSlotElement>('slot[name="nav"]')!;
-    this.#root.querySelector<HTMLElement>('.nav')!.hidden = slot.assignedElements().length === 0;
+    const assigned = slot.assignedElements();
+    this.#root.querySelector<HTMLElement>('.nav')!.hidden = assigned.length === 0;
+    this.toggleAttribute('bottom-nav', assigned.length > 0 && assigned.every((el) => el.hasAttribute('data-bottom-nav')));
   }
 
   #renderAccount() {

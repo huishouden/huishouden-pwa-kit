@@ -1,7 +1,7 @@
 /**
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
- * checkbox, section tabs, member badge and "Sample data" banner every app shows.
+ * checkbox, section tabs (a bottom bar on phones), member badge and "Sample data" banner every app shows.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -9,6 +9,7 @@
  * (DESIGN.md "Dark and ambient modes") that apply only under a `.dark` class, for apps with a dark setting.
  */
 import { type ReactNode } from 'react';
+import { type LucideIcon } from 'lucide-react';
 export declare const inputClass = "w-full min-h-11 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-base text-stone-800 outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:border-forest-600 dark:bg-forest-900 dark:text-stone-100 dark:focus:ring-forest-700";
 /** A select styled like the inputs. */
 export declare const selectClass = "w-full min-h-11 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-base text-stone-800 outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:border-forest-600 dark:bg-forest-900 dark:text-stone-100 dark:focus:ring-forest-700 appearance-auto";
@@ -81,13 +82,35 @@ export declare function SampleBanner({ text, short, notice, children, className,
 export interface Tab {
     id: string;
     label: string;
+    /** A lucide icon, shown beside the label in the phone's bottom bar and its More sheet. */
+    icon?: LucideIcon;
+    /** One of the (at most four) tabs the phone's bottom bar shows; the rest go under More. */
+    primary?: boolean;
+    /** A shorter label for the bottom bar when `label` is long ("Visits" for "Appointments"). */
+    short?: string;
 }
+/** Tabs the phone's bottom bar has room for, More included. */
+export declare const BOTTOM_NAV_MAX = 5;
 /**
- * The app's sections as a segmented control, for the app bar's `nav` slot:
- * `<AppBar …><SectionTabs tabs={…} tab={tab} onTab={setTab} /></AppBar>`. `compact` tightens the
- * spacing on phones for five or more tabs.
+ * Which tabs the phone's bottom bar shows and which go under More: all of them when they fit
+ * (four or fewer), else the ones marked `primary` (the first four if none is), in their order.
  */
-export declare function SectionTabs({ tabs, tab, onTab, compact }: {
+export declare function splitTabs(tabs: Tab[]): {
+    bar: Tab[];
+    more: Tab[];
+};
+/**
+ * The app's sections. On tablets and desktops (640px and up) a segmented control in the app bar's
+ * `nav` slot: `<AppBar …><SectionTabs tabs={…} tab={tab} onTab={setTab} /></AppBar>`. On phones a
+ * bar fixed to the bottom of the screen instead (DESIGN.md "Frame"): up to four tabs with icon and
+ * short label, and More opening a sheet with the rest when there are five or more. While the bar
+ * shows, `<html data-hh-bottom-nav>` gives the page bottom padding (the kit's tailwind.css) and sets
+ * `--hh-bottom-nav` to its height, so an app's own fixed bottom elements sit above it with
+ * `bottom-(--hh-bottom-nav)`. Dialogs and sheets cover it.
+ *
+ * `compact` tightened the phone tabs before the bottom bar; it no longer changes anything.
+ */
+export declare function SectionTabs({ tabs, tab, onTab }: {
     tabs: Tab[];
     tab: string;
     onTab: (id: string) => void;

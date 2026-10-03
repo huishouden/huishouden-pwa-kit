@@ -78,10 +78,20 @@ forest-600. Only the glyph changes between apps: portal `home` (a door), Tasks `
   `AppBar` from `@huishouden/pwa-kit/react/app-bar`). Never hand-build it. It holds the family logo
   linking to the portal, "Huishouden" over the app's short name (the portal shows "Huishouden"
   alone), the app's own tabs or switchers in the `nav` slot (beside the name on tablets, a second
-  row on phones), app buttons in the `actions` slot, and on the right "Sign in with Google" or the
+  row on phones; section tabs move to the bottom bar on phones, below), app buttons in the `actions` slot, and on the right "Sign in with Google" or the
   signed-in profile photo (`.hh-avatar`) opening the account menu: name, email, All apps, Sign out,
   and the running version. `theme="dark"` for dark screens. Sticky, cream, a stone-200 rule below,
   content width 1200px.
+- Sections: `SectionTabs` from `/react/ui`, never hand-built. From 640px they are a segmented
+  control in the app bar. On phones they are a bar fixed to the bottom edge (no sideways-scrolling
+  tabs): up to four sections with a lucide icon and a short label, and More opening a sheet with the
+  rest when there are five or more. The four are the sections the household reaches for most, led
+  by the one that answers "what needs doing first"; mark them `primary` and give long labels a
+  `short` one. White bar, a stone-200 rule above, the current section in forest-700 on a forest-100
+  pill, 64px tall plus the home-indicator inset. While it shows, the page is padded by
+  `--hh-bottom-nav` and the app bar holds only logo, name, actions and account; an app's own fixed
+  bottom elements (toasts, prompts) sit above it with `bottom-(--hh-bottom-nav)`; dialogs and sheets
+  cover it.
 - Page background `--hh-cream`; content on white surfaces; max content width 1200px, centred;
   24px page padding (16px on phones), honouring safe-area insets.
 - Tablet landscape (1280×800) first, then phone portrait. Nothing important below the fold on the tablet.
@@ -197,4 +207,5 @@ except an exit control.
 |---|---|---|
 | `pwa-design-check` | CI build job, every PR | Off-palette Tailwind colours, gradients, raw hex, `backdrop-blur`, other fonts, emoji in UI text |
 | `expectHuishoudenFrame` | Smoke tests against the live site | App bar present, logo links to the portal, the app's name, Inter |
+| `expectBottomNav` | Smoke tests against the live site | Phone sections in a fixed bottom bar: at most five 48px items, current marked, content clear of it, More sheet over it; tabs back in the app bar on tablets |
 | `huishouden/design-language` reviewer | `cr review` on every PR | Everything above that needs judgment: hierarchy, copy tone, component shapes, consistency with the other apps |

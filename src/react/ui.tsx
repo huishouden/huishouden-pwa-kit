@@ -1,7 +1,7 @@
 /**
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
- * checkbox, section tabs, member badge and "Sample data" banner every app shows.
+ * checkbox, section tabs (a bottom bar on phones), member badge and "Sample data" banner every app shows.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -9,7 +9,8 @@
  * (DESIGN.md "Dark and ambient modes") that apply only under a `.dark` class, for apps with a dark setting.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronDown, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ChevronDown, Ellipsis, X, type LucideIcon } from 'lucide-react';
 import { personColour, personInitial, personName } from '../people';
 
 export const inputClass =
@@ -207,35 +208,145 @@ export function SampleBanner({
 export interface Tab {
   id: string;
   label: string;
+  /** A lucide icon, shown beside the label in the phone's bottom bar and its More sheet. */
+  icon?: LucideIcon;
+  /** One of the (at most four) tabs the phone's bottom bar shows; the rest go under More. */
+  primary?: boolean;
+  /** A shorter label for the bottom bar when `label` is long ("Visits" for "Appointments"). */
+  short?: string;
+}
+
+/** Tabs the phone's bottom bar has room for, More included. */
+export const BOTTOM_NAV_MAX = 5;
+
+/**
+ * Which tabs the phone's bottom bar shows and which go under More: all of them when they fit
+ * (four or fewer), else the ones marked `primary` (the first four if none is), in their order.
+ */
+export function splitTabs(tabs: Tab[]): { bar: Tab[]; more: Tab[] } {
+  if (tabs.length < BOTTOM_NAV_MAX) return { bar: tabs, more: [] };
+  const marked = tabs.filter((t) => t.primary).slice(0, BOTTOM_NAV_MAX - 1);
+  const bar = marked.length ? marked : tabs.slice(0, BOTTOM_NAV_MAX - 1);
+  return { bar, more: tabs.filter((t) => !bar.includes(t)) };
 }
 
 /**
- * The app's sections as a segmented control, for the app bar's `nav` slot:
- * `<AppBar …><SectionTabs tabs={…} tab={tab} onTab={setTab} /></AppBar>`. `compact` tightens the
- * spacing on phones for five or more tabs.
+ * The app's sections. On tablets and desktops (640px and up) a segmented control in the app bar's
+ * `nav` slot: `<AppBar …><SectionTabs tabs={…} tab={tab} onTab={setTab} /></AppBar>`. On phones a
+ * bar fixed to the bottom of the screen instead (DESIGN.md "Frame"): up to four tabs with icon and
+ * short label, and More opening a sheet with the rest when there are five or more. While the bar
+ * shows, `<html data-hh-bottom-nav>` gives the page bottom padding (the kit's tailwind.css) and sets
+ * `--hh-bottom-nav` to its height, so an app's own fixed bottom elements sit above it with
+ * `bottom-(--hh-bottom-nav)`. Dialogs and sheets cover it.
+ *
+ * `compact` tightened the phone tabs before the bottom bar; it no longer changes anything.
  */
-export function SectionTabs({ tabs, tab, onTab, compact }: { tabs: Tab[]; tab: string; onTab: (id: string) => void; compact?: boolean }) {
+export function SectionTabs({ tabs, tab, onTab }: { tabs: Tab[]; tab: string; onTab: (id: string) => void; compact?: boolean }) {
   if (tabs.length === 0) return null;
   return (
-    <nav
-      slot="nav"
-      aria-label="Sections"
-      className={`flex w-full overflow-x-auto rounded-2xl border border-stone-200 bg-white p-1 sm:w-auto dark:border-forest-600 dark:bg-forest-800 ${compact ? 'gap-0.5 sm:gap-1' : 'gap-1'}`}
-    >
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => onTab(t.id)}
-          aria-current={t.id === tab ? 'page' : undefined}
-          className={`min-h-11 flex-1 rounded-xl text-sm font-medium whitespace-nowrap transition-colors duration-150 sm:flex-none sm:px-5 sm:text-base ${compact ? 'px-1' : 'px-2'} ${
-            t.id === tab ? 'bg-forest-700 text-white dark:bg-forest-400 dark:text-forest-900' : 'text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-forest-700'
-          }`}
+    <>
+      <nav
+        slot="nav"
+        data-bottom-nav=""
+        aria-label="Sections"
+        className="hidden w-full gap-1 overflow-x-auto rounded-2xl border border-stone-200 bg-white p-1 sm:flex sm:w-auto dark:border-forest-600 dark:bg-forest-800"
+      >
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onTab(t.id)}
+            aria-current={t.id === tab ? 'page' : undefined}
+            className={`min-h-11 flex-1 rounded-xl px-2 text-sm font-medium whitespace-nowrap transition-colors duration-150 sm:flex-none sm:px-5 sm:text-base ${
+              t.id === tab ? 'bg-forest-700 text-white dark:bg-forest-400 dark:text-forest-900' : 'text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-forest-700'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
+      {typeof document !== 'undefined' && createPortal(<BottomNav tabs={tabs} tab={tab} onTab={onTab} />, document.body)}
+    </>
+  );
+}
+
+const BOTTOM_NAV_ATTR = 'data-hh-bottom-nav';
+
+function BottomNav({ tabs, tab, onTab }: { tabs: Tab[]; tab: string; onTab: (id: string) => void }) {
+  const [sheet, setSheet] = useState(false);
+  const { bar, more } = splitTabs(tabs);
+  const inMore = more.some((t) => t.id === tab);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute(BOTTOM_NAV_ATTR, '');
+    return () => root.removeAttribute(BOTTOM_NAV_ATTR);
+  }, []);
+  const item = (key: string, label: string, Icon: LucideIcon | undefined, active: boolean, props: Record<string, unknown>) => (
+    <li key={key} className="flex min-w-0 flex-1">
+      <button
+        type="button"
+        {...props}
+        className={`flex min-h-16 w-full min-w-0 flex-col items-center justify-center gap-1 px-1 text-xs font-medium transition-colors duration-150 ${
+          active ? 'text-forest-700 dark:text-forest-300' : 'text-stone-600 dark:text-stone-300'
+        }`}
+      >
+        <span
+          aria-hidden
+          className={`flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-150 ${active ? 'bg-forest-100 dark:bg-forest-700' : ''}`}
         >
-          {t.label}
-        </button>
-      ))}
-    </nav>
+          {Icon ? <Icon size={22} strokeWidth={active ? 2.4 : 2} /> : null}
+        </span>
+        <span className={`max-w-full truncate ${active ? 'font-semibold' : ''}`}>{label}</span>
+      </button>
+    </li>
+  );
+  return (
+    <>
+      <nav
+        {...{ [BOTTOM_NAV_ATTR]: '' }}
+        aria-label="Sections"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] sm:hidden dark:border-forest-600 dark:bg-forest-800"
+      >
+        <ul className="mx-auto flex max-w-lg">
+          {bar.map((t) => item(t.id, t.short ?? t.label, t.icon, t.id === tab, { onClick: () => onTab(t.id), 'aria-current': t.id === tab ? 'page' : undefined }))}
+          {more.length > 0 &&
+            item('more', 'More', Ellipsis, inMore, {
+              onClick: () => setSheet(true),
+              'aria-haspopup': 'dialog',
+              'aria-expanded': sheet,
+              'aria-label': inMore ? `More, showing ${more.find((t) => t.id === tab)!.label}` : 'More',
+            })}
+        </ul>
+      </nav>
+      {sheet && (
+        <Dialog title="More" onClose={() => setSheet(false)}>
+          <ul className="grid gap-1">
+            {more.map((t) => {
+              const Icon = t.icon;
+              const active = t.id === tab;
+              return (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() => {
+                      setSheet(false);
+                      onTab(t.id);
+                    }}
+                    className={`flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-base font-medium transition-colors duration-150 ${
+                      active ? 'bg-forest-50 text-forest-700 dark:bg-forest-700 dark:text-forest-200' : 'text-stone-800 hover:bg-stone-100 dark:text-stone-100 dark:hover:bg-forest-700'
+                    }`}
+                  >
+                    {Icon ? <Icon size={22} aria-hidden /> : null}
+                    {t.label}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </Dialog>
+      )}
+    </>
   );
 }
 
@@ -279,7 +390,7 @@ export function Toast({ toast, onDone }: { toast: ToastState | null; onDone: () 
     return () => clearTimeout(id);
   }, [toast, onDone]);
   return (
-    <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+    <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-(--hh-bottom-nav) z-[60] flex justify-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
       {toast && (
         <div
           className={`pointer-events-auto flex min-h-14 max-w-xl items-center gap-4 rounded-2xl px-5 py-2 text-base font-medium text-white shadow-lg ${

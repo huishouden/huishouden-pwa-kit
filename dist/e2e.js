@@ -112,6 +112,72 @@ export async function expectCompactSampleBanner(page, path) {
     }
 }
 /**
+ * The phone's bottom tab bar (`SectionTabs` from /react/ui, DESIGN.md "Frame") at 390×844: one
+ * labelled nav fixed to the bottom edge, at most five items of 48px or more, the current section
+ * marked, the app bar's own tabs gone, the page padded so its end clears the bar, and More (when
+ * there is one) opening a sheet that covers the bar. Then at 1280×800 the bar is gone and the tabs
+ * are back in the app bar. Restores the viewport afterwards.
+ */
+export async function expectBottomNav(page, { path, labels, more } = {}) {
+    const before = page.viewportSize();
+    await page.setViewportSize({ width: 390, height: 844 });
+    try {
+        if (path !== undefined)
+            await page.goto(path, { waitUntil: 'networkidle' });
+        const nav = page.locator('nav[data-hh-bottom-nav]');
+        await expect(nav, 'one bottom bar').toHaveCount(1);
+        await expect(nav, 'bottom bar').toBeVisible();
+        await expect(nav, 'bottom bar is labelled').toHaveAttribute('aria-label', /\S/);
+        await expect(page.locator('hh-app-bar nav[slot="nav"]'), 'app bar tabs hidden on phones').toBeHidden();
+        const box = (await nav.boundingBox());
+        expect(Math.abs(box.y + box.height - 844), 'bar on the bottom edge').toBeLessThanOrEqual(1);
+        expect(box.width, 'bar spans the screen').toBeGreaterThanOrEqual(389);
+        expect(await nav.evaluate((el) => getComputedStyle(el).position), 'bar stays put').toBe('fixed');
+        const items = nav.getByRole('button');
+        const count = await items.count();
+        expect(count, 'one to five items').toBeGreaterThan(0);
+        expect(count).toBeLessThanOrEqual(5);
+        for (let i = 0; i < count; i++) {
+            const b = (await items.nth(i).boundingBox());
+            expect(Math.min(b.width, b.height), `item ${i + 1} is a 48px target`).toBeGreaterThanOrEqual(48);
+        }
+        if (labels)
+            expect((await items.allInnerTexts()).map((t) => t.trim()), 'bar labels').toEqual(labels);
+        const current = await nav.locator('[aria-current="page"]').count();
+        const moreButton = nav.getByRole('button', { name: /^More/ });
+        const moreShowing = (await moreButton.count()) > 0 && /^More, showing/.test((await moreButton.getAttribute('aria-label')) ?? '');
+        expect(current + (moreShowing ? 1 : 0), 'the current section is marked').toBe(1);
+        expect(await page.evaluate(() => document.documentElement.hasAttribute('data-hh-bottom-nav')), 'page knows the bar shows').toBe(true);
+        const padding = await page.evaluate(() => parseFloat(getComputedStyle(document.body).paddingBottom));
+        expect(padding, 'page padded for the bar').toBeGreaterThanOrEqual(box.height - 1);
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        const main = page.locator('main').first();
+        if ((await main.count()) > 0 && (await main.isVisible())) {
+            const m = (await main.boundingBox());
+            expect(m.y + m.height, 'content ends above the bar').toBeLessThanOrEqual(box.y + 1);
+        }
+        await page.evaluate(() => window.scrollTo(0, 0));
+        if ((await moreButton.count()) > 0) {
+            await moreButton.click();
+            const sheet = page.getByRole('dialog', { name: 'More' });
+            await expect(sheet, 'More opens a sheet').toBeVisible();
+            if (more)
+                expect((await sheet.locator('ul').getByRole('button').allInnerTexts()).map((t) => t.trim()), 'More sheet items').toEqual(more);
+            const covered = await page.evaluate(({ x, y }) => !document.elementFromPoint(x, y)?.closest('nav[data-hh-bottom-nav]'), { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+            expect(covered, 'the sheet covers the bar').toBe(true);
+            await page.keyboard.press('Escape');
+            await expect(sheet).toBeHidden();
+        }
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await expect(nav, 'no bottom bar on tablets').toBeHidden();
+        await expect(page.locator('hh-app-bar nav[slot="nav"]'), 'tabs in the app bar on tablets').toBeVisible();
+    }
+    finally {
+        if (before)
+            await page.setViewportSize(before);
+    }
+}
+/**
  * Captures a README screenshot of the live app: animations and the caret off, reduced motion,
  * optional frozen clock, so the PNG only changes when the app's look does. The reusable workflow
  * commits docs/screenshots back to main when the bytes change.
