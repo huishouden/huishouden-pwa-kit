@@ -1,16 +1,17 @@
 /**
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
- * checkbox, section tabs (a bottom bar on phones), member badge and "Sample data" banner every app shows.
+ * checkbox, section tabs (a bottom bar on phones), member badge, "Sample data" banner every app shows, and
+ * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
  * these files to Tailwind's sources. Icons are lucide-react, like the apps'. Each has `dark:` styles
  * (DESIGN.md "Dark and ambient modes") that apply only under a `.dark` class, for apps with a dark setting.
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Ellipsis, X, type LucideIcon } from 'lucide-react';
+import { ChevronDown, Ellipsis, EyeOff, Plus, X, type LucideIcon } from 'lucide-react';
 import { personColour, personInitial, personName } from '../people';
 
 export const inputClass =
@@ -57,6 +58,148 @@ export function Chip({ active, onClick, children, label }: { active?: boolean; o
     >
       {children}
     </button>
+  );
+}
+
+/** How long a finger rests on something before it counts as a long press. */
+export const LONG_PRESS_MS = 500;
+
+/** Handlers to spread on an element so a long press or a right-click (or the keyboard's menu key) runs `onLongPress`. */
+export interface LongPressHandlers {
+  onPointerDown: (e: ReactPointerEvent) => void;
+  onPointerMove: (e: ReactPointerEvent) => void;
+  onPointerUp: () => void;
+  onPointerLeave: () => void;
+  onPointerCancel: () => void;
+  onContextMenu: (e: ReactMouseEvent) => void;
+  onClickCapture: (e: ReactMouseEvent) => void;
+}
+
+/**
+ * A long press (touch or mouse, held still for `ms`) or a right-click runs `onLongPress`, and the
+ * click that ends a long press is swallowed, so the element's own onClick runs only for a tap.
+ * Moving more than 10px is a scroll, not a press. Pair the element with a visible way to reach the
+ * same action: a long press is not discoverable on its own.
+ */
+export function useLongPress(onLongPress: () => void, ms = LONG_PRESS_MS): LongPressHandlers {
+  const latest = useRef(onLongPress);
+  latest.current = onLongPress;
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const fired = useRef(false);
+  const cancel = () => {
+    clearTimeout(timer.current);
+    start.current = null;
+  };
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return {
+    onPointerDown: (e) => {
+      fired.current = false;
+      if (e.button !== 0) return;
+      cancel();
+      start.current = { x: e.clientX, y: e.clientY };
+      timer.current = setTimeout(() => {
+        start.current = null;
+        fired.current = true;
+        latest.current();
+      }, ms);
+    },
+    onPointerMove: (e) => {
+      if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) cancel();
+    },
+    onPointerUp: cancel,
+    onPointerLeave: cancel,
+    onPointerCancel: cancel,
+    onContextMenu: (e) => {
+      e.preventDefault();
+      cancel();
+      // A long press on Android also raises contextmenu; the press already ran it.
+      if (!fired.current) latest.current();
+    },
+    onClickCapture: (e) => {
+      if (!fired.current) return;
+      fired.current = false;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+  };
+}
+
+/**
+ * Something the app learned and offers back, "tap to add": a pill that runs `onPick` on a tap. A
+ * long press or right-click opens a small sheet with "Don't suggest <label>"; with `editing` an ×
+ * beside the label does the same at once, for a visible way in (an "Edit" link by the shelf's
+ * heading). Every target is at least 44px. Removing is the app's (with its Undo).
+ */
+export function SuggestionChip({
+  label,
+  onPick,
+  onRemove,
+  editing,
+  large,
+  removeLabel = `Don't suggest ${label}`,
+  hint,
+}: {
+  label: string;
+  onPick: () => void;
+  onRemove: () => void;
+  /** Shows an × that removes it with one tap. */
+  editing?: boolean;
+  /** The always-on tablet's larger text. */
+  large?: boolean;
+  removeLabel?: string;
+  /** A line in the sheet under the action, such as when it may come back. */
+  hint?: string;
+}) {
+  const [menu, setMenu] = useState(false);
+  const press = useLongPress(() => setMenu(true));
+  return (
+    <span
+      className={`inline-flex min-h-11 shrink-0 items-center rounded-full border border-forest-200 bg-forest-50 font-medium text-forest-700 dark:border-forest-600 dark:bg-forest-800 dark:text-forest-100 ${
+        large ? 'text-lg' : 'text-sm'
+      }`}
+    >
+      <button
+        type="button"
+        {...press}
+        onClick={onPick}
+        aria-label={`Add ${label}`}
+        className={`inline-flex min-h-11 items-center gap-1.5 rounded-full whitespace-nowrap select-none [-webkit-touch-callout:none] hover:bg-forest-100 dark:hover:bg-forest-700 ${
+          large ? 'px-4' : 'px-3.5'
+        } ${editing ? 'pr-1' : ''}`}
+      >
+        <Plus size={large ? 18 : 14} strokeWidth={2.5} aria-hidden="true" />
+        {label}
+      </button>
+      {editing && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={removeLabel}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-forest-700 hover:bg-forest-100 dark:text-forest-100 dark:hover:bg-forest-700"
+        >
+          <X size={large ? 18 : 16} aria-hidden="true" />
+        </button>
+      )}
+      {menu &&
+        // Into the body, so the sheet takes none of the pill's text styles and no scroller clips it.
+        createPortal(
+          <Dialog title={label} onClose={() => setMenu(false)}>
+            <button
+              type="button"
+              onClick={() => {
+                setMenu(false);
+                onRemove();
+              }}
+              className={`${secondaryButton} w-full justify-start`}
+            >
+              <EyeOff size={18} aria-hidden="true" /> {removeLabel}
+            </button>
+            {hint && <p className="mt-3 text-sm text-stone-600 dark:text-stone-300">{hint}</p>}
+          </Dialog>,
+          document.body,
+        )}
+    </span>
   );
 }
 

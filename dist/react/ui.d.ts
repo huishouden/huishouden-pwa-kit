@@ -1,14 +1,15 @@
 /**
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
- * checkbox, section tabs (a bottom bar on phones), member badge and "Sample data" banner every app shows.
+ * checkbox, section tabs (a bottom bar on phones), member badge, "Sample data" banner every app shows, and
+ * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
  * these files to Tailwind's sources. Icons are lucide-react, like the apps'. Each has `dark:` styles
  * (DESIGN.md "Dark and ambient modes") that apply only under a `.dark` class, for apps with a dark setting.
  */
-import { type ReactNode } from 'react';
+import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { type LucideIcon } from 'lucide-react';
 export declare const inputClass = "w-full min-h-11 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-base text-stone-800 outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:border-forest-600 dark:bg-forest-900 dark:text-stone-100 dark:focus:ring-forest-700";
 /** A select styled like the inputs. */
@@ -29,6 +30,43 @@ export declare function Chip({ active, onClick, children, label }: {
     onClick: () => void;
     children: ReactNode;
     label?: string;
+}): import("react").JSX.Element;
+/** How long a finger rests on something before it counts as a long press. */
+export declare const LONG_PRESS_MS = 500;
+/** Handlers to spread on an element so a long press or a right-click (or the keyboard's menu key) runs `onLongPress`. */
+export interface LongPressHandlers {
+    onPointerDown: (e: ReactPointerEvent) => void;
+    onPointerMove: (e: ReactPointerEvent) => void;
+    onPointerUp: () => void;
+    onPointerLeave: () => void;
+    onPointerCancel: () => void;
+    onContextMenu: (e: ReactMouseEvent) => void;
+    onClickCapture: (e: ReactMouseEvent) => void;
+}
+/**
+ * A long press (touch or mouse, held still for `ms`) or a right-click runs `onLongPress`, and the
+ * click that ends a long press is swallowed, so the element's own onClick runs only for a tap.
+ * Moving more than 10px is a scroll, not a press. Pair the element with a visible way to reach the
+ * same action: a long press is not discoverable on its own.
+ */
+export declare function useLongPress(onLongPress: () => void, ms?: number): LongPressHandlers;
+/**
+ * Something the app learned and offers back, "tap to add": a pill that runs `onPick` on a tap. A
+ * long press or right-click opens a small sheet with "Don't suggest <label>"; with `editing` an ×
+ * beside the label does the same at once, for a visible way in (an "Edit" link by the shelf's
+ * heading). Every target is at least 44px. Removing is the app's (with its Undo).
+ */
+export declare function SuggestionChip({ label, onPick, onRemove, editing, large, removeLabel, hint, }: {
+    label: string;
+    onPick: () => void;
+    onRemove: () => void;
+    /** Shows an × that removes it with one tap. */
+    editing?: boolean;
+    /** The always-on tablet's larger text. */
+    large?: boolean;
+    removeLabel?: string;
+    /** A line in the sheet under the action, such as when it may come back. */
+    hint?: string;
 }): import("react").JSX.Element;
 /**
  * A dialog: bottom sheet on phones, centred on tablets; title and close row; Escape and the scrim

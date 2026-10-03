@@ -2,7 +2,8 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 /**
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
- * checkbox, section tabs (a bottom bar on phones), member badge and "Sample data" banner every app shows.
+ * checkbox, section tabs (a bottom bar on phones), member badge, "Sample data" banner every app shows, and
+ * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -11,7 +12,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Ellipsis, X } from 'lucide-react';
+import { ChevronDown, Ellipsis, EyeOff, Plus, X } from 'lucide-react';
 import { personColour, personInitial, personName } from '../people';
 export const inputClass = 'w-full min-h-11 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-base text-stone-800 outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:border-forest-600 dark:bg-forest-900 dark:text-stone-100 dark:focus:ring-forest-700';
 /** A select styled like the inputs. */
@@ -31,6 +32,77 @@ export function Chip({ active, onClick, children, label }) {
     return (_jsx("button", { type: "button", onClick: onClick, "aria-pressed": active, "aria-label": label, className: `inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 ${active
             ? 'border-forest-700 bg-forest-700 text-white dark:border-forest-300 dark:bg-forest-300 dark:text-forest-900'
             : 'border-stone-200 bg-white text-stone-700 hover:border-forest-400 dark:border-forest-600 dark:bg-forest-800 dark:text-stone-200'}`, children: children }));
+}
+/** How long a finger rests on something before it counts as a long press. */
+export const LONG_PRESS_MS = 500;
+/**
+ * A long press (touch or mouse, held still for `ms`) or a right-click runs `onLongPress`, and the
+ * click that ends a long press is swallowed, so the element's own onClick runs only for a tap.
+ * Moving more than 10px is a scroll, not a press. Pair the element with a visible way to reach the
+ * same action: a long press is not discoverable on its own.
+ */
+export function useLongPress(onLongPress, ms = LONG_PRESS_MS) {
+    const latest = useRef(onLongPress);
+    latest.current = onLongPress;
+    const timer = useRef(undefined);
+    const start = useRef(null);
+    const fired = useRef(false);
+    const cancel = () => {
+        clearTimeout(timer.current);
+        start.current = null;
+    };
+    useEffect(() => () => clearTimeout(timer.current), []);
+    return {
+        onPointerDown: (e) => {
+            fired.current = false;
+            if (e.button !== 0)
+                return;
+            cancel();
+            start.current = { x: e.clientX, y: e.clientY };
+            timer.current = setTimeout(() => {
+                start.current = null;
+                fired.current = true;
+                latest.current();
+            }, ms);
+        },
+        onPointerMove: (e) => {
+            if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10)
+                cancel();
+        },
+        onPointerUp: cancel,
+        onPointerLeave: cancel,
+        onPointerCancel: cancel,
+        onContextMenu: (e) => {
+            e.preventDefault();
+            cancel();
+            // A long press on Android also raises contextmenu; the press already ran it.
+            if (!fired.current)
+                latest.current();
+        },
+        onClickCapture: (e) => {
+            if (!fired.current)
+                return;
+            fired.current = false;
+            e.preventDefault();
+            e.stopPropagation();
+        },
+    };
+}
+/**
+ * Something the app learned and offers back, "tap to add": a pill that runs `onPick` on a tap. A
+ * long press or right-click opens a small sheet with "Don't suggest <label>"; with `editing` an ×
+ * beside the label does the same at once, for a visible way in (an "Edit" link by the shelf's
+ * heading). Every target is at least 44px. Removing is the app's (with its Undo).
+ */
+export function SuggestionChip({ label, onPick, onRemove, editing, large, removeLabel = `Don't suggest ${label}`, hint, }) {
+    const [menu, setMenu] = useState(false);
+    const press = useLongPress(() => setMenu(true));
+    return (_jsxs("span", { className: `inline-flex min-h-11 shrink-0 items-center rounded-full border border-forest-200 bg-forest-50 font-medium text-forest-700 dark:border-forest-600 dark:bg-forest-800 dark:text-forest-100 ${large ? 'text-lg' : 'text-sm'}`, children: [_jsxs("button", { type: "button", ...press, onClick: onPick, "aria-label": `Add ${label}`, className: `inline-flex min-h-11 items-center gap-1.5 rounded-full whitespace-nowrap select-none [-webkit-touch-callout:none] hover:bg-forest-100 dark:hover:bg-forest-700 ${large ? 'px-4' : 'px-3.5'} ${editing ? 'pr-1' : ''}`, children: [_jsx(Plus, { size: large ? 18 : 14, strokeWidth: 2.5, "aria-hidden": "true" }), label] }), editing && (_jsx("button", { type: "button", onClick: onRemove, "aria-label": removeLabel, className: "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-forest-700 hover:bg-forest-100 dark:text-forest-100 dark:hover:bg-forest-700", children: _jsx(X, { size: large ? 18 : 16, "aria-hidden": "true" }) })), menu &&
+                // Into the body, so the sheet takes none of the pill's text styles and no scroller clips it.
+                createPortal(_jsxs(Dialog, { title: label, onClose: () => setMenu(false), children: [_jsxs("button", { type: "button", onClick: () => {
+                                setMenu(false);
+                                onRemove();
+                            }, className: `${secondaryButton} w-full justify-start`, children: [_jsx(EyeOff, { size: 18, "aria-hidden": "true" }), " ", removeLabel] }), hint && _jsx("p", { className: "mt-3 text-sm text-stone-600 dark:text-stone-300", children: hint })] }), document.body)] }));
 }
 /**
  * A dialog: bottom sheet on phones, centred on tablets; title and close row; Escape and the scrim

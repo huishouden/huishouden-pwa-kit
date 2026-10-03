@@ -12,7 +12,7 @@ if (typeof document === 'undefined') GlobalRegistrator.register({ url: 'https://
 afterAll(() => GlobalRegistrator.unregister());
 const { createRoot } = await import('react-dom/client');
 
-const { Chip, Dialog, Field, SampleBanner, SectionTabs, Toast, StatusPill, splitTabs, useToast } = await import('../src/react/ui');
+const { Chip, Dialog, Field, SampleBanner, SectionTabs, SuggestionChip, Toast, StatusPill, splitTabs, useToast } = await import('../src/react/ui');
 const { Clock, History, Home, Phone, Shield, Wrench } = await import('lucide-react');
 const { ClockProvider, useClock } = await import('../src/react/clock');
 const { CalendarImportDialog, CalendarHint } = await import('../src/react/calendar');
@@ -563,4 +563,65 @@ test('a suggestion can say what its add button does', () => {
   expect(added).toEqual(['a']);
   expect(document.querySelector('[aria-label="Add Lawn service"]')!.textContent?.trim()).toBe('Add');
   act(() => root.unmount());
+});
+
+describe('SuggestionChip', () => {
+  const pointer = (type: string, init: PointerEventInit = {}) => new PointerEvent(type, { bubbles: true, button: 0, clientX: 10, clientY: 10, ...init });
+  function setup(editing = false) {
+    const calls: string[] = [];
+    const { root } = render(<SuggestionChip label="Milk" editing={editing} onPick={() => calls.push('pick')} onRemove={() => calls.push('remove')} hint="It comes back once it is added again." />);
+    return { calls, root, chip: document.querySelector('[aria-label="Add Milk"]') as HTMLElement };
+  }
+
+  test('a tap picks it', () => {
+    const { calls, root, chip } = setup();
+    act(() => void chip.dispatchEvent(pointer('pointerdown')));
+    act(() => void chip.dispatchEvent(pointer('pointerup')));
+    click(chip);
+    expect(calls).toEqual(['pick']);
+    expect(document.querySelector('[role=dialog]')).toBeNull();
+    act(() => root.unmount());
+  });
+
+  test('a long press opens the sheet without picking, and its action removes', async () => {
+    const { calls, root, chip } = setup();
+    act(() => void chip.dispatchEvent(pointer('pointerdown')));
+    await act(() => new Promise((r) => setTimeout(r, 550)));
+    act(() => void chip.dispatchEvent(pointer('pointerup')));
+    click(chip);
+    expect(calls).toEqual([]);
+    expect(document.querySelector('[role=dialog]')!.getAttribute('aria-label')).toBe('Milk');
+    expect(document.body.textContent).toContain('It comes back once it is added again.');
+    click(byText("Don't suggest Milk"));
+    expect(calls).toEqual(['remove']);
+    expect(document.querySelector('[role=dialog]')).toBeNull();
+    // The next tap picks again.
+    act(() => void chip.dispatchEvent(pointer('pointerdown')));
+    click(chip);
+    expect(calls).toEqual(['remove', 'pick']);
+    act(() => root.unmount());
+  });
+
+  test('moving the finger is a scroll, not a press', async () => {
+    const { root, chip } = setup();
+    act(() => void chip.dispatchEvent(pointer('pointerdown')));
+    act(() => void chip.dispatchEvent(pointer('pointermove', { clientX: 40 })));
+    await act(() => new Promise((r) => setTimeout(r, 550)));
+    expect(document.querySelector('[role=dialog]')).toBeNull();
+    act(() => root.unmount());
+  });
+
+  test('a right-click opens the sheet', () => {
+    const { root, chip } = setup();
+    act(() => void chip.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
+    expect(document.querySelector('[role=dialog]')).not.toBeNull();
+    act(() => root.unmount());
+  });
+
+  test('editing shows an × that removes it at once', () => {
+    const { calls, root } = setup(true);
+    click(document.querySelector('[aria-label="Don\'t suggest Milk"]'));
+    expect(calls).toEqual(['remove']);
+    act(() => root.unmount());
+  });
 });
