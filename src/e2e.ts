@@ -363,3 +363,27 @@ export async function signInTestUser(page: Page, { email, path = './', sdkVersio
   // Not networkidle: a signed-in app keeps Firestore's listen channel open.
   await page.goto(path);
 }
+
+export interface PortalTodoOptions {
+  /** `done` (default) or `cancel`, which also confirms. */
+  action?: 'done' | 'cancel';
+  /** The portal's To-do page (default `/todo`, the site root's: the portal is at `/` on the one site). */
+  path?: string;
+  /** How long to wait for the app's item to be published (default 30 s: apps publish a few seconds after a change). */
+  timeout?: number;
+}
+
+/**
+ * Finds `title` on the portal's To-do tab (a list item named for it, published by an app through
+ * `./todos`) and runs its Done or Cancel there, confirming a cancel, then waits for the item to leave
+ * the list. For an app's signed-in staging test: create a record in the app, run this, then check the
+ * app's own data changed. Each staging site is a full mirror, so the portal is at `/` on it.
+ */
+export async function runPortalTodo(page: Page, title: string, { action = 'done', path = '/todo', timeout = 30_000 }: PortalTodoOptions = {}) {
+  await page.goto(path);
+  const row = page.getByRole('listitem', { name: title, exact: true });
+  await expect(row, `"${title}" on the portal's To-do list`).toBeVisible({ timeout });
+  await row.locator(`[data-todo-action="${action}"]`).click();
+  if (action === 'cancel') await page.getByRole('dialog').locator('[data-todo-confirm]').click();
+  await expect(row, `"${title}" leaves the To-do list`).toHaveCount(0, { timeout: 15_000 });
+}
