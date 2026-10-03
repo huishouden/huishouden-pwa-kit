@@ -1,6 +1,7 @@
 import { type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { type Role } from './roles.js';
 import { type Op } from './store.js';
+import { type Ymd } from './time.js';
 /**
  * The household's to-do list: every app's open, actionable things in one collection,
  * `households/{id}/todos`, so the portal can show one list (sorted by when each was added, to clear
@@ -15,7 +16,9 @@ import { type Op } from './store.js';
  * Op data may hold placeholders, resolved when the action runs rather than when it was published:
  * `'$now'` (ms), `'$today'` (YYYY-MM-DD), `'$me'` (the member's email) and `'$today+3m'` (a day
  * that far from today: `d`, `w`, `m` or `y`), so "done" on a job means done today even if the item
- * was published last week.
+ * was published last week. `{ $nextDue: { schedule, due } }` is a repeating job's next due date once
+ * done today (`./schedule` `nextDueAfterDone`): for set dates the first one after both `due` and
+ * today, however many dates passed between publishing and the tap.
  *
  * Admins and members read every item; helpers and kids those with `private: false`. Spending's
  * and Bills' are always private. Fields match the rules (`TODO_FIELDS`); keep them in step.
@@ -144,7 +147,14 @@ export interface ResolveContext {
     now: number;
     me: string;
 }
-/** The ops with their placeholders (`'$now'`, `'$today'`, `'$today+3m'`, `'$me'`) filled in. */
+/** `{ $nextDue: { schedule, due } }`: the next due date of a job done today. */
+export interface NextDuePlaceholder {
+    $nextDue: {
+        schedule: unknown;
+        due: Ymd;
+    };
+}
+/** The ops with their placeholders (`'$now'`, `'$today'`, `'$today+3m'`, `'$me'`, `{ $nextDue }`) filled in; throws `TodoActionError` on a malformed `$nextDue`. */
 export declare function resolveOps(ops: readonly Op[], ctx: ResolveContext): Op[];
 export interface ApplyOptions {
     me: string;
