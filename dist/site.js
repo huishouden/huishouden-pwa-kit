@@ -67,7 +67,7 @@ export function unionFeatures(all) {
 const NO_CACHE = [{ key: 'Cache-Control', value: 'no-cache' }];
 const IMMUTABLE = [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }];
 /** Files that must be fetched fresh for an update to reach a device. */
-export const FRESH_FILES = ['sw.js', 'registerSW.js', 'hh-push-sw.js', 'index.html', 'manifest.webmanifest', 'manifest.json'];
+export const FRESH_FILES = ['sw.js', 'registerSW.js', 'hh-push-sw.js', 'hh-share-sw.js', 'index.html', 'manifest.webmanifest', 'manifest.json'];
 /**
  * The shared site's hosting config: `/<app>` → `/<app>/`, each app's routes to its own
  * `index.html`, everything else to the portal's; Firebase's `/__/` untouched. `paths` are the apps
