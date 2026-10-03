@@ -1,0 +1,26 @@
+[
+  {
+    "card": {
+      "name": "Example Plumbing Co.",
+      "phones": [
+        {
+          "value": "+1 555-010-0150",
+          "label": "Main"
+        }
+      ],
+      "emails": [
+        {
+          "value": "office@plumbing.example.com"
+        }
+      ],
+      "organization": "Example Plumbing Co.",
+      "website": "plumbing.example.com"
+    },
+    "fill": {
+      "name": "Example Plumbing Co.",
+      "phone": "+1 555-010-0150",
+      "email": "office@plumbing.example.com",
+      "website": "plumbing.example.com"
+    }
+  }
+]

@@ -1,13 +1,18 @@
 /**
- * The household's contacts in React: the add/edit dialog (with an OpenStreetMap business search
- * that fills in the address, phone and website, and for businesses the map lacks, filling from a
- * listing screenshot or pasted listing text) and the contact card with tap-to-call, email,
+ * The household's contacts in React: the add/edit dialog (filling from the person's own contacts:
+ * the phone's contact picker, a contact card file or Google Contacts; an OpenStreetMap business
+ * search that fills in the address, phone and website, and for businesses the map lacks, filling
+ * from a listing screenshot or pasted listing text) and the contact card with tap-to-call, email,
  * website and map links. Saves go through `contactInput` in `../contacts`, so every app trims and
  * links the same way.
  */
 import { useRef, useState } from 'react';
-import { ClipboardPaste, ExternalLink, Globe, ImageUp, Lock, Mail, MapPin, Pencil, Phone, Search, Trash2 } from 'lucide-react';
+import type { Auth } from 'firebase/auth';
+import { BookUser, ClipboardPaste, ExternalLink, FileUp, Globe, ImageUp, Lock, Mail, MapPin, Pencil, Phone, Search, Trash2, UserSearch } from 'lucide-react';
 import { CONTACT_LIMITS, contactInput, displayWebsite, type Contact, type ContactInput } from '../contacts';
+import { contactFromCard, contactPickerSupported, contactSummary, parseVCard, pickContact, type ContactFill, type ParsedContact } from '../vcard';
+import { googleContactsAvailable, googleContactsToken, searchGoogleContacts } from '../google-contacts';
+import { googleAccessMessage, popupCancelled } from '../feedback';
 import { mapsSearchUrl, parsePlaceText, readPlaceScreenshot, searchPlaces, telHref, type ParsedPlace, type Place } from '../places';
 import { Checkbox, Chip, Dialog, ErrorNotice, Field, cardClass, deleteButton, ghostButton, iconButton, inputClass, linkClass, overline, primaryButton, secondaryButton } from './ui';
 
@@ -22,6 +27,19 @@ type Fill =
   | { status: 'done'; source: FillSource; place: ParsedPlace; filled: string[] };
 
 const SOURCE_WORDS: Record<FillSource, string> = { screenshot: 'the screenshot', text: 'the pasted text', share: 'what was shared' };
+
+/** Where a contact of the person's own came from. */
+type CardSource = 'picker' | 'card' | 'google' | 'shared';
+const CARD_WORDS: Record<CardSource, string> = { picker: 'your contacts', card: 'the contact card', google: 'Google Contacts', shared: 'the shared contact' };
+
+/** Filling from the person's own contacts: a list to choose from, a Google search, or what was filled. */
+type Own =
+  | { status: 'idle' }
+  | { status: 'busy'; doing: string }
+  | { status: 'choose'; source: CardSource; cards: ParsedContact[] }
+  | { status: 'none'; message: string }
+  | { status: 'error'; message: string; retry: () => void }
+  | { status: 'done'; source: CardSource; name: string; filled: string[] };
 
 const listWords = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
 
@@ -44,6 +62,16 @@ export interface ContactDialogProps {
    * opened from Google Maps' Share menu. Shown with what wasn't understood, for the person to check.
    */
   prefill?: ParsedPlace;
+  /**
+   * Contact cards shared into the app (`readSharedContact()` in `../contacts`): one fills the new
+   * contact, several are listed to choose from.
+   */
+  sharedContacts?: ParsedContact[];
+  /**
+   * The app's Firebase Auth: with a member signed in, offers "Find in my Google Contacts"
+   * (read-only, asks Google for permission on the first tap). Leave out to not offer it.
+   */
+  auth?: Auth | null;
   /** Reads a listing screenshot; defaults to on-device OCR (`readPlaceScreenshot`). Tests pass a stand-in. */
   readScreenshot?: (image: Blob, onProgress: (progress: number, status: string) => void) => Promise<ParsedPlace>;
   /**
@@ -65,6 +93,8 @@ export function ContactDialog({
   searchPlaceholder = 'Business name and town',
   namePlaceholder,
   prefill,
+  sharedContacts,
+  auth,
   readScreenshot = (image, onProgress) => readPlaceScreenshot(image, { onProgress }),
   canMarkPrivate = true,
   onSave,
@@ -72,14 +102,15 @@ export function ContactDialog({
   onClose,
 }: ContactDialogProps) {
   const start = contact ? undefined : prefill;
-  const [name, setName] = useState(contact?.name ?? start?.name?.slice(0, CONTACT_LIMITS.name) ?? '');
-  const [role, setRole] = useState(contact?.role ?? initialRole ?? '');
-  const [phone, setPhone] = useState(contact?.phone ?? start?.phone ?? '');
-  const [email, setEmail] = useState(contact?.email ?? start?.email ?? '');
-  const [website, setWebsite] = useState(contact?.website ?? start?.website ?? '');
-  const [address, setAddress] = useState(contact?.address ?? start?.address?.slice(0, CONTACT_LIMITS.address) ?? '');
+  const card = !contact && sharedContacts?.length === 1 ? contactFromCard(sharedContacts[0], { role: !initialRole }) : undefined;
+  const [name, setName] = useState(contact?.name ?? card?.name ?? start?.name?.slice(0, CONTACT_LIMITS.name) ?? '');
+  const [role, setRole] = useState(contact?.role ?? initialRole ?? card?.role ?? '');
+  const [phone, setPhone] = useState(contact?.phone ?? card?.phone ?? start?.phone ?? '');
+  const [email, setEmail] = useState(contact?.email ?? card?.email ?? start?.email ?? '');
+  const [website, setWebsite] = useState(contact?.website ?? card?.website ?? start?.website ?? '');
+  const [address, setAddress] = useState(contact?.address ?? card?.address ?? start?.address?.slice(0, CONTACT_LIMITS.address) ?? '');
   const [mapsUrl, setMapsUrl] = useState(contact?.mapsUrl ?? start?.mapsUrl ?? '');
-  const [notes, setNotes] = useState(contact?.notes ?? (start?.hours ? `Hours: ${start.hours}`.slice(0, CONTACT_LIMITS.notes) : ''));
+  const [notes, setNotes] = useState(contact?.notes ?? card?.notes ?? (start?.hours ? `Hours: ${start.hours}`.slice(0, CONTACT_LIMITS.notes) : ''));
   const [isPrivate, setPrivate] = useState(contact?.private === true);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState<PlaceSearch>({ status: 'idle' });
@@ -87,7 +118,21 @@ export function ContactDialog({
   const [pasting, setPasting] = useState(false);
   const [pasted, setPasted] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
+  const cardInput = useRef<HTMLInputElement>(null);
   const lastImage = useRef<Blob | null>(null);
+  const [picker] = useState(contactPickerSupported);
+  const [google] = useState(() => googleContactsAvailable(auth));
+  const [googleOpen, setGoogleOpen] = useState(false);
+  const [googleQuery, setGoogleQuery] = useState('');
+  // Fills right away from one shared card; several wait for the person to choose.
+  const [own, setOwn] = useState<Own>(() => {
+    if (contact || !sharedContacts) return { status: 'idle' };
+    if (sharedContacts.length === 0) return { status: 'none', message: 'Couldn’t find a contact in what was shared.' };
+    if (sharedContacts.length > 1) return { status: 'choose', source: 'shared', cards: sharedContacts };
+    return { status: 'done', source: 'shared', name: sharedContacts[0].name, filled: fillFields(contactFromCard(sharedContacts[0], { role: !initialRole })) };
+  });
+  // Notes a filled contact wrote, replaced (not added to again) when another one is chosen.
+  const filledNotes = useRef(card?.notes ?? '');
   const valid = name.trim().length > 0;
 
   const save = () => {
@@ -131,6 +176,63 @@ export function ContactDialog({
     setFill({ status: 'done', source, place: p, filled: filledFields(p, !notes.trim()) });
   };
 
+  // Fills what the contact has, keeps what was typed for anything it lacks, and says which.
+  const fillFromContact = (c: ParsedContact, source: CardSource) => {
+    const f = contactFromCard(c, { role: !role.trim() });
+    if (f.name) setName(f.name);
+    if (f.role) setRole(f.role);
+    if (f.phone) setPhone(f.phone);
+    if (f.email) setEmail(f.email);
+    if (f.website) setWebsite(f.website);
+    if (f.address) {
+      setAddress(f.address);
+      setMapsUrl('');
+    }
+    if (f.notes) {
+      const kept = notes.trim() === filledNotes.current.trim() ? '' : notes.trim();
+      setNotes((kept ? `${kept}\n${f.notes}` : f.notes).slice(0, CONTACT_LIMITS.notes));
+      filledNotes.current = f.notes;
+    }
+    setOwn({ status: 'done', source, name: c.name, filled: fillFields(f) });
+  };
+
+  const offer = (cards: ParsedContact[], source: CardSource, none: string) => {
+    if (cards.length === 0) setOwn({ status: 'none', message: none });
+    else if (cards.length === 1 && source !== 'google') fillFromContact(cards[0], source);
+    else setOwn({ status: 'choose', source, cards });
+  };
+
+  const pickFromPhone = async () => {
+    try {
+      const chosen = await pickContact();
+      if (chosen) fillFromContact(chosen, 'picker');
+    } catch {
+      setOwn({ status: 'error', message: 'Couldn’t open your contacts.', retry: () => void pickFromPhone() });
+    }
+  };
+
+  const importCard = async (file: File) => {
+    setOwn({ status: 'busy', doing: 'Reading the contact card…' });
+    try {
+      offer(parseVCard(await file.text()), 'card', 'Couldn’t find a contact in that file. Choose a contact card (.vcf).');
+    } catch {
+      setOwn({ status: 'error', message: 'Couldn’t read that file.', retry: () => cardInput.current?.click() });
+    }
+  };
+
+  const findInGoogle = async () => {
+    const q = googleQuery.trim();
+    if (!q) return;
+    setOwn({ status: 'busy', doing: 'Searching Google Contacts…' });
+    try {
+      const token = await googleContactsToken(auth as Auth);
+      offer(await searchGoogleContacts(token, q), 'google', `No one found for "${q}" in your Google Contacts.`);
+    } catch (e) {
+      if (popupCancelled(e)) return setOwn({ status: 'idle' });
+      setOwn({ status: 'error', message: googleAccessMessage(e, 'Google Contacts') ?? 'Couldn’t search Google Contacts. Try again.', retry: () => void findInGoogle() });
+    }
+  };
+
   const readImage = async (image: Blob) => {
     lastImage.current = image;
     setPasting(false);
@@ -172,6 +274,94 @@ export function ContactDialog({
         </>
       }
     >
+      <section className="mb-5 space-y-3 rounded-2xl border border-stone-200 p-4" aria-labelledby="own-contacts">
+        <p id="own-contacts" className="text-sm font-medium text-stone-700">
+          Already in your contacts?
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {picker && (
+            <button type="button" className={secondaryButton} disabled={own.status === 'busy'} onClick={() => void pickFromPhone()}>
+              <BookUser size={18} aria-hidden="true" /> Pick from my contacts
+            </button>
+          )}
+          <button type="button" className={secondaryButton} disabled={own.status === 'busy'} onClick={() => cardInput.current?.click()}>
+            <FileUp size={18} aria-hidden="true" /> Import a contact card
+          </button>
+          {google && (
+            <button type="button" className={secondaryButton} aria-expanded={googleOpen} onClick={() => setGoogleOpen(!googleOpen)}>
+              <UserSearch size={18} aria-hidden="true" /> Find in my Google Contacts
+            </button>
+          )}
+          <input
+            ref={cardInput}
+            type="file"
+            accept=".vcf,.vcard,text/vcard,text/x-vcard"
+            hidden
+            aria-label="Contact card file"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) void importCard(file);
+            }}
+          />
+        </div>
+        {googleOpen && (
+          <form
+            className="space-y-1.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void findInGoogle();
+            }}
+          >
+            <label htmlFor="google-contacts-query" className="block text-sm font-medium text-stone-700">
+              Name, email or phone
+            </label>
+            <div className="flex gap-2">
+              <input id="google-contacts-query" className={inputClass} value={googleQuery} onChange={(e) => setGoogleQuery(e.target.value)} autoComplete="off" />
+              <button type="submit" className={secondaryButton} disabled={!googleQuery.trim() || own.status === 'busy'}>
+                <Search size={18} aria-hidden="true" /> Search
+              </button>
+            </div>
+            <p className="text-sm text-stone-600">If Google says it hasn’t verified this app, choose Advanced, then continue: the app only reads your contacts.</p>
+          </form>
+        )}
+        {own.status === 'busy' && (
+          <p role="status" className="text-base text-stone-600">
+            {own.doing}
+          </p>
+        )}
+        {own.status === 'none' && (
+          <p role="status" className="text-base text-stone-600">
+            {own.message}
+          </p>
+        )}
+        {own.status === 'error' && <ErrorNotice message={own.message} onRetry={own.retry} />}
+        {own.status === 'choose' && (
+          <div className="space-y-1.5">
+            <p className="text-sm text-stone-600">{own.source === 'google' ? 'Choose who to add.' : `${CARD_WORDS[own.source][0].toUpperCase()}${CARD_WORDS[own.source].slice(1)} has ${own.cards.length} people. Choose one.`}</p>
+            <ul className="grid gap-1.5" aria-label="Contacts to choose from">
+              {own.cards.map((c, i) => (
+                <li key={i}>
+                  <button
+                    type="button"
+                    onClick={() => fillFromContact(c, own.source)}
+                    className="w-full rounded-xl border border-stone-200 px-3 py-2 text-left hover:border-forest-500 hover:bg-forest-50"
+                  >
+                    <span className="block font-medium text-stone-800 [overflow-wrap:anywhere]">{c.name}</span>
+                    {contactSummary(c) && <span className="block text-sm text-stone-600 [overflow-wrap:anywhere]">{contactSummary(c)}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {own.status === 'done' && (
+          <p role="status" className="text-base text-stone-700">
+            {own.filled.length ? `Filled in the ${listWords(own.filled)} from ${CARD_WORDS[own.source]}. Check them before saving.` : `${own.name} had no details to fill in.`}
+          </p>
+        )}
+      </section>
+
       <section className="mb-5 space-y-3 rounded-2xl border border-stone-200 p-4">
         <form
           className="space-y-1.5"
@@ -331,6 +521,11 @@ export function ContactDialog({
       </form>
     </Dialog>
   );
+}
+
+/** Field names a contact fills in, in the order the form shows them. */
+function fillFields(f: ContactFill): string[] {
+  return [f.name && 'name', f.role && 'role', f.phone && 'phone', f.email && 'email', f.website && 'website', f.address && 'address', f.notes && 'notes'].filter((x): x is string => !!x);
 }
 
 /** Field names a parsed listing fills in, in the order the form shows them. */

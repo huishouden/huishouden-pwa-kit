@@ -1,4 +1,6 @@
+import type { Auth } from 'firebase/auth';
 import { type Contact, type ContactInput } from '../contacts';
+import { type ParsedContact } from '../vcard';
 import { type ParsedPlace } from '../places';
 export interface ContactDialogProps {
     contact: Contact | null;
@@ -22,6 +24,16 @@ export interface ContactDialogProps {
      * opened from Google Maps' Share menu. Shown with what wasn't understood, for the person to check.
      */
     prefill?: ParsedPlace;
+    /**
+     * Contact cards shared into the app (`readSharedContact()` in `../contacts`): one fills the new
+     * contact, several are listed to choose from.
+     */
+    sharedContacts?: ParsedContact[];
+    /**
+     * The app's Firebase Auth: with a member signed in, offers "Find in my Google Contacts"
+     * (read-only, asks Google for permission on the first tap). Leave out to not offer it.
+     */
+    auth?: Auth | null;
     /** Reads a listing screenshot; defaults to on-device OCR (`readPlaceScreenshot`). Tests pass a stand-in. */
     readScreenshot?: (image: Blob, onProgress: (progress: number, status: string) => void) => Promise<ParsedPlace>;
     /**
@@ -33,7 +45,7 @@ export interface ContactDialogProps {
     onDelete?: () => void;
     onClose: () => void;
 }
-export declare function ContactDialog({ contact, app, roles, role: initialRole, title, searchPlaceholder, namePlaceholder, prefill, readScreenshot, canMarkPrivate, onSave, onDelete, onClose, }: ContactDialogProps): import("react").JSX.Element;
+export declare function ContactDialog({ contact, app, roles, role: initialRole, title, searchPlaceholder, namePlaceholder, prefill, sharedContacts, auth, readScreenshot, canMarkPrivate, onSave, onDelete, onClose, }: ContactDialogProps): import("react").JSX.Element;
 /**
  * "Only admins and members": the private flag on a contact or appointment (`./roles`), with its
  * one-line explanation. Show it only to those who may set it (`can(role, 'see-private')`).

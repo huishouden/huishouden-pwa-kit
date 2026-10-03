@@ -1,13 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { VitePWA } from 'vite-plugin-pwa';
 import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
+import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource } from './share-sw.js';
 /**
  * Vite PWA plugin with the conventions every app here shares: auto-updating service worker,
  * standalone manifest with 192/512/maskable icons from public/, and Firebase-safe navigation.
  */
 export function pwaApp(options) {
     const { overrides = {} } = options;
-    return [buildStamp(), telemetryChunks(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...VitePWA({
+    return [buildStamp(), telemetryChunks(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
             registerType: 'autoUpdate',
             includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
             ...overrides,
@@ -27,7 +28,7 @@ export function pwaWorkbox(options) {
         navigateFallback: '/index.html',
         navigateFallbackDenylist: FIREBASE_RESERVED_PATHS,
         ...workboxOverrides,
-        importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...importScripts],
+        importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...(sharesContacts(options) ? [SHARE_SW_FILE] : []), ...importScripts],
         runtimeCaching: [...(options.ocr ? [OCR_CACHE] : []), ...runtimeCaching],
         globIgnores: [TELEMETRY_CHUNKS, ...globIgnores],
     };
@@ -45,7 +46,7 @@ export function webManifest(options) {
         orientation: 'any',
         start_url: '/',
         scope: '/',
-        ...(options.shareTarget ? { share_target: SHARE_TARGET } : {}),
+        ...(options.shareTarget ? { share_target: sharesContacts(options) ? SHARE_TARGET_FILES : SHARE_TARGET } : {}),
         icons: options.icons ?? [
             { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
             { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -123,6 +124,17 @@ export function telemetryChunks() {
         },
     };
 }
+/** Emits the share target's handler next to the service worker (see share-sw.ts). */
+function shareServiceWorkerFile() {
+    return {
+        name: 'huishouden-share-sw',
+        apply: 'build',
+        generateBundle() {
+            this.emitFile({ type: 'asset', fileName: SHARE_SW_FILE, source: shareServiceWorkerSource() });
+        },
+    };
+}
+const sharesContacts = (options) => typeof options.shareTarget === 'object' && options.shareTarget.contacts === true;
 /** Emits the push handlers next to the service worker (see push-sw.ts). */
 function pushServiceWorkerFile() {
     return {
@@ -142,6 +154,20 @@ export const SHARE_TARGET = {
     method: 'GET',
     enctype: 'application/x-www-form-urlencoded',
     params: { title: 'share_title', text: 'share_text', url: 'share_url' },
+};
+/**
+ * The share target with contact cards (`shareTarget: { contacts: true }`): files need a POST,
+ * received by the service worker (`hh-share-sw.js`). The action is relative, so it resolves
+ * against the manifest and stays inside the app's scope wherever the app is served.
+ */
+export const SHARE_TARGET_FILES = {
+    action: SHARE_ACTION,
+    method: 'POST',
+    enctype: 'multipart/form-data',
+    params: {
+        ...SHARE_TARGET.params,
+        files: [{ name: SHARE_FILE_FIELD, accept: ['text/vcard', 'text/x-vcard', 'text/directory', '.vcf', '.vcard'] }],
+    },
 };
 /** The OCR engine's files; their URLs carry exact versions, so a cached copy never goes stale. */
 export const OCR_CACHE = {
