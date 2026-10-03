@@ -12,13 +12,13 @@ mock.module('firebase/firestore', () => ({
   ...real,
   collection: (_db: unknown, ...parts: string[]) => ({ path: parts.join('/') }),
   doc: (col: { path: string }, id: string) => ref(`${col.path}/${id}`),
-  where: (field: string, _op: string, value: unknown) => ({ field, value }),
-  query: (col: { path: string }, ...ws: { field: string; value: unknown }[]) => ({ ...col, ws }),
+  where: (field: string, op: string, value: unknown) => ({ field, op, value }),
+  query: (col: { path: string }, ...ws: { field: string; op?: string; value: unknown }[]) => ({ ...col, ws }),
   setDoc: async (r: Ref, data: Record<string, unknown>) => void store.set(r.path, data),
   deleteDoc: async (r: Ref) => void store.delete(r.path),
-  getDocs: async (q: { path: string; ws: { field: string; value: unknown }[] }) => {
+  getDocs: async (q: { path: string; ws: { field: string; op?: string; value: unknown }[] }) => {
     const docs = [...store.entries()]
-      .filter(([p, d]) => p.startsWith(`${q.path}/`) && q.ws.every((w) => d[w.field] === w.value))
+      .filter(([p, d]) => p.startsWith(`${q.path}/`) && q.ws.every((w) => ((w as { op?: string }).op === 'array-contains' ? Array.isArray(d[w.field]) && (d[w.field] as unknown[]).includes(w.value) : d[w.field] === w.value)))
       .map(([p, d]) => ({ id: p.split('/').pop()!, ref: ref(p), data: () => d }));
     return { docs, size: docs.length };
   },
@@ -36,7 +36,7 @@ mock.module('firebase/firestore', () => ({
   },
 }));
 
-const { REMINDER_FIELDS, cancelReminders, reminderDoc, reminderId, remindersForCourse, replaceReminders, syncReminders, toReminder, upsertReminder } = await import('../src/reminders');
+const { PERSONAL_REMINDER_FIELDS, personalReminderDoc, syncPersonalReminders, REMINDER_FIELDS, cancelReminders, reminderDoc, reminderId, remindersForCourse, replaceReminders, syncReminders, toReminder, upsertReminder } = await import('../src/reminders');
 
 const db = {} as real.Firestore;
 const NOW = new Date(2026, 2, 14, 12, 0).getTime();
@@ -191,5 +191,36 @@ describe('private reminders', () => {
     expect(store.has(path('vet'))).toBe(true);
     expect(store.has(path('d2'))).toBe(false);
     expect(store.get(path('d3'))?.private).toBeUndefined();
+  });
+});
+
+describe('reminders for named members only', () => {
+  const A = 'alex@example.com';
+  const N = 'nan@example.com';
+  const input = (at: number, recipients: string[], audience = [A, N]) => ({
+    app: 'health', title: 'Medicine for Nan', body: '8:00 AM: Lisinopril 10 mg', at, url: 'https://example.web.app/health/', recipients, audience, ref: 'health:dose:p1',
+  });
+
+  test('the document keeps recipients within the audience, private, unsent', () => {
+    const d = personalReminderDoc(input(at(15, 8), ['Nan@example.com', 'sam@example.com']), A, NOW);
+    expect(d.recipients).toEqual([N]);
+    expect(d.audience).toEqual([A, N]);
+    expect(d.private).toBe(true);
+    expect(d.sent).toBe(false);
+    for (const k of Object.keys(d)) expect(PERSONAL_REMINDER_FIELDS as readonly string[]).toContain(k);
+    expect(() => personalReminderDoc(input(at(15, 8), [N], [N]), A, NOW)).toThrow();
+    expect(() => personalReminderDoc(input(at(15, 8), ['sam@example.com']), A, NOW)).toThrow();
+  });
+
+  test('sync writes future ones naming the writer, deletes dropped ones, never touches sent or others', async () => {
+    store.clear();
+    const col = 'households/h1/personalReminders';
+    store.set(`${col}/sent`, { app: 'health', at: at(14, 8), sent: true, audience: [A] });
+    store.set(`${col}/someone-else`, { app: 'health', at: at(16, 8), sent: false, audience: [N] });
+    const first = await syncPersonalReminders(db, 'h1', 'health', [input(at(15, 8), [A]), input(at(15, 20), [A], [N]), input(at(13, 8), [A])], A, NOW);
+    expect(first).toEqual({ written: 1, deleted: 0, unchanged: 0 });
+    expect(await syncPersonalReminders(db, 'h1', 'health', [input(at(15, 8), [A])], A, NOW)).toEqual({ written: 0, deleted: 0, unchanged: 1 });
+    expect(await syncPersonalReminders(db, 'h1', 'health', [], A, NOW)).toEqual({ written: 0, deleted: 1, unchanged: 0 });
+    expect([...store.keys()].sort()).toEqual([`${col}/sent`, `${col}/someone-else`]);
   });
 });

@@ -10,12 +10,12 @@ type Ref = { path: string; id: string };
 type Where = { field: string; op: string; value: unknown };
 const ref = (path: string): Ref => ({ path, id: path.split('/').pop()! });
 const matches = (d: Record<string, unknown>, w: Where) =>
-  w.op === '==' ? d[w.field] === w.value : w.op === '<' ? (d[w.field] as number) < (w.value as number) : false;
+  w.op === '==' ? d[w.field] === w.value : w.op === '<' ? (d[w.field] as number) < (w.value as number) : w.op === 'array-contains' ? Array.isArray(d[w.field]) && (d[w.field] as unknown[]).includes(w.value) : false;
 const docsOf = (q: { path: string; w: Where[] }) =>
   [...store.entries()]
     .filter(([p, d]) => p.startsWith(`${q.path}/`) && !p.slice(q.path.length + 1).includes('/') && q.w.every((w) => matches(d, w)))
     .map(([p, d]) => ({ id: p.split('/').pop()!, ref: ref(p), data: () => d }));
-let listener: (() => void) | null = null;
+const listeners = new Set<() => void>();
 // Paths the stand-in refuses like the rules would (a helper writing over an item without the flag).
 const refuse = new Set<string>();
 mock.module('firebase/firestore', () => ({
@@ -26,9 +26,10 @@ mock.module('firebase/firestore', () => ({
   query: (col: { path: string }, ...w: Where[]) => ({ ...col, w }),
   getDocs: async (q: { path: string; w: Where[] }) => ({ docs: docsOf(q) }),
   onSnapshot: (q: { path: string; w: Where[] }, next: (s: unknown) => void) => {
-    listener = () => next({ docs: docsOf(q) });
+    const listener = () => next({ docs: docsOf(q) });
+    listeners.add(listener);
     listener();
-    return () => (listener = null);
+    return () => listeners.delete(listener);
   },
   writeBatch: () => {
     const ops: (() => void)[] = [];
@@ -39,7 +40,7 @@ mock.module('firebase/firestore', () => ({
       commit: async () => {
         if (paths.some((p) => refuse.has(p))) throw Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
         ops.forEach((op) => op());
-        listener?.();
+        listeners.forEach((l) => l());
       },
     };
   },
@@ -49,6 +50,7 @@ const agenda = await import('../src/agenda');
 const {
   AGENDA_FIELDS, agendaDays, agendaDoc, agendaId, agendaStatus, agendaTime, allDayStart, inAgendaWindow,
   removeAgenda, replaceAgenda, syncAgenda, toAgendaItem, todayItems, watchAgenda,
+  personalAgendaDoc, syncPersonalAgenda, PERSONAL_AGENDA_FIELDS,
 } = agenda;
 type AgendaInput = import('../src/agenda').AgendaInput;
 type AgendaItem = import('../src/agenda').AgendaItem;
@@ -350,5 +352,54 @@ describe('agendaDays', () => {
   test('a timed item ending on a later day shows on both', () => {
     const days = agendaDays([item({ start: at(10, 2, 22), end: at(10, 3, 2) })], NOW);
     expect(days.map((d) => d.day)).toEqual(['2026-10-02', '2026-10-03']);
+  });
+});
+
+describe('items for named members only', () => {
+  const item = (ref: string, start: number, audience: string[]): import('../src/agenda').PersonalAgendaInput => ({
+    ref, kind: 'medicine', title: 'Medicine for Nan', start, allDay: false, url: 'https://example.web.app/health/', status: 'upcoming', audience,
+  });
+
+  test('the document names its audience, lowercased and sorted, and is private', () => {
+    const d = personalAgendaDoc('health', item('dose:p1:0800', at(10, 2, 8), ['Sam@Example.com', 'alex@example.com', 'sam@example.com']), 'alex@example.com', NOW);
+    expect(d.audience).toEqual(['alex@example.com', 'sam@example.com']);
+    expect(d.private).toBe(true);
+    for (const k of Object.keys(d)) expect(PERSONAL_AGENDA_FIELDS as readonly string[]).toContain(k);
+    expect(() => personalAgendaDoc('health', item('x', at(10, 2, 8), ['sam@example.com']), 'alex@example.com', NOW)).toThrow();
+  });
+
+  test('a sync writes the items that name the writer, keeps others', async () => {
+    store.clear();
+    const mine = item('dose:p1:0800', at(10, 2, 8), ['alex@example.com', 'sam@example.com']);
+    const notMine = item('dose:p2:0800', at(10, 2, 8), ['sam@example.com']);
+    // Another carer's item the writer can't see stays put.
+    store.set(`households/${H}/personalAgenda/other`, { app: 'health', audience: ['sam@example.com'], start: at(10, 2, 9) });
+    const r = await syncPersonalAgenda(db, H, 'health', [mine, notMine], BY);
+    expect(r).toEqual({ written: 1, deleted: 0, unchanged: 0 });
+    expect([...store.keys()].filter((k) => k.includes('personalAgenda')).sort()).toEqual([
+      `households/${H}/personalAgenda/health_dose_p1_0800_${at(10, 2, 8)}`,
+      `households/${H}/personalAgenda/other`,
+    ]);
+    expect(await syncPersonalAgenda(db, H, 'health', [mine], BY)).toEqual({ written: 0, deleted: 0, unchanged: 1 });
+    expect(await syncPersonalAgenda(db, H, 'health', [], BY)).toEqual({ written: 0, deleted: 1, unchanged: 0 });
+    expect(store.has(`households/${H}/personalAgenda/other`)).toBe(true);
+  });
+
+  test("watchAgenda with me follows the shared items and the member's own", async () => {
+    store.clear();
+    await syncAgenda(db, H, 'home', [{ ref: 'job:1', kind: 'due', title: 'Change filter', start: at(10, 3), allDay: true, url: 'https://example.web.app/home/', status: 'upcoming', private: false }], BY);
+    await syncPersonalAgenda(db, H, 'health', [item('dose:p1:0800', at(10, 2, 8), ['alex@example.com'])], BY);
+    const seen: string[][] = [];
+    const stop = watchAgenda(db, H, { from: at(10, 1), to: at(10, 10), me: 'alex@example.com' }, (items) => seen.push(items.map((i) => i.title)));
+    expect(seen.at(-1)).toEqual(['Medicine for Nan', 'Change filter']);
+    const others: string[][] = [];
+    const stop2 = watchAgenda(db, H, { from: at(10, 1), to: at(10, 10), me: 'sam@example.com' }, (items) => others.push(items.map((i) => i.title)));
+    expect(others.at(-1)).toEqual(['Change filter']);
+    const without: string[][] = [];
+    const stop3 = watchAgenda(db, H, { from: at(10, 1), to: at(10, 10) }, (items) => without.push(items.map((i) => i.title)));
+    expect(without.at(-1)).toEqual(['Change filter']);
+    stop();
+    stop2();
+    stop3();
   });
 });

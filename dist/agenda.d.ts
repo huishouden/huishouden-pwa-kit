@@ -41,11 +41,20 @@ export interface AgendaItem {
     status?: AgendaStatus;
     /** Only admins and members see it: from a private record, or about money. Stored as a boolean. */
     private?: boolean;
+    /**
+     * Only these members see it (lowercase emails): an item in `personalAgenda` (`./audience`), about
+     * one person's care. Absent on the shared agenda.
+     */
+    audience?: string[];
     updatedAt: number;
     /** Lowercase email of the member whose app wrote it. */
     by: string;
 }
 export declare const AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "updatedAt", "by"];
+/** The collection of items for named members only (`./audience`). */
+export declare const PERSONAL_AGENDA = "personalAgenda";
+/** Fields of a `personalAgenda` item: the agenda's plus `audience`. */
+export declare const PERSONAL_AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "updatedAt", "by", "audience"];
 /** Maximum lengths, the same as the rules. */
 export declare const AGENDA_LIMITS: {
     readonly app: 40;
@@ -61,13 +70,22 @@ export declare const AGENDA_PAST_DAYS = 30;
 /** ...to this many days ahead. */
 export declare const AGENDA_AHEAD_DAYS = 180;
 /** What an app passes in: everything but the bookkeeping the kit fills in. */
-export type AgendaInput = Omit<AgendaItem, 'id' | 'app' | 'updatedAt' | 'by'>;
+export type AgendaInput = Omit<AgendaItem, 'id' | 'app' | 'updatedAt' | 'by' | 'audience'>;
+/** An item for named members only: who may see it (`./audience`). */
+export type PersonalAgendaInput = AgendaInput & {
+    audience: readonly string[];
+};
 /** An all-day item's `start` (and, for the day after its last, `end`): local midnight of a day. */
 export declare const allDayStart: (day: Ymd) => number;
 /** The same id for the same item however often it is published: `<app>_<ref>_<start>`, Firestore-safe. */
 export declare function agendaId(app: string, ref: string, start: number): string;
 /** The stored document: trimmed and clipped to the rules' sizes; throws on what the rules would refuse. */
 export declare function agendaDoc(app: string, input: AgendaInput, by: string, now?: number): Omit<AgendaItem, 'id'>;
+/**
+ * A `personalAgenda` document: as `agendaDoc`, private, with the audience cleaned. Throws when the
+ * audience is empty or leaves out the writer (the rules refuse both).
+ */
+export declare function personalAgendaDoc(app: string, input: PersonalAgendaInput, by: string, now?: number): Omit<AgendaItem, 'id'>;
 /** The window apps publish: from `AGENDA_PAST_DAYS` ago to `AGENDA_AHEAD_DAYS` ahead, whole days. */
 export declare function agendaWindow(now: number): {
     from: number;
@@ -107,6 +125,12 @@ export declare function removeAgenda(db: Firestore, householdId: string, app: st
  * every open costs one read of the app's items and almost no writes.
  */
 export declare function syncAgenda(db: Firestore, householdId: string, app: string, items: AgendaInput[], options: AgendaWriteOptions): Promise<AgendaWriteResult>;
+/**
+ * Makes this app's items for named members exactly `items`, as `syncAgenda` does for the shared
+ * agenda: the items whose audience includes `by` (the only ones this member may read or write).
+ * Items whose audience leaves `by` out are skipped; another allowed member's device keeps them.
+ */
+export declare function syncPersonalAgenda(db: Firestore, householdId: string, app: string, items: PersonalAgendaInput[], { by, now }: Omit<AgendaWriteOptions, 'restricted'>): Promise<AgendaWriteResult>;
 /** A stored document as an item, read defensively. */
 export declare function toAgendaItem(id: string, data: Record<string, unknown>): AgendaItem;
 export interface AgendaRange {
@@ -118,9 +142,14 @@ export interface AgendaRange {
     apps?: string[];
     /** A helper or kid (`isRestricted(role)`): only items not marked private, as the rules require. */
     restricted?: boolean;
+    /** The signed-in member's email: also follows the items for named members that name them (`./audience`). */
+    me?: string;
     onError?: (error: Error) => void;
 }
-/** Follows the household's items overlapping `from`..`to` (and any overdue), soonest first. */
+/**
+ * Follows the household's items overlapping `from`..`to` (and any overdue), soonest first; with
+ * `me`, the member's personal items too. Waits for both lists before the first answer.
+ */
 export declare function watchAgenda(db: Firestore, householdId: string, range: AgendaRange, onChange: (items: AgendaItem[]) => void): Unsubscribe;
 /**
  * Where an item stands now. Items with a status become overdue once their time passes even if the
