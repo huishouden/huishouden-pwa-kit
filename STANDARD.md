@@ -411,6 +411,8 @@ nothing deployed or tested there can read or write real household data.
   4. Security headers on the app's pages and none that frame-deny `/__/auth/handler`
      (`expectSecurityHeaders`).
   5. Signed out, the "Sample data" banner is one line on a 390px phone (`expectCompactSampleBanner`).
+  6. An app with section tabs shows them as the bottom bar on a 390px phone and in the app bar on a
+     tablet (`expectBottomNav`).
 - **Signed-in tests** (`bun run e2e:signed-in`, `e2e/signed-in.spec.ts`) run only on staging, as
   invented test users signed in with Firebase custom tokens (`signInTestUser`), never a Google
   account: Google blocks scripted sign-in to real accounts, and staging keeps tests away from real

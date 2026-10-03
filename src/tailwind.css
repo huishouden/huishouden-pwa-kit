@@ -60,6 +60,23 @@
   }
 }
 
+/*
+ * The phone's bottom tab bar (SectionTabs from /react/ui sets data-hh-bottom-nav on <html> while it
+ * shows): --hh-bottom-nav is its height, the page gets that much bottom padding so nothing ends up
+ * behind it, and an app's own fixed bottom elements sit above it with `bottom-(--hh-bottom-nav)`.
+ */
+:root {
+  --hh-bottom-nav: 0px;
+}
+@media (max-width: 639px) {
+  :root[data-hh-bottom-nav] {
+    --hh-bottom-nav: calc(4rem + 1px + env(safe-area-inset-bottom));
+  }
+  :root[data-hh-bottom-nav] body {
+    padding-bottom: var(--hh-bottom-nav);
+  }
+}
+
 /* Bottom padding that clears the iPhone home indicator; dialogs use it as bottom sheets. */
 .safe-bottom {
   padding-bottom: max(1.25rem, env(safe-area-inset-bottom));

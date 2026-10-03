@@ -159,6 +159,15 @@ describe('<hh-app-bar>', () => {
     expect($('.menu a.item')!.getAttribute('href')).toBe(new URL('/privacy', location.href).href);
   });
 
+  test('section tabs that move to the bottom bar on phones mark the bar', async () => {
+    const { bar } = mount({}, '<nav slot="nav" data-bottom-nav><button>Today</button></nav>');
+    await Promise.resolve();
+    expect(bar.hasAttribute('bottom-nav')).toBe(true);
+    const other = mount({}, '<nav slot="nav"><button>March</button></nav>');
+    await Promise.resolve();
+    expect(other.bar.hasAttribute('bottom-nav')).toBe(false);
+  });
+
   test('the nav area shows only when the app slots something into it', async () => {
     expect(mount().$('.nav')!.hidden).toBe(true);
     const { $ } = mount({}, '<nav slot="nav"><button>Today</button></nav>');
