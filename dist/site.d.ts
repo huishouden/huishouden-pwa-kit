@@ -35,8 +35,6 @@ export declare function siteApps(registry: unknown): (RegistryEntry & {
 export declare function sharedSite(registry: unknown): string;
 /** Which device features a `Permissions-Policy` value turns on. */
 export declare function featuresOf(policy: string | undefined): DeviceFeatures;
-/** A feature is on for the site when any app turns it on (a header can't differ by path cheaply). */
-export declare function unionFeatures(all: DeviceFeatures[]): DeviceFeatures;
 /** Files that must be fetched fresh for an update to reach a device. */
 export declare const FRESH_FILES: string[];
 export interface HostingSite {
@@ -62,12 +60,21 @@ export interface HostingSite {
         }[];
     }[];
 }
+/** One app in a deploy: its path and the device features its own firebase.json turns on. */
+export interface SiteEntry {
+    path: string;
+    features?: DeviceFeatures;
+}
 /**
  * The shared site's hosting config: `/<app>` → `/<app>/`, each app's routes to its own
- * `index.html`, everything else to the portal's; Firebase's `/__/` untouched. `paths` are the apps
- * this deploy holds (others fall to the portal until they publish a build).
+ * `index.html`, everything else to the portal's; Firebase's `/__/` untouched. `entries` are the
+ * apps this deploy holds (others fall to the portal until they publish a build).
+ *
+ * `Permissions-Policy` applies to the document it comes with, so each app's pages get only the
+ * features that app turns on (a later header rule overrides an earlier one on Hosting): Car's
+ * camera is not Tasks' camera.
  */
-export declare function siteConfig(site: string, paths: string[], features?: DeviceFeatures, publicDir?: string): HostingSite;
+export declare function siteConfig(site: string, entries: SiteEntry[], publicDir?: string): HostingSite;
 /**
  * Every path but `/sw.js`, with the rest of the path captured as `rest`. Firebase checks redirects
  * before files, and RE2 has no lookahead, so the exception is spelled out.

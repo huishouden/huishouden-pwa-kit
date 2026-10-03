@@ -6,7 +6,7 @@
  *
  * In an app, only `appUrl` is for the browser.
  */
-import { APP_PATHS_REGEX, securityHeaders } from './security-headers.js';
+import { APP_PATHS_REGEX, permissionsPolicy, securityHeaders } from './security-headers.js';
 /** `pet`, `/pet` or `/pet/` as `/pet/`; empty as `/`. */
 export function normalizePath(path) {
     const trimmed = path.replace(/^\/+|\/+$/g, '');
@@ -60,21 +60,22 @@ export function featuresOf(policy) {
     const on = (name) => new RegExp(`(?:^|,)\\s*${name}=\\(\\s*self\\s*\\)`).test(policy ?? '');
     return { camera: on('camera'), geolocation: on('geolocation') };
 }
-/** A feature is on for the site when any app turns it on (a header can't differ by path cheaply). */
-export function unionFeatures(all) {
-    return { camera: all.some((f) => f.camera), geolocation: all.some((f) => f.geolocation) };
-}
 const NO_CACHE = [{ key: 'Cache-Control', value: 'no-cache' }];
 const IMMUTABLE = [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }];
 /** Files that must be fetched fresh for an update to reach a device. */
 export const FRESH_FILES = ['sw.js', 'registerSW.js', 'hh-push-sw.js', 'hh-share-sw.js', 'index.html', 'manifest.webmanifest', 'manifest.json'];
 /**
  * The shared site's hosting config: `/<app>` → `/<app>/`, each app's routes to its own
- * `index.html`, everything else to the portal's; Firebase's `/__/` untouched. `paths` are the apps
- * this deploy holds (others fall to the portal until they publish a build).
+ * `index.html`, everything else to the portal's; Firebase's `/__/` untouched. `entries` are the
+ * apps this deploy holds (others fall to the portal until they publish a build).
+ *
+ * `Permissions-Policy` applies to the document it comes with, so each app's pages get only the
+ * features that app turns on (a later header rule overrides an earlier one on Hosting): Car's
+ * camera is not Tasks' camera.
  */
-export function siteConfig(site, paths, features = {}, publicDir = 'public') {
-    const apps = [...new Set(paths.map(normalizePath))].filter((p) => p !== '/').sort();
+export function siteConfig(site, entries, publicDir = 'public') {
+    const byPath = new Map(entries.map((e) => [normalizePath(e.path), e.features ?? {}]));
+    const apps = [...byPath.keys()].filter((p) => p !== '/').sort();
     const bases = ['/', ...apps];
     return {
         site,
@@ -83,7 +84,8 @@ export function siteConfig(site, paths, features = {}, publicDir = 'public') {
         redirects: apps.map((p) => ({ source: p.slice(0, -1), destination: p, type: 301 })),
         rewrites: [...apps.map((p) => ({ source: `${p}**`, destination: `${p}index.html` })), { source: '**', destination: '/index.html' }],
         headers: [
-            { regex: APP_PATHS_REGEX, headers: securityHeaders(features) },
+            { regex: APP_PATHS_REGEX, headers: securityHeaders(byPath.get('/') ?? {}) },
+            ...apps.map((p) => ({ source: `${p}**`, headers: [{ key: 'Permissions-Policy', value: permissionsPolicy(byPath.get(p)) }] })),
             ...bases.map((p) => ({ source: `${p}@(${FRESH_FILES.join('|')})`, headers: NO_CACHE })),
             // The page itself at each app's address (`/pet/` serves /pet/index.html).
             { regex: `^(?:${bases.join('|')})$`, headers: NO_CACHE },

@@ -28,7 +28,6 @@ import {
   siteApps,
   siteConfig,
   staleApps,
-  unionFeatures,
   type BuildStamp,
   type HostingSite,
   type SiteManifest,
@@ -212,8 +211,7 @@ async function assemble() {
   }
   writeFileSync(join(pub, SITE_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
 
-  const features = unionFeatures(policies.map(featuresOf));
-  const hosting: HostingSite[] = [siteConfig(site, included, features)];
+  const hosting: HostingSite[] = [siteConfig(site, included.map((path, i) => ({ path, features: featuresOf(policies[i]) })))];
   if (flag('redirects') && flavor === 'production') {
     // Only to a path this deploy serves: an old site never redirects to a 404.
     for (const app of apps.filter((a) => a.redirect && a.path !== '/' && a.site !== site && included.includes(a.path))) {

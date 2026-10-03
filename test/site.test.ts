@@ -11,7 +11,6 @@ import {
   siteApps,
   siteConfig,
   staleApps,
-  unionFeatures,
 } from '../src/site';
 import { globToRegExp } from '../src/security-headers';
 
@@ -55,7 +54,7 @@ describe('appUrl', () => {
 });
 
 describe('siteConfig', () => {
-  const config = siteConfig('example-family', ['/', '/pet/', '/baby/'], { camera: true });
+  const config = siteConfig('example-family', [{ path: '/', features: { camera: true } }, { path: '/pet/', features: { camera: true } }, { path: '/baby/', features: { geolocation: true } }]);
   const rewrite = (path: string) => config.rewrites!.find((r) => globToRegExp(r.source).test(path))?.destination;
 
   test('each app answers its own routes; the rest is the portal', () => {
@@ -73,13 +72,13 @@ describe('siteConfig', () => {
     ]);
   });
 
-  test("security headers everywhere but Firebase's /__/, with the apps' features", () => {
+  test("security headers everywhere but Firebase's /__/; each app only its own features", () => {
     const h = (p: string) => headersFor(config.headers!, p);
-    for (const p of ['/', '/pet/', '/pet/assets/index-abc.js', '/privacy']) {
-      expect(h(p).get('x-frame-options'), p).toBe('DENY');
-      expect(h(p).get('permissions-policy'), p).toBe('camera=(self), microphone=(), geolocation=()');
-    }
+    for (const p of ['/', '/pet/', '/pet/assets/index-abc.js', '/privacy', '/baby/feeds']) expect(h(p).get('x-frame-options'), p).toBe('DENY');
+    for (const p of ['/', '/privacy', '/petals', '/pet/', '/pet/meds/c1']) expect(h(p).get('permissions-policy'), p).toBe('camera=(self), microphone=(), geolocation=()');
+    for (const p of ['/baby/', '/baby/feeds']) expect(h(p).get('permissions-policy'), p).toBe('camera=(), microphone=(), geolocation=(self)');
     expect(h('/__/auth/handler').has('x-frame-options')).toBe(false);
+    expect(h('/__/auth/handler').has('permissions-policy')).toBe(false);
   });
 
   test("workers, manifests and pages are fetched fresh; each app's assets are immutable", () => {
@@ -90,18 +89,17 @@ describe('siteConfig', () => {
   });
 
   test('the portal alone', () => {
-    const only = siteConfig('example-family', ['/']);
+    const only = siteConfig('example-family', [{ path: '/' }]);
     expect(only.redirects).toEqual([]);
     expect(only.rewrites).toEqual([{ source: '**', destination: '/index.html' }]);
   });
 });
 
 describe('features', () => {
-  test('reads and joins Permissions-Policy values', () => {
+  test('reads Permissions-Policy values', () => {
     expect(featuresOf('camera=(self), microphone=(), geolocation=()')).toEqual({ camera: true, geolocation: false });
     expect(featuresOf('camera=(), microphone=(), geolocation=(self)')).toEqual({ camera: false, geolocation: true });
     expect(featuresOf(undefined)).toEqual({ camera: false, geolocation: false });
-    expect(unionFeatures([{ camera: true }, { geolocation: true }, {}])).toEqual({ camera: true, geolocation: true });
   });
 });
 
