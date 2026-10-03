@@ -277,6 +277,35 @@ with `@huishouden/pwa-kit/agenda`; the portal only reads.
 - **Rules**: the `agenda` block in the project's rules file; fields match `AGENDA_FIELDS`, and
   `by` must be the signed-in member.
 
+## To-dos
+
+The portal's To-do tab lists every app's open, actionable things in one place, sorted by when each
+was added, so the household can clear out old ones in any app without opening it. Each app
+publishes its open items to `households/{id}/todos` with `@huishouden/pwa-kit/todos`; the portal
+reads them and runs the actions the app wrote down.
+
+- **What to publish**: things someone has to do or decide, one item per record: open to-dos and
+  chores, jobs due or overdue, checklist items, reminders due, unpaid bills. Not appointments that
+  simply happen, and not logs. A list that is all small things (groceries) publishes one summary line
+  (`status: 'info'`, no actions) linking to the app. `createdAt` is when the record was added (what
+  "Older than 30 days" filters on), `due` its due day if it has one, `owner` who added it.
+- **Actions**: `done` and `cancel`, each a short label ("Done", "Mark paid", "Skip", "Pause"), the
+  ops that do it in the app's own collections (`TODO_COLLECTIONS`; merge ops on the fields that
+  change), and who may (`roles`, plus `owner: true` for helpers' and kids' own records, `emails` for
+  named members): the same the app's rules allow, so the portal hides what a role can't do. Cancel
+  is the app's own notion and stays visible in its history (a cancelled to-do, a paused job, a
+  skipped checklist item, a dismissed reminder). Use placeholders for anything about the moment it
+  runs (`'$today'`, `'$today+3m'`, `'$now'`, `'$me'`), never a date worked out when publishing.
+- **When**: `syncTodos(app, items)` on open and a few seconds after the data changes, alongside
+  `syncAgenda`. A record done or cancelled anywhere drops out on the next sync; the portal removes
+  the item itself when it runs an action, and Undo writes the records and the item back.
+- **Privacy**: as the agenda: helpers and kids read only `private: false` items, Spending's and
+  Bills' are always private.
+- **Rules**: the `todos` block; fields match `TODO_FIELDS` and `TODO_ACTION_FIELDS`, `by` is the
+  signed-in member. The rules can't check ops (no loops), so the portal refuses an action writing
+  outside the app's collections (`todoOpsAllowed`), and every op is checked by the target
+  collection's own rules as the member who taps it.
+
 ## Food preferences
 
 Meal suggestions in any app (Groceries' meal ideas, and whatever comes next) plan for the same people.
