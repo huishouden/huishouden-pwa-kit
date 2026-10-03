@@ -94,6 +94,7 @@ forest-600. Only the glyph changes between apps: portal `home` (a door), Tasks `
   `--hh-bottom-nav` and the app bar holds only logo, name, actions and account; an app's own fixed
   bottom elements (toasts, prompts) sit above it with `bottom-(--hh-bottom-nav)`; dialogs and sheets
   cover it.
+- Printing: the frame never prints (the kit's tailwind.css). Something meant for paper, such as a list for the doctor, carries `data-hh-print` and prints alone, black on white, without the frame, banners, dialogs or toasts around it. On a phone screen it fits the width: tables stack into rows there and keep their columns on paper.
 - Page background `--hh-cream`; content on white surfaces; max content width 1200px, centred;
   24px page padding (16px on phones), honouring safe-area insets.
 - Tablet landscape (1280×800) first, then phone portrait. Nothing important below the fold on the tablet.
