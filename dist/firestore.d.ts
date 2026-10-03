@@ -2,6 +2,7 @@ import type { FirebaseApp } from 'firebase/app';
 import type { Auth } from 'firebase/auth';
 import { type CollectionReference, type DocumentData, type DocumentReference, type FieldValue, type Firestore, type FirestoreSettings, type PartialWithFieldValue, type SetOptions, type UpdateData, type WithFieldValue } from 'firebase/firestore';
 import { type StorageLike } from './outbox-codec.js';
+import type { Op as StoreOp } from './store.js';
 type AuthLike = Pick<Auth, 'currentUser' | 'onAuthStateChanged'>;
 /** The part of the Web Locks API the outbox uses. */
 export interface LockManagerLike {
@@ -48,6 +49,13 @@ export interface WriteBatch {
 }
 /** Firestore's batch, noted as one entry when it commits. */
 export declare function writeBatch(db: Firestore): WriteBatch;
+/**
+ * Writes `./store` ops as one batch under `base` (`households/{id}`): a set for each op with data
+ * (merged with `merge`), a delete for each without. `path(col)` names the Firestore collection for an op's list (the list
+ * name itself by default). Returns the commit, for the caller's error toast; the screen updates
+ * from the local cache before it resolves.
+ */
+export declare function commitOps<C extends string>(db: Firestore, base: string, ops: readonly StoreOp<C>[], path?: (col: C) => string): Promise<void>;
 export declare const deleteField: () => FieldValue;
 export declare const serverTimestamp: () => FieldValue;
 export declare const arrayUnion: (...elements: unknown[]) => FieldValue;

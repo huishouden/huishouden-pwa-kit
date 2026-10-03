@@ -109,6 +109,25 @@ export function writeBatch(db) {
     };
     return self;
 }
+/**
+ * Writes `./store` ops as one batch under `base` (`households/{id}`): a set for each op with data
+ * (merged with `merge`), a delete for each without. `path(col)` names the Firestore collection for an op's list (the list
+ * name itself by default). Returns the commit, for the caller's error toast; the screen updates
+ * from the local cache before it resolves.
+ */
+export function commitOps(db, base, ops, path = (col) => col) {
+    const batch = writeBatch(db);
+    for (const op of ops) {
+        const ref = doc(db, base, path(op.col), op.id);
+        if (!op.data)
+            batch.delete(ref);
+        else if (op.merge)
+            batch.set(ref, op.data, { merge: true });
+        else
+            batch.set(ref, op.data);
+    }
+    return batch.commit();
+}
 // Field sentinels: Firestore's, remembered so a note can repeat them -------------------------------
 export const deleteField = () => remember(fsDeleteField(), () => ({ [TAG]: 'deleteField' }));
 export const serverTimestamp = () => remember(fsServerTimestamp(), () => ({ [TAG]: 'serverTimestamp' }));

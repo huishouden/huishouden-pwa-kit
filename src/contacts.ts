@@ -157,6 +157,47 @@ export async function restoreContact(db: Firestore, householdId: string, contact
   });
 }
 
+/** The three contact writes an app's actions make, over Firestore or the sample's memory. */
+export interface ContactWrites {
+  save(id: string | null, input: ContactInput): void;
+  /** Stops showing it in this app (`removeContactFromApp`). */
+  remove(contact: Contact): void;
+  /** Puts it back as it was (Undo). */
+  restore(contact: Contact): void;
+}
+
+/**
+ * The contact writes for an app's signed-out sample, on a list in memory: a save is cleaned and
+ * stamped like `addContact` / `updateContact`, a removal drops it from the list, a restore puts it
+ * back under its id. A list sorted by name stays sorted.
+ */
+export function sampleContacts(
+  read: () => Contact[],
+  write: (contacts: Contact[]) => void,
+  { by, now, newId }: { by: string; now: () => number; newId: () => string },
+): ContactWrites {
+  const put = (contact: Contact) => write([...read().filter((c) => c.id !== contact.id), contact].sort((a, b) => a.name.localeCompare(b.name)));
+  return {
+    save: (id, input) => {
+      const existing = id ? read().find((c) => c.id === id) : undefined;
+      const t = now();
+      put({ id: id ?? newId(), ...cleanContact(input), createdAt: existing?.createdAt ?? t, ...(existing ? { updatedAt: t } : {}), by });
+    },
+    remove: (contact) => write(read().filter((c) => c.id !== contact.id)),
+    restore: put,
+  };
+}
+
+/** The contact writes for a signed-in household, each failure passed to `report` (an error toast). */
+export function householdContacts(db: Firestore, householdId: string, app: string, by: string, report: (write: Promise<unknown>) => void): ContactWrites {
+  return {
+    save: (id, input) => report(id ? updateContact(db, householdId, id, input, by) : addContact(db, householdId, input, by)),
+    // A contact other apps also show stays for them; this app only stops showing it.
+    remove: (contact) => report(removeContactFromApp(db, householdId, contact, app, by)),
+    restore: (contact) => report(restoreContact(db, householdId, contact)),
+  };
+}
+
 // ---- Helpers for an app's contacts screen and dialog ----
 
 /** Field lengths the household rules allow for contacts. */
