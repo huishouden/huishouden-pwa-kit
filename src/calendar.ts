@@ -1,8 +1,8 @@
 import type { Auth } from 'firebase/auth';
 import { googleAccessMessage, popupBlocked, popupCancelled } from './feedback';
 import { cachedGoogleToken, googleAccessToken, googleFetch } from './google-token';
-import { inferRule, type EventRule } from './schedule';
-import { formatDayShort, formatTime, startOfDay, toHhmm, toYmd, type Hhmm } from './time';
+import { fitsRule, inferRule, type EventRule, type PrepOffset } from './schedule';
+import { addDays, formatDayShort, formatTime, startOfDay, toHhmm, toYmd, type Hhmm } from './time';
 import { dismissId, dismissedIds } from './suggestions';
 
 /**
@@ -354,4 +354,92 @@ export function recurringSeries(matches: CalendarMatch[]): { series: CalendarSer
     series.push({ key, title: sorted[0].title.trim(), matches: sorted, rule, ...(time ? { time } : {}) });
   }
   return { series: series.sort((a, b) => a.matches[0].start - b.matches[0].start), rest: rest.sort((a, b) => a.start - b.start) };
+}
+
+// ---- A series the app already has: the event itself, or the reminder before it ----
+
+/** A regular event an app already keeps, as far as comparing it with a calendar series goes. */
+export interface ScheduledEvent {
+  title: string;
+  rule: EventRule;
+  time?: Hhmm;
+  prep?: { offset: PrepOffset };
+}
+
+/** How an existing event covers a series. */
+export interface SeriesCover<E> {
+  event: E;
+  /**
+   * `occurrences`: the series is the event itself (the same days, rhythm and time). `prep`: it falls
+   * before each occurrence, where the thing to do before goes ("Garbage out" the evening before a
+   * Monday pickup), with `offset` where it falls.
+   */
+  as: 'occurrences' | 'prep';
+  offset?: PrepOffset;
+}
+
+export interface SeriesCoverOptions<E> {
+  /** Whether the event is about the same thing as the series (both garbage, say). Only related events cover. */
+  related: (series: CalendarSeries, event: E) => boolean;
+  /** Share of the series' dates that must fit (default 0.75, so a holiday-shifted one doesn't break it). */
+  share?: number;
+  /** How far a reminder may be from the thing to do before: days (default 1) and hours (default 2). */
+  slackDays?: number;
+  slackHours?: number;
+}
+
+const minutes = (t: Hhmm) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+const near = (a: Hhmm | undefined, b: Hhmm | undefined, hours: number) => !a || !b || Math.abs(minutes(a) - minutes(b)) <= hours * 60;
+
+/**
+ * The existing event a calendar series repeats, or null when it is new: a related event whose
+ * occurrences fall on the series' dates (at about its time), or whose thing to do before does (the
+ * evening-before reminder: within `slackDays` and `slackHours` of the prep's offset). An event
+ * with no thing to do before is matched against the day or two before it, when the series reads
+ * as a reminder (`looksLikePrep`).
+ * Occurrence matches win over prep matches; among events, the first in `events` wins.
+ */
+export function seriesCover<E extends ScheduledEvent>(series: CalendarSeries, events: readonly E[], options: SeriesCoverOptions<E>): SeriesCover<E> | null {
+  const { related, share = 0.75, slackDays = 1, slackHours = 2 } = options;
+  const dates = series.matches.map((m) => ({ day: toYmd(m.start), time: m.allDay ? undefined : toHhmm(m.start) }));
+  if (dates.length === 0) return null;
+  const fits = (test: (d: (typeof dates)[number]) => boolean) => dates.filter(test).length / dates.length >= share;
+  const candidates = events.filter((e) => related(series, e));
+  const same = candidates.find((e) => fits((d) => fitsRule(e.rule, d.day) && near(d.time, e.time, slackHours)));
+  if (same) return { event: same, as: 'occurrences' };
+  for (const e of candidates) {
+    if (!e.prep && !looksLikePrep(series)) continue;
+    const base = e.prep?.offset.daysBefore ?? 1;
+    const spread = e.prep ? slackDays : 1;
+    const tries = [base, ...Array.from({ length: spread }, (_, i) => [base - i - 1, base + i + 1]).flat()].filter((k) => k > 0 || (k === 0 && !!e.prep));
+    const prepTime = e.prep?.offset.time;
+    const k = tries.find((n) => fits((d) => fitsRule(e.rule, addDays(d.day, n)) && near(d.time, prepTime, slackHours)));
+    if (k !== undefined) return { event: e, as: 'prep', offset: { daysBefore: k, time: series.time ?? prepTime ?? '19:00' } };
+  }
+  return null;
+}
+
+/**
+ * Whether a calendar series reads as a reminder to do something before an event rather than the
+ * event itself: "Garbage out for Monday pickup", "Put the bins out", or anything in the evening.
+ */
+export function looksLikePrep(series: Pick<CalendarSeries, 'title' | 'time'>): boolean {
+  if (/\bout\b|\b(remind(er)?|put|take|bring|wheel|roll)\b/i.test(series.title)) return true;
+  return !!series.time && Number(series.time.slice(0, 2)) >= 16;
+}
+
+const FILLER = new Set(['a', 'an', 'the', 'at', 'on', 'in', 'for', 'to', 'of', 'and', 'with', 'my', 'our']);
+const titleWords = (t: string) => new Set(t.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !FILLER.has(w)));
+
+/**
+ * Whether two titles name the same thing: the words they share, of all the words in either (filler
+ * like "the", "for" left out), reach `threshold`. "Trash pickup" and "trash  Pickup!" do; "Garbage
+ * pickup" and "Garbage out for Monday pickup" (2 of 4) don't.
+ */
+export function similarTitles(a: string, b: string, threshold = 0.6): boolean {
+  const x = titleWords(a);
+  const y = titleWords(b);
+  if (x.size === 0 || y.size === 0) return a.trim().toLowerCase() === b.trim().toLowerCase();
+  const both = [...x].filter((w) => y.has(w)).length;
+  return both / (x.size + y.size - both) >= threshold;
 }

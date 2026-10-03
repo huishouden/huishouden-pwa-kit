@@ -17,6 +17,7 @@ const { ClockProvider, useClock } = await import('../src/react/clock');
 const { CalendarImportDialog, CalendarHint } = await import('../src/react/calendar');
 const { ContactDialog, ContactCard } = await import('../src/react/contacts');
 const { PhotoPicker } = await import('../src/react/photo');
+const { SuggestionsCard } = await import('../src/react/suggestions');
 
 function render(node: React.ReactNode): { root: Root; el: HTMLElement } {
   document.body.innerHTML = '<div id="app"></div>';
@@ -342,4 +343,30 @@ describe('SampleBanner', () => {
     expect(document.querySelector('[role="note"]')!.textContent).toBe('Sample dataSign-in was cancelled.');
     act(() => root.unmount());
   });
+});
+
+test('a suggestion can say what its add button does', () => {
+  const added: string[] = [];
+  const items = [{ id: 'a', title: 'Garbage out' }, { id: 'b', title: 'Lawn service' }];
+  const { root } = render(
+    <SuggestionsCard
+      suggestions={items}
+      idOf={(i) => i.id}
+      titleOf={(i) => i.title}
+      detailOf={() => null}
+      lead="Looks regular"
+      label="Regular events in your calendar"
+      moreLabel="More"
+      icon={null}
+      onAdd={(i) => added.push(i.id)}
+      onDismiss={() => {}}
+      addAs={(i) => (i.id === 'a' ? { label: 'Use as prep', ariaLabel: 'Use Garbage out as prep for Garbage pickup' } : null)}
+    />,
+  );
+  const prep = document.querySelector('[aria-label="Use Garbage out as prep for Garbage pickup"]');
+  expect(prep!.textContent).toBe('Use as prep');
+  click(prep);
+  expect(added).toEqual(['a']);
+  expect(document.querySelector('[aria-label="Add Lawn service"]')!.textContent?.trim()).toBe('Add');
+  act(() => root.unmount());
 });

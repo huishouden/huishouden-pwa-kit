@@ -1,5 +1,5 @@
 import type { Auth } from 'firebase/auth';
-import { type EventRule } from './schedule';
+import { type EventRule, type PrepOffset } from './schedule';
 import { type Hhmm } from './time';
 /**
  * Finds Google Calendar events that match a piece of household data (a task, an appointment), so
@@ -145,3 +145,52 @@ export declare function recurringSeries(matches: CalendarMatch[]): {
     series: CalendarSeries[];
     rest: CalendarMatch[];
 };
+/** A regular event an app already keeps, as far as comparing it with a calendar series goes. */
+export interface ScheduledEvent {
+    title: string;
+    rule: EventRule;
+    time?: Hhmm;
+    prep?: {
+        offset: PrepOffset;
+    };
+}
+/** How an existing event covers a series. */
+export interface SeriesCover<E> {
+    event: E;
+    /**
+     * `occurrences`: the series is the event itself (the same days, rhythm and time). `prep`: it falls
+     * before each occurrence, where the thing to do before goes ("Garbage out" the evening before a
+     * Monday pickup), with `offset` where it falls.
+     */
+    as: 'occurrences' | 'prep';
+    offset?: PrepOffset;
+}
+export interface SeriesCoverOptions<E> {
+    /** Whether the event is about the same thing as the series (both garbage, say). Only related events cover. */
+    related: (series: CalendarSeries, event: E) => boolean;
+    /** Share of the series' dates that must fit (default 0.75, so a holiday-shifted one doesn't break it). */
+    share?: number;
+    /** How far a reminder may be from the thing to do before: days (default 1) and hours (default 2). */
+    slackDays?: number;
+    slackHours?: number;
+}
+/**
+ * The existing event a calendar series repeats, or null when it is new: a related event whose
+ * occurrences fall on the series' dates (at about its time), or whose thing to do before does (the
+ * evening-before reminder: within `slackDays` and `slackHours` of the prep's offset). An event
+ * with no thing to do before is matched against the day or two before it, when the series reads
+ * as a reminder (`looksLikePrep`).
+ * Occurrence matches win over prep matches; among events, the first in `events` wins.
+ */
+export declare function seriesCover<E extends ScheduledEvent>(series: CalendarSeries, events: readonly E[], options: SeriesCoverOptions<E>): SeriesCover<E> | null;
+/**
+ * Whether a calendar series reads as a reminder to do something before an event rather than the
+ * event itself: "Garbage out for Monday pickup", "Put the bins out", or anything in the evening.
+ */
+export declare function looksLikePrep(series: Pick<CalendarSeries, 'title' | 'time'>): boolean;
+/**
+ * Whether two titles name the same thing: the words they share, of all the words in either (filler
+ * like "the", "for" left out), reach `threshold`. "Trash pickup" and "trash  Pickup!" do; "Garbage
+ * pickup" and "Garbage out for Monday pickup" (2 of 4) don't.
+ */
+export declare function similarTitles(a: string, b: string, threshold?: number): boolean;

@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import cases from './fixtures/event-rules.json';
 import {
-  cleanRule, describePrep, describeRule, eventOccurrences, happensOn, inferRule, isEventRule, isPrepOffset, nextOccurrence, nthWeekday, occurrenceStart,
+  cleanRule, describePrep, fitsRule, describeRule, eventOccurrences, happensOn, inferRule, isEventRule, isPrepOffset, nextOccurrence, nthWeekday, occurrenceStart,
   prepState, prepWhen, prepWindow, pruneChanges, ruleOccurrences, toChange, weekdayOfMonth, withChange, type EventRule, type OccurrenceChanges,
 } from '../src/schedule';
 import { atTime, clockWords, isHhmm, toHhmm, HOUR } from '../src/time';
-import { recurringSeries, type CalendarMatch } from '../src/calendar';
+import { looksLikePrep, recurringSeries, seriesCover, similarTitles, type CalendarMatch, type CalendarSeries, type ScheduledEvent } from '../src/calendar';
 
 describe('event rules', () => {
   for (const c of cases.occurrences) {
@@ -248,5 +248,80 @@ describe('repeating calendar events', () => {
     const { series, rest } = recurringSeries([ev('1', 'Lawn service', 2031, 10, 2, 9), ev('2', 'Lawn service', 2031, 10, 5, 9), ev('3', 'Lawn service', 2031, 10, 19, 9)]);
     expect(series).toEqual([]);
     expect(rest).toHaveLength(3);
+  });
+});
+
+describe('a series the household already has', () => {
+  // Thursday 16 October 2031; Sunday the 19th, Monday the 20th, Wednesday the 22nd.
+  const weekly = (title: string, firstDay: number, h: number | undefined, weeks = 4, every = 1): CalendarSeries => {
+    const matches: CalendarMatch[] = Array.from({ length: weeks }, (_, i) => ({
+      id: `${title}-${i}`,
+      title,
+      start: h === undefined ? new Date(2031, 9, firstDay + 7 * every * i).getTime() : new Date(2031, 9, firstDay + 7 * every * i, h).getTime(),
+      allDay: h === undefined,
+      location: '',
+      description: '',
+      link: '',
+      calendarName: 'Family',
+    }));
+    return recurringSeries(matches).series[0];
+  };
+  type Ev = ScheduledEvent & { id: string; kind: string };
+  const kindOf = (t: string) => (/garbage|trash/i.test(t) ? 'trash' : /recycl/i.test(t) ? 'recycling' : /lawn/i.test(t) ? 'lawn' : null);
+  const related = (s: CalendarSeries, e: Ev) => kindOf(s.title) === e.kind;
+  // Garbage on Mondays and Thursdays, entered recently (after the calendar series began).
+  const garbage: Ev = { id: 'g', kind: 'trash', title: 'Garbage pickup', rule: { freq: 'week', every: 1, start: '2031-11-03', days: [1, 4] }, time: '07:00', prep: { offset: { daysBefore: 1, time: '19:00' } } };
+  const recycling: Ev = { id: 'r', kind: 'recycling', title: 'Recycling pickup', rule: { freq: 'week', every: 2, start: '2031-10-16' } };
+
+  test('fitsRule carries the pattern on before the start and after the end', () => {
+    expect(fitsRule(garbage.rule, '2031-10-20')).toBe(true);
+    expect(fitsRule(garbage.rule, '2031-10-21')).toBe(false);
+    expect(fitsRule(recycling.rule, '2031-10-02')).toBe(true);
+    expect(fitsRule(recycling.rule, '2031-10-09')).toBe(false);
+    expect(fitsRule({ freq: 'month', every: 1, start: '2031-06-10', nth: 2, weekday: 2, until: '2031-07-01' }, '2031-10-14')).toBe(true);
+    expect(fitsRule({ freq: 'year', every: 1, start: '2031-06-10' }, '2029-06-10')).toBe(true);
+    expect(fitsRule({ freq: 'year', every: 1, start: '2031-06-10' }, '2029-06-11')).toBe(false);
+  });
+
+  test('the pickups themselves: the same days and rhythm', () => {
+    const cover = seriesCover(weekly('Trash day', 20, 7), [recycling, garbage], { related });
+    expect(cover).toEqual({ event: garbage, as: 'occurrences' });
+    expect(seriesCover(weekly('Recycling', 16, undefined, 3, 2), [garbage, recycling], { related })).toEqual({ event: recycling, as: 'occurrences' });
+  });
+
+  test('the evening before a Monday pickup and before a Thursday one is the reminder', () => {
+    const monday = weekly('Garbage out for Monday Pickup', 19, 20);
+    const thursday = weekly('Garbage out for Thursday Pickup', 22, 20);
+    expect(seriesCover(monday, [garbage], { related })).toEqual({ event: garbage, as: 'prep', offset: { daysBefore: 1, time: '20:00' } });
+    expect(seriesCover(thursday, [garbage], { related })).toEqual({ event: garbage, as: 'prep', offset: { daysBefore: 1, time: '20:00' } });
+    // With no thing to do before yet, the day before is still where a reminder goes.
+    const { prep: _, ...bare } = garbage;
+    expect(seriesCover(monday, [bare], { related })).toEqual({ event: bare, as: 'prep', offset: { daysBefore: 1, time: '20:00' } });
+    expect(looksLikePrep(monday)).toBe(true);
+  });
+
+  test('slack: a day and two hours either side of the thing to do before', () => {
+    const twoBefore = { ...garbage, prep: { offset: { daysBefore: 2, time: '18:00' } } };
+    expect(seriesCover(weekly('Garbage out', 19, 20), [twoBefore], { related })?.offset).toEqual({ daysBefore: 1, time: '20:00' });
+    const morning = { ...garbage, prep: { offset: { daysBefore: 1, time: '09:00' } } };
+    expect(seriesCover(weekly('Garbage out', 19, 20), [morning], { related })).toBeNull();
+  });
+
+  test('a new series is not covered: another kind, other days, or another rhythm', () => {
+    expect(seriesCover(weekly('Recycling out', 19, 20), [garbage], { related })).toBeNull();
+    expect(seriesCover(weekly('Garbage pickup', 22, 7), [{ ...garbage, rule: { freq: 'week', every: 1, start: '2031-10-16' }, prep: undefined }], { related })).toBeNull();
+    expect(seriesCover(weekly('Recycling', 16, undefined, 4, 1), [recycling], { related })).toBeNull();
+    expect(seriesCover(weekly('Lawn service', 17, 9), [garbage, recycling], { related })).toBeNull();
+  });
+
+  test('what reads as a reminder, and titles that name the same thing', () => {
+    expect(looksLikePrep({ title: 'Put the bins out', time: '07:00' })).toBe(true);
+    expect(looksLikePrep({ title: 'Garbage pickup', time: '07:00' })).toBe(false);
+    expect(looksLikePrep({ title: 'Garbage pickup', time: '20:00' })).toBe(true);
+    expect(looksLikePrep({ title: 'Lawn service' })).toBe(false);
+    expect(similarTitles('Trash pickup', 'trash  Pickup!')).toBe(true);
+    expect(similarTitles('The recycling pickup', 'Recycling pickup')).toBe(true);
+    expect(similarTitles('Garbage pickup', 'Garbage out for Monday Pickup')).toBe(false);
+    expect(similarTitles('Lawn service', 'Pool service')).toBe(false);
   });
 });

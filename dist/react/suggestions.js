@@ -1,4 +1,4 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
 /**
  * New things found in one of the member's Google services that belong in the app (calendar events,
  * Google Tasks), offered as suggestions: looked for on open, when the signed-in member changes and
@@ -91,7 +91,7 @@ export const ADDED_HIDE_MS = 10_000;
  * when its record arrives (if none arrives within ten seconds, the save failed and it comes back).
  * After either button, focus stays on the card.
  */
-export function SuggestionsCard({ suggestions, idOf, titleOf, detailOf, lead, label, moreLabel, icon, onAdd, onDismiss }) {
+export function SuggestionsCard({ suggestions, idOf, titleOf, detailOf, lead, label, moreLabel, icon, onAdd, onDismiss, addAs }) {
     const [open, setOpen] = useState(false);
     const [added, setAdded] = useState(() => new Map());
     const card = useRef(null);
@@ -126,6 +126,6 @@ export function SuggestionsCard({ suggestions, idOf, titleOf, detailOf, lead, la
         onDismiss(m);
         keepFocus();
     };
-    const actions = (m) => (_jsxs("div", { className: "flex shrink-0 gap-1", children: [_jsx("button", { type: "button", className: ghostButton, onClick: () => dismiss(m), "aria-label": `Not this one: ${titleOf(m)}`, children: "Not this one" }), _jsxs("button", { type: "button", className: secondaryButton, onClick: () => add(m), "aria-label": `Add ${titleOf(m)}`, children: [_jsx(Plus, { size: 18 }), " Add"] })] }));
+    const actions = (m, as = addAs?.(m)) => (_jsxs("div", { className: "flex shrink-0 gap-1", children: [_jsx("button", { type: "button", className: ghostButton, onClick: () => dismiss(m), "aria-label": `Not this one: ${titleOf(m)}`, children: "Not this one" }), _jsx("button", { type: "button", className: secondaryButton, onClick: () => add(m), "aria-label": as?.ariaLabel ?? `Add ${titleOf(m)}`, children: as ? as.label : _jsxs(_Fragment, { children: [_jsx(Plus, { size: 18 }), " Add"] }) })] }));
     return (_jsxs("section", { ref: card, tabIndex: -1, className: "rounded-2xl border border-stone-200 bg-white px-4 py-2 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-forest-200 dark:border-forest-600 dark:bg-forest-800", "aria-label": label, children: [_jsxs("div", { className: "flex flex-wrap items-center gap-x-3 gap-y-1", children: [icon, _jsxs("p", { role: "status", className: "min-w-0 flex-1 text-base text-stone-700 [overflow-wrap:anywhere]", children: [lead, ": ", _jsx("span", { className: "font-medium text-stone-800 dark:text-stone-100", children: titleOf(first) }), detailOf(first) && _jsxs("span", { className: "text-stone-600 dark:text-stone-300", children: [" \u00B7 ", detailOf(first)] })] }), rest.length > 0 && (_jsxs("button", { type: "button", className: ghostButton, onClick: () => setOpen((o) => !o), "aria-expanded": open, "aria-controls": listId, children: [open ? _jsx(ChevronUp, { size: 18 }) : _jsx(ChevronDown, { size: 18 }), " +", rest.length, " more"] })), actions(first)] }), open && rest.length > 0 && (_jsx("ul", { id: listId, className: "mt-1 divide-y divide-stone-200 border-t border-stone-200", "aria-label": moreLabel, children: rest.map((m) => (_jsxs("li", { className: "flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 pl-8", children: [_jsxs("p", { className: "min-w-0 flex-1 text-base [overflow-wrap:anywhere]", children: [_jsx("span", { className: "font-medium text-stone-800 dark:text-stone-100", children: titleOf(m) }), detailOf(m) && _jsxs("span", { className: "text-stone-600 dark:text-stone-300", children: [" \u00B7 ", detailOf(m)] })] }), actions(m)] }, idOf(m)))) }))] }));
 }

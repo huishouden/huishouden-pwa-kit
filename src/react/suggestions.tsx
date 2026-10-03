@@ -121,7 +121,7 @@ export const ADDED_HIDE_MS = 10_000;
  * when its record arrives (if none arrives within ten seconds, the save failed and it comes back).
  * After either button, focus stays on the card.
  */
-export function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead, label, moreLabel, icon, onAdd, onDismiss }: {
+export function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead, label, moreLabel, icon, onAdd, onDismiss, addAs }: {
   suggestions: T[];
   idOf: (item: T) => string;
   titleOf: (item: T) => string;
@@ -136,6 +136,8 @@ export function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead,
   icon: ReactNode;
   onAdd: (item: T) => void;
   onDismiss: (item: T) => void;
+  /** An item whose add button does something else ("Use as prep"): its words and accessible name. Add otherwise. */
+  addAs?: (item: T) => { label: string; ariaLabel: string } | null;
 }) {
   const [open, setOpen] = useState(false);
   const [added, setAdded] = useState<ReadonlyMap<string, number>>(() => new Map());
@@ -171,13 +173,13 @@ export function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead,
     onDismiss(m);
     keepFocus();
   };
-  const actions = (m: T) => (
+  const actions = (m: T, as = addAs?.(m)) => (
     <div className="flex shrink-0 gap-1">
       <button type="button" className={ghostButton} onClick={() => dismiss(m)} aria-label={`Not this one: ${titleOf(m)}`}>
         Not this one
       </button>
-      <button type="button" className={secondaryButton} onClick={() => add(m)} aria-label={`Add ${titleOf(m)}`}>
-        <Plus size={18} /> Add
+      <button type="button" className={secondaryButton} onClick={() => add(m)} aria-label={as?.ariaLabel ?? `Add ${titleOf(m)}`}>
+        {as ? as.label : <><Plus size={18} /> Add</>}
       </button>
     </div>
   );
