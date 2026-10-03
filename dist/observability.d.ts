@@ -32,12 +32,22 @@ export type ObservabilityBlock = 'not-configured' | 'automation' | 'host';
 export declare function observabilityBlock(config: NewRelicConfig | null, hosts?: RegExp): ObservabilityBlock | null;
 /** Whether usage counts may be sent: not when the browser sends Global Privacy Control or Do Not Track. */
 export declare function usageAllowed(): boolean;
+/**
+ * Words that must never be sent, whatever carries them (an error message, a stack, an attribute):
+ * Health passes its medicine names and the names of the people it looks after, and calls it again
+ * when they change. Each app's list is kept under its own `key`; an empty list clears it. Matching
+ * ignores case; words shorter than three characters are left alone (they would blank out ordinary
+ * text). Replaced with `[redacted]`.
+ */
+export declare function setSensitiveWords(key: string, words: readonly string[]): void;
+/** Whether `text` holds one of the words set with `setSensitiveWords`. */
+export declare function hasSensitiveWords(text: string): boolean;
 /** Rules the agent applies to everything it sends (messages, stack traces, page URLs, attributes). */
 export declare const OBFUSCATION_RULES: {
     regex: RegExp;
     replacement: string;
 }[];
-/** A message or URL with emails, query strings, household paths and long numbers taken out. */
+/** A message or URL with emails, query strings, household paths, long numbers and sensitive words taken out. */
 export declare function redact(text: string, max?: number): string;
 /** A stable, anonymous tag for a household: the first 16 hex digits of SHA-256 over its id. */
 export declare function householdTag(householdId: string): Promise<string>;

@@ -2,8 +2,14 @@ import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/fir
 import { deleteDoc, setDoc, writeBatch } from './firestore.js';
 import { doseSlots } from './dose.js';
 import { MONEY_APPS } from './roles.js';
+import { cleanAudience, inAudience } from './audience.js';
 export const REMINDER_FIELDS = ['app', 'title', 'body', 'at', 'url', 'recipients', 'ref', 'private', 'sent', 'sentAt', 'createdAt', 'by'];
+/** The collection of reminders for named members only (`./audience`); the sender reads it too. */
+export const PERSONAL_REMINDERS = 'personalReminders';
+/** Fields of a `personalReminders` document: a reminder's plus `audience`. */
+export const PERSONAL_REMINDER_FIELDS = [...REMINDER_FIELDS, 'audience'];
 const remindersOf = (db, householdId) => collection(db, 'households', householdId, 'reminders');
+const personalOf = (db, householdId) => collection(db, 'households', householdId, PERSONAL_REMINDERS);
 /** Reminders matching `filters`, or for a helper or kid only the open ones (what the rules let them read). */
 const visible = (db, householdId, restricted, ...filters) => query(remindersOf(db, householdId), ...filters, ...(restricted ? [where('private', '==', false)] : []));
 const refused = (e) => e?.code === 'permission-denied';
@@ -135,6 +141,61 @@ export async function syncReminders(db, householdId, app, inputs, by, now = Date
     await commit(db, ops, restricted);
     return { written: ops.length - deleted, deleted, unchanged };
 }
+/**
+ * A `personalReminders` document: as `reminderDoc`, private, with the audience cleaned and the
+ * recipients narrowed to it. Throws when the audience leaves out the writer or no recipient is in it.
+ */
+export function personalReminderDoc(input, by, now = Date.now()) {
+    const audience = cleanAudience(input.audience);
+    if (!inAudience(audience, by))
+        throw new Error('A personal reminder must name its writer in its audience.');
+    const recipients = cleanAudience(input.recipients).filter((e) => audience.includes(e));
+    const { audience: _a, ...rest } = input;
+    return { ...reminderDoc({ ...rest, recipients, private: true }, by, now), audience };
+}
+/**
+ * Makes this app's reminders for named members exactly `inputs` from now on, as `syncReminders`
+ * does for shared ones: the reminders whose audience includes `by`. Past and sent ones are never
+ * touched; inputs whose audience leaves `by` out, or with no recipient in it, are skipped.
+ */
+export async function syncPersonalReminders(db, householdId, app, inputs, by, now = Date.now()) {
+    const me = by.trim().toLowerCase();
+    const wanted = new Map();
+    for (const r of inputs) {
+        if (r.at <= now || !inAudience(cleanAudience(r.audience), me))
+            continue;
+        let data;
+        try {
+            data = personalReminderDoc({ ...r, app }, me, now);
+        }
+        catch {
+            continue;
+        }
+        wanted.set(r.id ?? reminderId(r.ref ?? app, data.at), data);
+    }
+    const col = personalOf(db, householdId);
+    const existing = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
+    const ops = [];
+    for (const d of existing.docs) {
+        const data = d.data();
+        if (typeof data.at === 'number' && data.at > now && data.sent !== true && !wanted.has(d.id))
+            ops.push((b) => b.delete(d.ref));
+    }
+    const deleted = ops.length;
+    const have = new Map(existing.docs.map((d) => [d.id, d.data()]));
+    let unchanged = 0;
+    for (const [id, data] of wanted) {
+        const old = have.get(id);
+        if (old && sameReminder(old, data) && JSON.stringify(old.audience) === JSON.stringify(data.audience))
+            unchanged++;
+        else if (old?.sent === true)
+            unchanged++;
+        else
+            ops.push((b) => b.set(doc(col, id), data));
+    }
+    await commit(db, ops);
+    return { written: ops.length - deleted, deleted, unchanged };
+}
 export function toReminder(id, data) {
     return {
         id,
@@ -146,6 +207,7 @@ export function toReminder(id, data) {
         recipients: Array.isArray(data.recipients) ? data.recipients.map(String) : 'all',
         ref: typeof data.ref === 'string' ? data.ref : undefined,
         ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
+        ...(Array.isArray(data.audience) ? { audience: data.audience.filter((e) => typeof e === 'string') } : {}),
         sent: data.sent === true,
         sentAt: typeof data.sentAt === 'number' ? data.sentAt : undefined,
         createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,

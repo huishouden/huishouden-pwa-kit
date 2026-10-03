@@ -1,6 +1,7 @@
 import { collection, doc, getDocs, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { writeBatch } from './firestore.js';
 import { MONEY_APPS } from './roles.js';
+import { cleanAudience, inAudience } from './audience.js';
 import { HOUR, daysBetween, dueText, dueWords, formatTime, longDate, startOfDay, toYmd, type Ymd, ymdToTime, addDays } from './time.js';
 
 /**
@@ -47,12 +48,23 @@ export interface AgendaItem {
   status?: AgendaStatus;
   /** Only admins and members see it: from a private record, or about money. Stored as a boolean. */
   private?: boolean;
+  /**
+   * Only these members see it (lowercase emails): an item in `personalAgenda` (`./audience`), about
+   * one person's care. Absent on the shared agenda.
+   */
+  audience?: string[];
   updatedAt: number;
   /** Lowercase email of the member whose app wrote it. */
   by: string;
 }
 
 export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'private', 'updatedAt', 'by'] as const;
+
+/** The collection of items for named members only (`./audience`). */
+export const PERSONAL_AGENDA = 'personalAgenda';
+
+/** Fields of a `personalAgenda` item: the agenda's plus `audience`. */
+export const PERSONAL_AGENDA_FIELDS = [...AGENDA_FIELDS, 'audience'] as const;
 
 /** Maximum lengths, the same as the rules. */
 export const AGENDA_LIMITS = { app: 40, ref: 200, title: 120, detail: 200, url: 2000, who: 60, by: 254 } as const;
@@ -63,12 +75,16 @@ export const AGENDA_PAST_DAYS = 30;
 export const AGENDA_AHEAD_DAYS = 180;
 
 /** What an app passes in: everything but the bookkeeping the kit fills in. */
-export type AgendaInput = Omit<AgendaItem, 'id' | 'app' | 'updatedAt' | 'by'>;
+export type AgendaInput = Omit<AgendaItem, 'id' | 'app' | 'updatedAt' | 'by' | 'audience'>;
+
+/** An item for named members only: who may see it (`./audience`). */
+export type PersonalAgendaInput = AgendaInput & { audience: readonly string[] };
 
 /** An all-day item's `start` (and, for the day after its last, `end`): local midnight of a day. */
 export const allDayStart = (day: Ymd): number => ymdToTime(day);
 
 const agendaOf = (db: Firestore, householdId: string) => collection(db, 'households', householdId, 'agenda');
+const personalOf = (db: Firestore, householdId: string) => collection(db, 'households', householdId, PERSONAL_AGENDA);
 
 const safe = (s: string) => s.replace(/[^A-Za-z0-9_-]+/g, '_');
 
@@ -108,6 +124,17 @@ export function agendaDoc(app: string, input: AgendaInput, by: string, now = Dat
     updatedAt: now,
     by: by.trim().toLowerCase(),
   };
+}
+
+/**
+ * A `personalAgenda` document: as `agendaDoc`, private, with the audience cleaned. Throws when the
+ * audience is empty or leaves out the writer (the rules refuse both).
+ */
+export function personalAgendaDoc(app: string, input: PersonalAgendaInput, by: string, now = Date.now()): Omit<AgendaItem, 'id'> {
+  const audience = cleanAudience(input.audience);
+  if (!inAudience(audience, by)) throw new Error('A personal agenda item must name its writer in its audience.');
+  const { audience: _a, ...rest } = input;
+  return { ...agendaDoc(app, { ...rest, private: true }, by, now), audience };
 }
 
 /** The window apps publish: from `AGENDA_PAST_DAYS` ago to `AGENDA_AHEAD_DAYS` ahead, whole days. */
@@ -168,22 +195,22 @@ export interface AgendaWriteResult {
 }
 
 /** Makes `stored` (this app's items, or one ref's) exactly `items`, writing only what changed. */
-async function reconcile(
+async function reconcile<I extends AgendaInput>(
   db: Firestore,
   householdId: string,
   app: string,
   stored: { id: string; data: Record<string, unknown> }[],
-  items: AgendaInput[],
+  items: I[],
   { by, restricted = false, now = Date.now() }: AgendaWriteOptions,
+  { col = agendaOf(db, householdId), build = (item: I) => agendaDoc(app, item, by, now) }: { col?: ReturnType<typeof agendaOf>; build?: (item: I) => Omit<AgendaItem, 'id'> } = {},
 ): Promise<AgendaWriteResult> {
   const wanted = new Map<string, Omit<AgendaItem, 'id'>>();
   for (const item of items) {
     if (!inAgendaWindow(item, now)) continue;
     // A helper's device can't see private items, so it never publishes or removes them.
     if (restricted && item.private) continue;
-    wanted.set(agendaId(app, item.ref, item.start), agendaDoc(app, item, by, now));
+    wanted.set(agendaId(app, item.ref, item.start), build(item));
   }
-  const col = agendaOf(db, householdId);
   const ops: Op[] = [];
   let unchanged = 0;
   const have = new Map(stored.map((s) => [s.id, s.data]));
@@ -238,6 +265,25 @@ export async function syncAgenda(db: Firestore, householdId: string, app: string
   return reconcile(db, householdId, app, snapshotDocs(snap), items, options);
 }
 
+/**
+ * Makes this app's items for named members exactly `items`, as `syncAgenda` does for the shared
+ * agenda: the items whose audience includes `by` (the only ones this member may read or write).
+ * Items whose audience leaves `by` out are skipped; another allowed member's device keeps them.
+ */
+export async function syncPersonalAgenda(
+  db: Firestore,
+  householdId: string,
+  app: string,
+  items: PersonalAgendaInput[],
+  { by, now = Date.now() }: Omit<AgendaWriteOptions, 'restricted'>,
+): Promise<AgendaWriteResult> {
+  const me = by.trim().toLowerCase();
+  const col = personalOf(db, householdId);
+  const snap = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
+  const mine = items.filter((i) => inAudience(cleanAudience(i.audience), me));
+  return reconcile(db, householdId, app, snapshotDocs(snap), mine, { by: me, now }, { col, build: (item) => personalAgendaDoc(app, item, me, now) });
+}
+
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 
@@ -263,6 +309,7 @@ export function toAgendaItem(id: string, data: Record<string, unknown>): AgendaI
     ...(status ? { status } : {}),
     // Left out when the document has no flag, so an admin's or member's sync writes one.
     ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
+    ...(Array.isArray(data.audience) ? { audience: data.audience.filter((e): e is string => typeof e === 'string') } : {}),
     updatedAt: num(data.updatedAt) ?? 0,
     by: str(data.by) ?? '',
   };
@@ -280,23 +327,50 @@ export interface AgendaRange {
   apps?: string[];
   /** A helper or kid (`isRestricted(role)`): only items not marked private, as the rules require. */
   restricted?: boolean;
+  /** The signed-in member's email: also follows the items for named members that name them (`./audience`). */
+  me?: string;
   onError?: (error: Error) => void;
 }
 
-/** Follows the household's items overlapping `from`..`to` (and any overdue), soonest first. */
+/**
+ * Follows the household's items overlapping `from`..`to` (and any overdue), soonest first; with
+ * `me`, the member's personal items too. Waits for both lists before the first answer.
+ */
 export function watchAgenda(db: Firestore, householdId: string, range: AgendaRange, onChange: (items: AgendaItem[]) => void): Unsubscribe {
-  const { from, to, apps, restricted, onError } = range;
-  return onSnapshot(
-    visible(db, householdId, restricted, where('start', '<', to)),
-    (snap) =>
-      onChange(
-        snap.docs
-          .map((d) => toAgendaItem(d.id, d.data()))
-          .filter((i) => (!apps || apps.includes(i.app)) && (i.status === 'overdue' || (i.end ?? i.start) >= from))
-          .sort(byStart),
+  const { from, to, apps, restricted, me, onError } = range;
+  const keep = (i: AgendaItem) => i.start < to && (!apps || apps.includes(i.app)) && (i.status === 'overdue' || (i.end ?? i.start) >= from);
+  let shared: AgendaItem[] | null = null;
+  let personal: AgendaItem[] | null = me ? null : [];
+  const emit = () => {
+    if (shared && personal) onChange([...shared, ...personal].filter(keep).sort(byStart));
+  };
+  const unsubs = [
+    onSnapshot(
+      visible(db, householdId, restricted, where('start', '<', to)),
+      (snap) => {
+        shared = snap.docs.map((d) => toAgendaItem(d.id, d.data()));
+        emit();
+      },
+      (error) => onError?.(error),
+    ),
+  ];
+  if (me) {
+    unsubs.push(
+      onSnapshot(
+        query(personalOf(db, householdId), where('audience', 'array-contains', me.trim().toLowerCase())),
+        (snap) => {
+          personal = snap.docs.map((d) => toAgendaItem(d.id, d.data()));
+          emit();
+        },
+        // Rules from before personal items refuse the query: the shared agenda still shows.
+        () => {
+          personal = [];
+          emit();
+        },
       ),
-    (error) => onError?.(error),
-  );
+    );
+  }
+  return () => unsubs.forEach((u) => u());
 }
 
 // ---- Reading the agenda: Today and days ----

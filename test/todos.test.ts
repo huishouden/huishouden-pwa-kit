@@ -11,9 +11,9 @@ type Where = { field: string; op: string; value: unknown };
 const ref = (path: string): Ref => ({ path, id: path.split('/').pop()! });
 const docsOf = (q: { path: string; w?: Where[] }) =>
   [...store.entries()]
-    .filter(([p, d]) => p.startsWith(`${q.path}/`) && !p.slice(q.path.length + 1).includes('/') && (q.w ?? []).every((w) => d[w.field] === w.value))
+    .filter(([p, d]) => p.startsWith(`${q.path}/`) && !p.slice(q.path.length + 1).includes('/') && (q.w ?? []).every((w) => (w.op === 'array-contains' ? Array.isArray(d[w.field]) && (d[w.field] as unknown[]).includes(w.value) : d[w.field] === w.value)))
     .map(([p, d]) => ({ id: p.split('/').pop()!, ref: ref(p), data: () => d }));
-let listener: (() => void) | null = null;
+const listeners = new Set<() => void>();
 const refuse = new Set<string>();
 const merge = (a: Record<string, unknown> | undefined, b: Record<string, unknown>) => ({ ...(a ?? {}), ...b });
 mock.module('firebase/firestore', () => ({
@@ -26,9 +26,10 @@ mock.module('firebase/firestore', () => ({
   getDocs: async (q: { path: string; w: Where[] }) => ({ docs: docsOf(q) }),
   getDoc: async (r: Ref) => ({ exists: () => store.has(r.path), data: () => store.get(r.path) }),
   onSnapshot: (q: { path: string; w: Where[] }, next: (s: unknown) => void) => {
-    listener = () => next({ docs: docsOf(q) });
+    const listener = () => next({ docs: docsOf(q) });
+    listeners.add(listener);
     listener();
-    return () => (listener = null);
+    return () => listeners.delete(listener);
   },
   writeBatch: () => {
     const ops: (() => void)[] = [];
@@ -42,7 +43,7 @@ mock.module('firebase/firestore', () => ({
       commit: async () => {
         if (paths.some((p) => refuse.has(p))) throw Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
         ops.forEach((op) => op());
-        listener?.();
+        listeners.forEach((l) => l());
       },
     };
   },
@@ -50,7 +51,7 @@ mock.module('firebase/firestore', () => ({
 
 const {
   TODO_FIELDS, TODO_ACTION_FIELDS, addedText, applyTodo, canDo, olderThan, resolveOps, sortTodos, syncTodos, todoDoc, todoDueText, todoId,
-  todoOpsAllowed, todoOverdue, toTodoItem, watchTodos, TodoActionError,
+  todoOpsAllowed, todoOverdue, toTodoItem, watchTodos, TodoActionError, personalTodoDoc, syncPersonalTodos, PERSONAL_TODO_FIELDS,
 } = await import('../src/todos');
 type TodoInput = import('../src/todos').TodoInput;
 type TodoItem = import('../src/todos').TodoItem;
@@ -301,5 +302,65 @@ describe('applying an action', () => {
     await expect(applyTodo(db, H, item(), 'done', { me: ALEX, now: NOW })).rejects.toBeInstanceOf(TodoActionError);
     await expect(applyTodo(db, H, item({ done: { label: 'Done', roles: ['admin'], ops: [{ col: 'bills', id: 'b', data: null }] } }), 'done', { me: ALEX })).rejects.toThrow(/its app/);
     expect(writes).toBe(0);
+  });
+});
+
+describe('to-dos for named members only', () => {
+  const NAN = 'nan@example.com';
+  const dosesCol = 'healthPeople/p1/doses';
+  const personal = (over: Partial<import('../src/todos').PersonalTodoInput> = {}): import('../src/todos').PersonalTodoInput => ({
+    ref: 'missed:p1:2026-10-03T08:00',
+    title: 'Missed 8:00 AM medicine for Nan',
+    createdAt: NOW,
+    url: 'https://huishouden.example.web.app/health/',
+    audience: [ALEX, NAN],
+    done: { label: 'Given', roles: ['admin'], emails: [ALEX, NAN], ops: [{ col: dosesCol, id: 'm1_2026-10-03T08_00', data: { medId: 'm1', slot: '2026-10-03T08:00', status: 'given', at: 1, by: '$me', createdAt: '$now' } }] },
+    ...over,
+  });
+  const personalStored = () =>
+    [...store.entries()].filter(([p]) => p.startsWith(`${base}/personalTodos/`)).map(([p, d]) => toTodoItem(p.split('/').pop()!, d));
+
+  test("nested collections match a star for one id, and nothing else", () => {
+    const op = (col: string) => [{ col, id: 'x', data: {} }];
+    expect(todoOpsAllowed('health', op('healthPeople/p1/doses'))).toBe(true);
+    expect(todoOpsAllowed('health', op('healthPeople/p1/meds'))).toBe(true);
+    expect(todoOpsAllowed('health', op('healthPeople/p1/doses/x/y'))).toBe(false);
+    expect(todoOpsAllowed('health', op('healthPeople/../doses'))).toBe(false);
+    expect(todoOpsAllowed('health', op('healthPeople'))).toBe(false);
+    expect(todoOpsAllowed('health', op('petMedDoses'))).toBe(false);
+  });
+
+  test('the document names its audience and is private; it must name its writer', () => {
+    const d = personalTodoDoc('health', personal(), ALEX, NOW);
+    expect(d.audience).toEqual([ALEX, NAN]);
+    expect(d.private).toBe(true);
+    for (const k of Object.keys(d)) expect(PERSONAL_TODO_FIELDS as readonly string[]).toContain(k);
+    expect(() => personalTodoDoc('health', personal({ audience: [NAN] }), ALEX, NOW)).toThrow();
+  });
+
+  test('sync writes only items naming the writer; watch with me merges them; Done removes it from the personal list', async () => {
+    reset();
+    await syncTodos(db, H, 'tasks', [input()], { by: ALEX, now: NOW });
+    expect(await syncPersonalTodos(db, H, 'health', [personal(), personal({ ref: 'refill:m2', audience: [NAN] })], { by: ALEX, now: NOW })).toEqual({ written: 1, deleted: 0, unchanged: 0 });
+    const seen: TodoItem[][] = [];
+    const stop = watchTodos(db, H, { me: ALEX }, (items) => seen.push(items));
+    expect(seen.at(-1)!.map((i) => i.title).sort()).toEqual(['Fix the porch light', 'Missed 8:00 AM medicine for Nan']);
+    const others: TodoItem[][] = [];
+    const stop2 = watchTodos(db, H, { me: SAM }, (items) => others.push(items));
+    expect(others.at(-1)!.map((i) => i.title)).toEqual(['Fix the porch light']);
+    const t = personalStored()[0];
+    expect(canDo(t, 'done', 'member', ALEX)).toBe(true);
+    expect(canDo(t, 'done', 'member', SAM)).toBe(false);
+    const applied = await applyTodo(db, H, t, 'done', { me: ALEX, now: NOW });
+    await applied.written;
+    expect(store.get(`${base}/${dosesCol}/m1_2026-10-03T08_00`)).toEqual({ medId: 'm1', slot: '2026-10-03T08:00', status: 'given', at: 1, by: ALEX, createdAt: NOW });
+    expect(personalStored()).toEqual([]);
+    expect(stored()).toHaveLength(1);
+    await applied.undo();
+    expect(store.has(`${base}/${dosesCol}/m1_2026-10-03T08_00`)).toBe(false);
+    expect(personalStored()[0].audience).toEqual([ALEX, NAN]);
+    expect(personalStored()[0].private).toBe(true);
+    stop();
+    stop2();
   });
 });
