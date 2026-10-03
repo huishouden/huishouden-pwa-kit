@@ -1,8 +1,9 @@
 import { collection, doc, getDoc, getDocs, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { commitOps, writeBatch } from './firestore.js';
 import { MONEY_APPS, ROLES, type Role } from './roles.js';
+import { isSchedule, nextDueAfterDone } from './schedule.js';
 import { inverseOps, type Op } from './store.js';
-import { addDays, addMonths, DAY, daysBetween, dueText, toYmd, type Ymd } from './time.js';
+import { addDays, addMonths, DAY, daysBetween, dueText, isYmd, toYmd, type Ymd } from './time.js';
 
 /**
  * The household's to-do list: every app's open, actionable things in one collection,
@@ -18,7 +19,9 @@ import { addDays, addMonths, DAY, daysBetween, dueText, toYmd, type Ymd } from '
  * Op data may hold placeholders, resolved when the action runs rather than when it was published:
  * `'$now'` (ms), `'$today'` (YYYY-MM-DD), `'$me'` (the member's email) and `'$today+3m'` (a day
  * that far from today: `d`, `w`, `m` or `y`), so "done" on a job means done today even if the item
- * was published last week.
+ * was published last week. `{ $nextDue: { schedule, due } }` is a repeating job's next due date once
+ * done today (`./schedule` `nextDueAfterDone`): for set dates the first one after both `due` and
+ * today, however many dates passed between publishing and the tap.
  *
  * Admins and members read every item; helpers and kids those with `private: false`. Spending's
  * and Bills' are always private. Fields match the rules (`TODO_FIELDS`); keep them in step.
@@ -379,6 +382,19 @@ export interface ResolveContext {
 
 const OFFSET = /^\$today([+-]\d{1,4})([dwmy])$/;
 
+/** `{ $nextDue: { schedule, due } }`: the next due date of a job done today. */
+export interface NextDuePlaceholder {
+  $nextDue: { schedule: unknown; due: Ymd };
+}
+
+const isNextDue = (v: object): v is NextDuePlaceholder => Object.keys(v).length === 1 && '$nextDue' in v;
+
+function resolveNextDue({ $nextDue: arg }: NextDuePlaceholder, today: Ymd): Ymd {
+  const { schedule, due } = (arg ?? {}) as { schedule?: unknown; due?: unknown };
+  if (!isSchedule(schedule) || !isYmd(due)) throw new TodoActionError('This can only be changed in its app.');
+  return nextDueAfterDone(schedule, due, today);
+}
+
 function resolveValue(v: unknown, ctx: ResolveContext, today: Ymd): unknown {
   if (typeof v === 'string') {
     if (v === '$now') return ctx.now;
@@ -392,11 +408,12 @@ function resolveValue(v: unknown, ctx: ResolveContext, today: Ymd): unknown {
     return v;
   }
   if (Array.isArray(v)) return v.map((x) => resolveValue(x, ctx, today));
+  if (v && typeof v === 'object' && isNextDue(v)) return resolveNextDue(v, today);
   if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, resolveValue(x, ctx, today)]));
   return v;
 }
 
-/** The ops with their placeholders (`'$now'`, `'$today'`, `'$today+3m'`, `'$me'`) filled in. */
+/** The ops with their placeholders (`'$now'`, `'$today'`, `'$today+3m'`, `'$me'`, `{ $nextDue }`) filled in; throws `TodoActionError` on a malformed `$nextDue`. */
 export function resolveOps(ops: readonly Op[], ctx: ResolveContext): Op[] {
   const today = toYmd(ctx.now);
   return ops.map((op) => ({ ...op, data: op.data === null ? null : (resolveValue(op.data, ctx, today) as object) }));

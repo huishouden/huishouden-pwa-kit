@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import * as real from 'firebase/firestore';
+import { daysBetween } from '../src/time';
 
 // An in-memory stand-in for the few Firestore calls todos.ts makes (the rules themselves are
 // tested in huishouden/rules). Counts writes so "unchanged items are not rewritten" is checkable.
@@ -229,6 +230,43 @@ describe('applying an action', () => {
   test('placeholders resolve when the action runs', () => {
     const [op] = resolveOps([{ col: 'homeTasks', id: 'j', data: { lastDone: '$today', due: '$today+3m', week: '$today+2w', at: '$now', by: '$me', n: ['$today-1d'], keep: 'today$' }, merge: true }], { now: NOW, me: 'Sam@Example.com' });
     expect(op.data).toEqual({ lastDone: '2026-10-03', due: '2027-01-03', week: '2026-10-17', at: NOW, by: SAM, n: ['2026-10-02'], keep: 'today$' });
+  });
+
+  test('$nextDue resolves to the next due date as of the tap, not as of publishing', () => {
+    const monthly = { kind: 'fixed', every: 1, unit: 'month', anchor: '2026-01-15' } as const;
+    const resolve = (data: object, now = NOW) => resolveOps([{ col: 'homeTasks', id: 'j', data, merge: true }], { now, me: SAM })[0].data;
+    // Three dates overdue (July, August, September 15): the next is October 15, after today.
+    expect(resolve({ due: { $nextDue: { schedule: monthly, due: '2026-07-15' } } })).toEqual({ due: '2026-10-15' });
+    // Done early: the coming date is covered, the next is the one after it.
+    expect(resolve({ due: { $nextDue: { schedule: monthly, due: '2026-10-15' } } })).toEqual({ due: '2026-11-15' });
+    expect(resolve({ due: { $nextDue: { schedule: { kind: 'after-done', every: 3, unit: 'month' }, due: '2026-07-15' } } })).toEqual({ due: '2027-01-03' });
+    expect(() => resolve({ due: { $nextDue: { schedule: { kind: 'fixed', every: 0, unit: 'month', anchor: '2026-01-15' }, due: '2026-07-15' } } })).toThrow(TodoActionError);
+    expect(() => resolve({ due: { $nextDue: { schedule: monthly, due: 'soon' } } })).toThrow(TodoActionError);
+  });
+
+  test('a set-dates job three dates overdue, done from the list, is next due after today', async () => {
+    reset();
+    const monthly = { kind: 'fixed', every: 1, unit: 'month', anchor: '2026-01-15' } as const;
+    // Published in July, when only the July date had passed; tapped on 3 October.
+    const published = todoDoc(
+      'home',
+      {
+        ref: 'job:j1',
+        title: 'Clean the gutters',
+        createdAt: 1,
+        url,
+        done: { label: 'Done', roles: ['admin', 'member', 'helper', 'kid'], ops: [{ col: 'homeTasks', id: 'j1', merge: true, data: { lastDone: '$today', due: { $nextDue: { schedule: monthly, due: '2026-07-15' } }, updatedAt: '$now' } }] },
+      },
+      ALEX,
+      day(7, 16),
+    );
+    store.set(`${base}/todos/home:job:j1`, published);
+    store.set(`${base}/homeTasks/j1`, { title: 'Clean the gutters', schedule: monthly, due: '2026-07-15', by: ALEX });
+    const applied = await applyTodo(db, H, { ...published, id: 'home:job:j1' }, 'done', { me: SAM, now: NOW });
+    await applied.written;
+    const job = store.get(`${base}/homeTasks/j1`)!;
+    expect(job).toEqual({ title: 'Clean the gutters', schedule: monthly, due: '2026-10-15', lastDone: '2026-10-03', updatedAt: NOW, by: ALEX });
+    expect(daysBetween('2026-10-03', job.due as string)).toBeGreaterThan(0);
   });
 
   test('done writes the source record and removes the item in one batch; Undo puts both back', async () => {
