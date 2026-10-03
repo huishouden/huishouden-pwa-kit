@@ -1,8 +1,9 @@
 import { collection, doc, getDoc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { commitOps, writeBatch } from './firestore.js';
 import { MONEY_APPS, ROLES } from './roles.js';
+import { isSchedule, nextDueAfterDone } from './schedule.js';
 import { inverseOps } from './store.js';
-import { addDays, addMonths, DAY, daysBetween, dueText, toYmd } from './time.js';
+import { addDays, addMonths, DAY, daysBetween, dueText, isYmd, toYmd } from './time.js';
 export const TODO_STATUSES = ['open', 'info'];
 export const TODO_FIELDS = ['app', 'ref', 'title', 'detail', 'createdAt', 'due', 'who', 'url', 'status', 'private', 'owner', 'done', 'cancel', 'updatedAt', 'by'];
 export const TODO_ACTION_FIELDS = ['label', 'ops', 'roles', 'owner', 'emails'];
@@ -271,6 +272,13 @@ export function canDo(item, which, role, me) {
     return (action.owner === true && item.owner === email) || (action.emails ?? []).includes(email);
 }
 const OFFSET = /^\$today([+-]\d{1,4})([dwmy])$/;
+const isNextDue = (v) => Object.keys(v).length === 1 && '$nextDue' in v;
+function resolveNextDue({ $nextDue: arg }, today) {
+    const { schedule, due } = (arg ?? {});
+    if (!isSchedule(schedule) || !isYmd(due))
+        throw new TodoActionError('This can only be changed in its app.');
+    return nextDueAfterDone(schedule, due, today);
+}
 function resolveValue(v, ctx, today) {
     if (typeof v === 'string') {
         if (v === '$now')
@@ -288,11 +296,13 @@ function resolveValue(v, ctx, today) {
     }
     if (Array.isArray(v))
         return v.map((x) => resolveValue(x, ctx, today));
+    if (v && typeof v === 'object' && isNextDue(v))
+        return resolveNextDue(v, today);
     if (v && typeof v === 'object')
         return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, resolveValue(x, ctx, today)]));
     return v;
 }
-/** The ops with their placeholders (`'$now'`, `'$today'`, `'$today+3m'`, `'$me'`) filled in. */
+/** The ops with their placeholders (`'$now'`, `'$today'`, `'$today+3m'`, `'$me'`, `{ $nextDue }`) filled in; throws `TodoActionError` on a malformed `$nextDue`. */
 export function resolveOps(ops, ctx) {
     const today = toYmd(ctx.now);
     return ops.map((op) => ({ ...op, data: op.data === null ? null : resolveValue(op.data, ctx, today) }));
