@@ -18,6 +18,8 @@ export declare const GLYPHS: {
     readonly list: "<path d=\"M184 290 h144 M184 334 h144 M184 378 h96\" stroke=\"#2d6a4f\" stroke-width=\"26\" stroke-linecap=\"round\"/>";
     /** Shopping: a cart. */
     readonly cart: "<path d=\"M168 280 h28 l26 92 h104 l22 -68 h-136\" fill=\"none\" stroke=\"#2d6a4f\" stroke-width=\"24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"234\" cy=\"404\" r=\"14\" fill=\"#2d6a4f\"/><circle cx=\"316\" cy=\"404\" r=\"14\" fill=\"#2d6a4f\"/>";
+    /** Health: a capsule. */
+    readonly pill: "<g transform=\"rotate(-45 256 344)\"><rect x=\"219\" y=\"266\" width=\"74\" height=\"156\" rx=\"37\" fill=\"none\" stroke=\"#2d6a4f\" stroke-width=\"22\"/><path d=\"M219 344 v41 a37 37 0 0 0 74 0 v-41 z\" fill=\"#2d6a4f\"/></g>";
 };
 export type Glyph = keyof typeof GLYPHS;
 /** Full-bleed square for maskable icons (the launcher crops it); rounded tile otherwise. */

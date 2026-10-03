@@ -1,10 +1,15 @@
 import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { writeBatch } from './firestore.js';
 import { MONEY_APPS } from './roles.js';
+import { cleanAudience, inAudience } from './audience.js';
 import { HOUR, daysBetween, dueText, dueWords, formatTime, longDate, startOfDay, toYmd, ymdToTime, addDays } from './time.js';
 export const AGENDA_KINDS = ['appointment', 'due', 'renewal', 'bill', 'birthday', 'medicine', 'feeding', 'task', 'other'];
 export const AGENDA_STATUSES = ['upcoming', 'overdue', 'done'];
 export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'private', 'updatedAt', 'by'];
+/** The collection of items for named members only (`./audience`). */
+export const PERSONAL_AGENDA = 'personalAgenda';
+/** Fields of a `personalAgenda` item: the agenda's plus `audience`. */
+export const PERSONAL_AGENDA_FIELDS = [...AGENDA_FIELDS, 'audience'];
 /** Maximum lengths, the same as the rules. */
 export const AGENDA_LIMITS = { app: 40, ref: 200, title: 120, detail: 200, url: 2000, who: 60, by: 254 };
 /** Apps publish items from this many days ago (overdue ones whatever their age)... */
@@ -14,6 +19,7 @@ export const AGENDA_AHEAD_DAYS = 180;
 /** An all-day item's `start` (and, for the day after its last, `end`): local midnight of a day. */
 export const allDayStart = (day) => ymdToTime(day);
 const agendaOf = (db, householdId) => collection(db, 'households', householdId, 'agenda');
+const personalOf = (db, householdId) => collection(db, 'households', householdId, PERSONAL_AGENDA);
 const safe = (s) => s.replace(/[^A-Za-z0-9_-]+/g, '_');
 /** The same id for the same item however often it is published: `<app>_<ref>_<start>`, Firestore-safe. */
 export function agendaId(app, ref, start) {
@@ -56,6 +62,17 @@ export function agendaDoc(app, input, by, now = Date.now()) {
         by: by.trim().toLowerCase(),
     };
 }
+/**
+ * A `personalAgenda` document: as `agendaDoc`, private, with the audience cleaned. Throws when the
+ * audience is empty or leaves out the writer (the rules refuse both).
+ */
+export function personalAgendaDoc(app, input, by, now = Date.now()) {
+    const audience = cleanAudience(input.audience);
+    if (!inAudience(audience, by))
+        throw new Error('A personal agenda item must name its writer in its audience.');
+    const { audience: _a, ...rest } = input;
+    return { ...agendaDoc(app, { ...rest, private: true }, by, now), audience };
+}
 /** The window apps publish: from `AGENDA_PAST_DAYS` ago to `AGENDA_AHEAD_DAYS` ahead, whole days. */
 export function agendaWindow(now) {
     return { from: addDays(now, -AGENDA_PAST_DAYS), to: addDays(now, AGENDA_AHEAD_DAYS + 1) };
@@ -92,7 +109,7 @@ async function commit(db, ops, restricted = false) {
     }
 }
 /** Makes `stored` (this app's items, or one ref's) exactly `items`, writing only what changed. */
-async function reconcile(db, householdId, app, stored, items, { by, restricted = false, now = Date.now() }) {
+async function reconcile(db, householdId, app, stored, items, { by, restricted = false, now = Date.now() }, { col = agendaOf(db, householdId), build = (item) => agendaDoc(app, item, by, now) } = {}) {
     const wanted = new Map();
     for (const item of items) {
         if (!inAgendaWindow(item, now))
@@ -100,9 +117,8 @@ async function reconcile(db, householdId, app, stored, items, { by, restricted =
         // A helper's device can't see private items, so it never publishes or removes them.
         if (restricted && item.private)
             continue;
-        wanted.set(agendaId(app, item.ref, item.start), agendaDoc(app, item, by, now));
+        wanted.set(agendaId(app, item.ref, item.start), build(item));
     }
-    const col = agendaOf(db, householdId);
     const ops = [];
     let unchanged = 0;
     const have = new Map(stored.map((s) => [s.id, s.data]));
@@ -147,6 +163,18 @@ export async function syncAgenda(db, householdId, app, items, options) {
     const snap = await getDocs(visible(db, householdId, options.restricted, where('app', '==', app)));
     return reconcile(db, householdId, app, snapshotDocs(snap), items, options);
 }
+/**
+ * Makes this app's items for named members exactly `items`, as `syncAgenda` does for the shared
+ * agenda: the items whose audience includes `by` (the only ones this member may read or write).
+ * Items whose audience leaves `by` out are skipped; another allowed member's device keeps them.
+ */
+export async function syncPersonalAgenda(db, householdId, app, items, { by, now = Date.now() }) {
+    const me = by.trim().toLowerCase();
+    const col = personalOf(db, householdId);
+    const snap = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
+    const mine = items.filter((i) => inAudience(cleanAudience(i.audience), me));
+    return reconcile(db, householdId, app, snapshotDocs(snap), mine, { by: me, now }, { col, build: (item) => personalAgendaDoc(app, item, me, now) });
+}
 const str = (v) => (typeof v === 'string' ? v : undefined);
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 /** A stored document as an item, read defensively. */
@@ -171,18 +199,43 @@ export function toAgendaItem(id, data) {
         ...(status ? { status } : {}),
         // Left out when the document has no flag, so an admin's or member's sync writes one.
         ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
+        ...(Array.isArray(data.audience) ? { audience: data.audience.filter((e) => typeof e === 'string') } : {}),
         updatedAt: num(data.updatedAt) ?? 0,
         by: str(data.by) ?? '',
     };
 }
 const byStart = (a, b) => a.start - b.start || Number(b.allDay) - Number(a.allDay) || a.title.localeCompare(b.title);
-/** Follows the household's items overlapping `from`..`to` (and any overdue), soonest first. */
+/**
+ * Follows the household's items overlapping `from`..`to` (and any overdue), soonest first; with
+ * `me`, the member's personal items too. Waits for both lists before the first answer.
+ */
 export function watchAgenda(db, householdId, range, onChange) {
-    const { from, to, apps, restricted, onError } = range;
-    return onSnapshot(visible(db, householdId, restricted, where('start', '<', to)), (snap) => onChange(snap.docs
-        .map((d) => toAgendaItem(d.id, d.data()))
-        .filter((i) => (!apps || apps.includes(i.app)) && (i.status === 'overdue' || (i.end ?? i.start) >= from))
-        .sort(byStart)), (error) => onError?.(error));
+    const { from, to, apps, restricted, me, onError } = range;
+    const keep = (i) => i.start < to && (!apps || apps.includes(i.app)) && (i.status === 'overdue' || (i.end ?? i.start) >= from);
+    let shared = null;
+    let personal = me ? null : [];
+    const emit = () => {
+        if (shared && personal)
+            onChange([...shared, ...personal].filter(keep).sort(byStart));
+    };
+    const unsubs = [
+        onSnapshot(visible(db, householdId, restricted, where('start', '<', to)), (snap) => {
+            shared = snap.docs.map((d) => toAgendaItem(d.id, d.data()));
+            emit();
+        }, (error) => onError?.(error)),
+    ];
+    if (me) {
+        unsubs.push(onSnapshot(query(personalOf(db, householdId), where('audience', 'array-contains', me.trim().toLowerCase())), (snap) => {
+            personal = snap.docs.map((d) => toAgendaItem(d.id, d.data()));
+            emit();
+        }, 
+        // Rules from before personal items refuse the query: the shared agenda still shows.
+        () => {
+            personal = [];
+            emit();
+        }));
+    }
+    return () => unsubs.forEach((u) => u());
 }
 // ---- Reading the agenda: Today and days ----
 /**

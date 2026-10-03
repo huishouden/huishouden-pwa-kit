@@ -8,6 +8,7 @@
  * back in `assumptions`, so the app can show them next to the fields it filled in.
  */
 import { type ReadTextOptions } from './ocr';
+import { type EventRule } from './schedule';
 export { OCR_LANG_PATH, releaseOcr } from './ocr';
 export type ReadLabelOptions = Omit<ReadTextOptions, 'screenshot'>;
 /**
@@ -136,10 +137,17 @@ export interface ScheduleCourse {
     times: string[];
     /** Days between dosing days: 2 for every other day. Default 1. */
     everyDays?: number;
+    /**
+     * Dosing days on a calendar pattern instead (`./schedule` `EventRule`: Mondays and Thursdays, the
+     * 1st of each month); `everyDays` is then ignored. Days before `startDate` never count.
+     */
+    rule?: EventRule;
+    /** "YYYY-MM-DD", the last dosing day (a medicine stopped or prescribed until a date). */
+    until?: string;
 }
 /**
  * Every dose of a course between `from` and `to` (ms, inclusive), in order. Ongoing courses (no
- * `days`) run until `to`.
+ * `days` or `until`) run until `to`.
  */
 export declare function doseSlots(course: ScheduleCourse, from: number, to: number): DoseSlot[];
 export type DoseState = 'given' | 'due' | 'missed' | 'upcoming';
@@ -165,3 +173,64 @@ export declare function doseSummary(course: ScheduleCourse, given: readonly stri
 }): DoseSummary;
 /** Days between dosing days for a parsed interval (48 h → 2), for `ScheduleCourse.everyDays`. */
 export declare function everyDaysOf(course: Pick<ParsedCourse, 'intervalHours'>): number;
+/** A dose someone recorded: given, or skipped on purpose. `slot` is the `DoseSlot.key` it answers (none for as-needed). */
+export interface DoseLog {
+    at: number;
+    slot?: string;
+    status: 'given' | 'skipped';
+    by?: string;
+}
+/** The slot keys that have been answered, given or skipped: nothing more is due for them. */
+export declare function handledKeys(logs: readonly DoseLog[]): Set<string>;
+export type SlotState = 'given' | 'skipped' | 'due' | 'missed' | 'upcoming';
+export interface SlotStatus<L extends DoseLog = DoseLog> {
+    slot: DoseSlot;
+    state: SlotState;
+    /** The log that answered it (the given one if a slot was logged both ways). */
+    log?: L;
+}
+/** Each slot of a course between `from` and `to` with what happened to it, in order. */
+export declare function slotStatuses<L extends DoseLog>(course: ScheduleCourse, logs: readonly L[], from: number, to: number, now: number, window?: DoseWindow): SlotStatus<L>[];
+export interface Adherence {
+    given: number;
+    skipped: number;
+    missed: number;
+    /** Doses of the period nobody has answered yet that are still due. */
+    due: number;
+    /** Given out of given and missed (skipped on purpose doesn't count against it); null with nothing to count. */
+    rate: number | null;
+}
+/** How a scheduled course went between `from` and `to` (capped at now): given, skipped and missed doses. */
+export declare function adherence(course: ScheduleCourse, logs: readonly DoseLog[], from: number, to: number, now: number, window?: DoseWindow): Adherence;
+/**
+ * How close two doses of a scheduled medicine may be before a second one looks like a double dose:
+ * half the shortest gap between its dose times (across midnight too), at least an hour and at most
+ * 12 hours. Once a day: 12 hours.
+ */
+export declare function doubleDoseWindowMs(times: readonly string[]): number;
+/** The latest dose given within `withinMs` before `now` (or after it, for a time typed ahead), if any. */
+export declare function recentlyGiven<L extends DoseLog>(logs: readonly L[], now: number, withinMs: number): L | undefined;
+export interface AsNeededLimits {
+    /** Hours to wait between doses. */
+    minHours?: number;
+    /** Doses allowed in any 24 hours. */
+    maxPerDay?: number;
+}
+export interface AsNeededCheck {
+    /** Whether a dose now keeps within the limits. */
+    ok: boolean;
+    /** `too-soon`: less than `minHours` since the last; `max-reached`: `maxPerDay` given in the last 24 hours. */
+    reason?: 'too-soon' | 'max-reached';
+    /** The last dose given before now. */
+    last?: number;
+    /** Doses given in the 24 hours before now. */
+    inLastDay: number;
+    /** The earliest moment a dose keeps within both limits (now when `ok`). */
+    nextAt: number;
+}
+/**
+ * Whether an as-needed medicine ("every 4 to 6 hours as needed, no more than 4 in 24 hours") may be
+ * given at `now`, from the doses given. Advice for the person giving it, never a block: the app
+ * says why and lets them go ahead.
+ */
+export declare function asNeededCheck(logs: readonly DoseLog[], now: number, { minHours, maxPerDay }: AsNeededLimits): AsNeededCheck;

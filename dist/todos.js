@@ -2,19 +2,27 @@ import { collection, doc, getDoc, getDocs, onSnapshot, query, where } from 'fire
 import { commitOps, writeBatch } from './firestore.js';
 import { MONEY_APPS, ROLES } from './roles.js';
 import { isSchedule, nextDueAfterDone } from './schedule.js';
+import { cleanAudience, inAudience } from './audience.js';
 import { inverseOps } from './store.js';
 import { addDays, addMonths, DAY, daysBetween, dueText, isYmd, toYmd } from './time.js';
 export const TODO_STATUSES = ['open', 'info'];
 export const TODO_FIELDS = ['app', 'ref', 'title', 'detail', 'createdAt', 'due', 'who', 'url', 'status', 'private', 'owner', 'done', 'cancel', 'updatedAt', 'by'];
+/** The collection of to-dos for named members only (`./audience`). */
+export const PERSONAL_TODOS = 'personalTodos';
+/** Fields of a `personalTodos` item: the list's plus `audience`. */
+export const PERSONAL_TODO_FIELDS = [...TODO_FIELDS, 'audience'];
 export const TODO_ACTION_FIELDS = ['label', 'ops', 'roles', 'owner', 'emails'];
 /** Maximum lengths and counts, the same as the rules. */
 export const TODO_LIMITS = { app: 40, ref: 200, title: 120, detail: 200, url: 2000, who: 60, by: 254, label: 24, ops: 8, emails: 12 };
 /**
  * The collections each app's actions may write: the portal refuses an action touching anything
  * else (so an item can't be made to change money or settings when someone taps Done). An app that
- * publishes to-dos is listed here; one with an empty list publishes summary lines only.
+ * publishes to-dos is listed here; one with an empty list publishes summary lines only. A `*` part
+ * stands for one document id in a nested path: Health's entry for any person's doses is
+ * `healthPeople`, `*`, `doses` joined with slashes.
  */
 export const TODO_COLLECTIONS = {
+    health: ['healthPeople/*/doses', 'healthPeople/*/meds'],
     tasks: ['items'],
     groceries: [],
     home: ['homeTasks', 'homeServiceLog', 'homeEventPrep'],
@@ -24,6 +32,13 @@ export const TODO_COLLECTIONS = {
     bills: ['bills'],
 };
 const todosOf = (db, householdId) => collection(db, 'households', householdId, 'todos');
+const personalOf = (db, householdId) => collection(db, 'households', householdId, PERSONAL_TODOS);
+/** Whether a collection path matches one of `TODO_COLLECTIONS`' entries (`*` is one id). */
+function collectionMatches(pattern, col) {
+    const want = pattern.split('/');
+    const have = col.split('/');
+    return want.length === have.length && want.every((w, i) => (w === '*' ? /^[^/]{1,200}$/.test(have[i]) && have[i] !== '.' && have[i] !== '..' : w === have[i]));
+}
 /** The same id for the same record however often it is published: `<app>:<ref>`, Firestore-safe. */
 export function todoId(app, ref) {
     return `${app}:${ref.replace(/\//g, '_')}`.slice(0, 250);
@@ -35,7 +50,7 @@ export function todoOpsAllowed(app, ops) {
     const allowed = TODO_COLLECTIONS[app] ?? [];
     return (ops.length > 0 &&
         ops.length <= TODO_LIMITS.ops &&
-        ops.every((op) => allowed.includes(op.col) && typeof op.id === 'string' && /^[^/]{1,200}$/.test(op.id) && (op.data === null || (typeof op.data === 'object' && !Array.isArray(op.data)))));
+        ops.every((op) => allowed.some((p) => collectionMatches(p, op.col)) && typeof op.id === 'string' && /^[^/]{1,200}$/.test(op.id) && (op.data === null || (typeof op.data === 'object' && !Array.isArray(op.data)))));
 }
 /** Firestore refuses `undefined`: drop it, as JSON does. */
 const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -96,6 +111,17 @@ export function todoDoc(app, input, by, now = Date.now()) {
         by: lower(by),
     };
 }
+/**
+ * A `personalTodos` document: as `todoDoc`, private, with the audience cleaned. Throws when the
+ * audience leaves out the writer (the rules refuse it).
+ */
+export function personalTodoDoc(app, input, by, now = Date.now()) {
+    const audience = cleanAudience(input.audience);
+    if (!inAudience(audience, by))
+        throw new Error('A personal to-do must name its writer in its audience.');
+    const { audience: _a, ...rest } = input;
+    return { ...todoDoc(app, { ...rest, private: true }, by, now), audience };
+}
 const str = (v) => (typeof v === 'string' ? v : undefined);
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 function toAction(v) {
@@ -142,6 +168,7 @@ export function toTodoItem(id, data) {
         ...(owner ? { owner } : {}),
         ...(done ? { done } : {}),
         ...(cancel ? { cancel } : {}),
+        ...(Array.isArray(data.audience) ? { audience: data.audience.filter((e) => typeof e === 'string') } : {}),
         updatedAt: num(data.updatedAt) ?? 0,
         by: str(data.by) ?? '',
     };
@@ -187,10 +214,13 @@ export async function syncTodos(db, householdId, app, items, { by, restricted = 
             continue;
         wanted.set(todoId(app, item.ref), todoDoc(app, item, by, now));
     }
-    const col = todosOf(db, householdId);
+    return reconcile(db, todosOf(db, householdId), snap.docs, wanted, restricted);
+}
+/** Makes the stored documents exactly `wanted`, writing only what changed. */
+async function reconcile(db, col, stored, wanted, restricted) {
     const ops = [];
     let unchanged = 0;
-    const have = new Map(snap.docs.map((d) => [d.id, d.data()]));
+    const have = new Map(stored.map((d) => [d.id, d.data()]));
     for (const id of have.keys())
         if (!wanted.has(id))
             ops.push((b) => b.delete(doc(col, id)));
@@ -205,9 +235,49 @@ export async function syncTodos(db, householdId, app, items, { by, restricted = 
     await commit(db, ops, restricted);
     return { written: ops.length - deleted, deleted, unchanged };
 }
-/** Follows the household's to-dos, newest first. */
-export function watchTodos(db, householdId, { restricted, onError }, onChange) {
-    return onSnapshot(visible(db, householdId, restricted), (snap) => onChange(sortTodos(snap.docs.map((d) => toTodoItem(d.id, d.data())), 'newest')), (error) => onError?.(error));
+/**
+ * Makes this app's to-dos for named members exactly `items`, as `syncTodos` does for the shared
+ * list: the items whose audience includes `by` (the only ones this member may read or write).
+ * Items whose audience leaves `by` out are skipped; another allowed member's device keeps them.
+ */
+export async function syncPersonalTodos(db, householdId, app, items, { by, now = Date.now() }) {
+    const me = by.trim().toLowerCase();
+    const col = personalOf(db, householdId);
+    const snap = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
+    const wanted = new Map();
+    for (const item of items) {
+        if (!inAudience(cleanAudience(item.audience), me))
+            continue;
+        wanted.set(todoId(app, item.ref), personalTodoDoc(app, item, me, now));
+    }
+    return reconcile(db, col, snap.docs, wanted, false);
+}
+/** Follows the household's to-dos (with `me`, the member's personal ones too), newest first. Waits for both lists before the first answer. */
+export function watchTodos(db, householdId, { restricted, me, onError }, onChange) {
+    let shared = null;
+    let personal = me ? null : [];
+    const emit = () => {
+        if (shared && personal)
+            onChange(sortTodos([...shared, ...personal], 'newest'));
+    };
+    const unsubs = [
+        onSnapshot(visible(db, householdId, restricted), (snap) => {
+            shared = snap.docs.map((d) => toTodoItem(d.id, d.data()));
+            emit();
+        }, (error) => onError?.(error)),
+    ];
+    if (me) {
+        unsubs.push(onSnapshot(query(personalOf(db, householdId), where('audience', 'array-contains', me.trim().toLowerCase())), (snap) => {
+            personal = snap.docs.map((d) => toTodoItem(d.id, d.data()));
+            emit();
+        }, 
+        // Rules from before personal items refuse the query: the shared list still shows.
+        () => {
+            personal = [];
+            emit();
+        }));
+    }
+    return () => unsubs.forEach((u) => u());
 }
 /**
  * `newest` / `oldest`: by when added. `due`: soonest due first, undated last (newest first among
@@ -310,8 +380,10 @@ export function resolveOps(ops, ctx) {
 /** The item as stored again (Undo), written by `me`. */
 function restoredDoc(item, me, now) {
     const { id: _id, ...rest } = item;
-    return plain({ ...rest, private: item.private === true || MONEY_APPS.includes(item.app), updatedAt: now, by: lower(me) });
+    return plain({ ...rest, private: item.private === true || !!item.audience || MONEY_APPS.includes(item.app), updatedAt: now, by: lower(me) });
 }
+/** The collection an item lives in: the personal list when it names an audience. */
+const listOf = (item) => (item.audience ? PERSONAL_TODOS : 'todos');
 /** Thrown when an action can't run: its record is gone or it writes where it shouldn't. */
 export class TodoActionError extends Error {
 }
@@ -339,9 +411,10 @@ export async function applyTodo(db, householdId, item, which, { me, now = Date.n
         throw new TodoActionError(`${item.title} was changed in its app. Open it there.`);
     }
     const inverse = inverseOps(ops, (col, id) => before.get(`${col}/${id}`));
-    const written = commitOps(db, base, [...ops, { col: 'todos', id: item.id, data: null }]);
+    const list = listOf(item);
+    const written = commitOps(db, base, [...ops, { col: list, id: item.id, data: null }]);
     return {
         written,
-        undo: () => commitOps(db, base, [...inverse, { col: 'todos', id: item.id, data: restoredDoc(item, me, Date.now()) }]),
+        undo: () => commitOps(db, base, [...inverse, { col: list, id: item.id, data: restoredDoc(item, me, Date.now()) }]),
     };
 }

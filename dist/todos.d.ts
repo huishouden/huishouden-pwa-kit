@@ -64,11 +64,20 @@ export interface TodoItem {
     owner?: string;
     done?: TodoAction;
     cancel?: TodoAction;
+    /**
+     * Only these members see it (lowercase emails): an item in `personalTodos` (`./audience`), about
+     * one person's care. Absent on the shared list.
+     */
+    audience?: string[];
     updatedAt: number;
     /** Lowercase email of the member whose app wrote it. */
     by: string;
 }
 export declare const TODO_FIELDS: readonly ["app", "ref", "title", "detail", "createdAt", "due", "who", "url", "status", "private", "owner", "done", "cancel", "updatedAt", "by"];
+/** The collection of to-dos for named members only (`./audience`). */
+export declare const PERSONAL_TODOS = "personalTodos";
+/** Fields of a `personalTodos` item: the list's plus `audience`. */
+export declare const PERSONAL_TODO_FIELDS: readonly ["app", "ref", "title", "detail", "createdAt", "due", "who", "url", "status", "private", "owner", "done", "cancel", "updatedAt", "by", "audience"];
 export declare const TODO_ACTION_FIELDS: readonly ["label", "ops", "roles", "owner", "emails"];
 /** Maximum lengths and counts, the same as the rules. */
 export declare const TODO_LIMITS: {
@@ -86,12 +95,18 @@ export declare const TODO_LIMITS: {
 /**
  * The collections each app's actions may write: the portal refuses an action touching anything
  * else (so an item can't be made to change money or settings when someone taps Done). An app that
- * publishes to-dos is listed here; one with an empty list publishes summary lines only.
+ * publishes to-dos is listed here; one with an empty list publishes summary lines only. A `*` part
+ * stands for one document id in a nested path: Health's entry for any person's doses is
+ * `healthPeople`, `*`, `doses` joined with slashes.
  */
 export declare const TODO_COLLECTIONS: Record<string, readonly string[]>;
 /** What an app passes in: everything but the bookkeeping the kit fills in. */
-export type TodoInput = Omit<TodoItem, 'id' | 'app' | 'updatedAt' | 'by' | 'status'> & {
+export type TodoInput = Omit<TodoItem, 'id' | 'app' | 'updatedAt' | 'by' | 'status' | 'audience'> & {
     status?: TodoStatus;
+};
+/** A to-do for named members only: who may see it (`./audience`). */
+export type PersonalTodoInput = TodoInput & {
+    audience: readonly string[];
 };
 /** The same id for the same record however often it is published: `<app>:<ref>`, Firestore-safe. */
 export declare function todoId(app: string, ref: string): string;
@@ -99,6 +114,11 @@ export declare function todoId(app: string, ref: string): string;
 export declare function todoOpsAllowed(app: string, ops: readonly Op[]): boolean;
 /** The stored document: trimmed and clipped to the rules' sizes; throws on what the rules or the portal would refuse. */
 export declare function todoDoc(app: string, input: TodoInput, by: string, now?: number): Omit<TodoItem, 'id'>;
+/**
+ * A `personalTodos` document: as `todoDoc`, private, with the audience cleaned. Throws when the
+ * audience leaves out the writer (the rules refuse it).
+ */
+export declare function personalTodoDoc(app: string, input: PersonalTodoInput, by: string, now?: number): Omit<TodoItem, 'id'>;
 /** A stored document as an item, read defensively. */
 export declare function toTodoItem(id: string, data: Record<string, unknown>): TodoItem;
 export interface TodoWriteOptions {
@@ -119,13 +139,21 @@ export interface TodoWriteResult {
  * record done or cancelled anywhere leaves the list on the next sync.
  */
 export declare function syncTodos(db: Firestore, householdId: string, app: string, items: TodoInput[], { by, restricted, now }: TodoWriteOptions): Promise<TodoWriteResult>;
+/**
+ * Makes this app's to-dos for named members exactly `items`, as `syncTodos` does for the shared
+ * list: the items whose audience includes `by` (the only ones this member may read or write).
+ * Items whose audience leaves `by` out are skipped; another allowed member's device keeps them.
+ */
+export declare function syncPersonalTodos(db: Firestore, householdId: string, app: string, items: PersonalTodoInput[], { by, now }: Omit<TodoWriteOptions, 'restricted'>): Promise<TodoWriteResult>;
 export interface TodoWatchOptions {
     /** A helper or kid (`isRestricted(role)`): only items not marked private, as the rules require. */
     restricted?: boolean;
+    /** The signed-in member's email: also follows the to-dos for named members that name them (`./audience`). */
+    me?: string;
     onError?: (error: Error) => void;
 }
-/** Follows the household's to-dos, newest first. */
-export declare function watchTodos(db: Firestore, householdId: string, { restricted, onError }: TodoWatchOptions, onChange: (items: TodoItem[]) => void): Unsubscribe;
+/** Follows the household's to-dos (with `me`, the member's personal ones too), newest first. Waits for both lists before the first answer. */
+export declare function watchTodos(db: Firestore, householdId: string, { restricted, me, onError }: TodoWatchOptions, onChange: (items: TodoItem[]) => void): Unsubscribe;
 export type TodoSort = 'newest' | 'oldest' | 'due' | 'app';
 /**
  * `newest` / `oldest`: by when added. `due`: soonest due first, undated last (newest first among
