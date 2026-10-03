@@ -98,7 +98,7 @@ Every site sends these on its own pages (`templates/firebase.json`, values in
   `"source": "**"` for these headers.
 - **Per app, the features it uses:** `camera=(self)` for an app that takes photos in the page
   (Pet's medicine labels, the contact screenshot reader), `geolocation=(self)` for one that asks
-  where you are (Tasks' nearby stores). Microphone stays off everywhere.
+  where you are (Groceries' nearby stores, Tasks' nearby places). Microphone stays off everywhere.
 - **Checked twice:** CI's `pwa-headers-check` (kit 0.43.0 and later) fails a `firebase.json`
   whose app paths lack a header or whose `/__/` paths would be frame-denied, and each app's smoke
   test calls `expectSecurityHeaders(request, '/', { camera, geolocation })` from `/e2e` against the
@@ -279,7 +279,7 @@ with `@huishouden/pwa-kit/agenda`; the portal only reads.
 
 ## Food preferences
 
-Meal suggestions in any app (Tasks' meal ideas, and whatever comes next) plan for the same people.
+Meal suggestions in any app (Groceries' meal ideas, and whatever comes next) plan for the same people.
 The portal's household panel edits one document, `households/{id}/settings/food`, with
 `@huishouden/pwa-kit/food`; other apps only read it with `watchFood`.
 

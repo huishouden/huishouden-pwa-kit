@@ -4,7 +4,7 @@ import { setDoc } from './firestore.js';
 /**
  * The household's food preferences: who eats at home, their diets, allergies and dislikes, and the
  * kitchen basics a recipe may assume. One document, `households/{id}/settings/food`, edited in the
- * portal and read by any app that suggests meals (Tasks' meal ideas), so every app plans for the
+ * portal and read by any app that suggests meals (Groceries' meal ideas), so every app plans for the
  * same people. `householdDietRules` words it as plain constraints for a prompt or a filter.
  *
  * The rules check the document's shape (FOOD_FIELDS, list sizes, the pantry); they can't afford to check
