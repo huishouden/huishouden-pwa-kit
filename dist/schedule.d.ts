@@ -173,6 +173,13 @@ export declare function ruleOccurrences(rule: EventRule, from: Ymd, to: Ymd): Ym
 /** Whether the rule happens on `day`. */
 export declare const happensOn: (rule: EventRule, day: Ymd) => boolean;
 /**
+ * Whether `day` falls on the rule's pattern, with the schedule carried on before `start` and after
+ * `until`: the same weekdays and every-N-weeks rhythm, the same day (or nth weekday) of the month.
+ * For comparing a schedule with dates from elsewhere, such as a calendar series that began before
+ * the event was entered.
+ */
+export declare function fitsRule(rule: EventRule, day: Ymd): boolean;
+/**
  * "Every Thursday", "Every other Friday", "Every 3 weeks on Monday", "Every Monday and Thursday",
  * "Every month on the 15th", "Every month on the third Tuesday", "Every 2 months on the last
  * Friday", "Every year on November 2".
@@ -271,7 +278,7 @@ export declare function prepWhen(deadline: number, now: number): string;
  * The rule a handful of dates follow, or null when they follow none: the occurrences of a repeating
  * calendar event, say. Weekly (the same weekday, every N weeks: the largest step every gap is a
  * multiple of, so a skipped holiday week doesn't break it), monthly on the same day or the same
- * nth weekday, or yearly. Needs at least two different dates; starts on the first.
+ * nth weekday, yearly, or weekly on several weekdays (Monday and Thursday). Needs at least two different dates; starts on the first.
  */
 export declare function inferRule(dates: Ymd[]): EventRule | null;
 /** Something to do before each occurrence ("Take the garbage out"), when, and whether to send a reminder then. */
