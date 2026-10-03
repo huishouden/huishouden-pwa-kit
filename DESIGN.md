@@ -138,7 +138,8 @@ rather than copying the class strings; the shapes are:
 - **Chip / filter:** pill, white with stone-200 border; selected = forest-700 fill, white text.
 - **Input:** white, stone-200 border, `rounded-xl px-3 py-2.5`, focus forest-500 border + forest-200 ring.
 - **Dialog:** white `rounded-3xl`, black/40 scrim; bottom sheet on phones, centred on tablets;
-  title + close (X) row; Escape closes.
+  title + close (X) row; Escape closes. On a touch screen no field takes focus on open (the keyboard
+  opens when a field is tapped), and nothing moves focus or scroll while the person fills it in.
 - **List row:** full-width, 44px+ tall, stone-200 divider, primary text stone-800, meta stone-600.
 - **Card:** white, `rounded-2xl`, stone-200 border or `shadow-sm`, 20–24px padding, one heading.
 - **Icons:** lucide-react, stroke 2–2.2, 16/20/24px, coloured by text colour; no emoji as icons.

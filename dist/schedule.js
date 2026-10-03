@@ -40,6 +40,34 @@ export function occurrences(s, from, to) {
         out.push(d);
     return out;
 }
+/** The last occurrence of a fixed schedule on or before `day`; null when `day` is before the anchor. */
+export function occurrenceOnOrBefore(s, day) {
+    if (daysBetween(s.anchor, day) < 0)
+        return null;
+    const next = occurrenceOnOrAfter(s, day);
+    if (next === day)
+        return day;
+    const approxDays = { day: 1, week: 7, month: 28, year: 365 }[s.unit] * s.every;
+    let k = Math.max(0, Math.floor(daysBetween(s.anchor, day) / approxDays) + 2);
+    while (k > 0 && daysBetween(occurrence(s, k), day) < 0)
+        k--;
+    return occurrence(s, k);
+}
+/**
+ * The next due date from when it was last done. Not done yet: an after-done job is due today (it
+ * needs doing; nothing says it was done), a fixed one on its next date. Overdue: today, or for a
+ * fixed schedule the last of its dates before today. Done on a day: one interval later, or a
+ * fixed schedule's next date after it; either may have passed, so the job shows overdue.
+ */
+export function dueFromLastDone(s, today, last) {
+    if (last.kind === 'done')
+        return s.kind === 'fixed' ? occurrenceAfter(s, last.on) : addInterval(last.on, s.every, s.unit);
+    if (s.kind === 'after-done')
+        return today;
+    if (last.kind === 'not-yet')
+        return occurrenceOnOrAfter(s, today);
+    return occurrenceOnOrBefore(s, addDays(today, -1)) ?? today;
+}
 /**
  * The first due date for a new or edited schedule. Fixed: the first occurrence on or after today.
  * After-done: one interval after the last time it was done, or today when it never was.

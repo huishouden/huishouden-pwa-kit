@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import fixture from './fixtures/schedules.json';
 import usage from './fixtures/usage-due.json';
 import {
-  addInterval, afterUsage, dailyPace, describeMonths, describeSchedule, firstDue, isSchedule, latestReading, nextDueAfterDone, nextRenewal,
-  occurrenceOnOrAfter, occurrences, renewalDue, usageDue, type FixedSchedule, type Schedule, type Unit,
+  addInterval, afterUsage, dailyPace, describeMonths, describeSchedule, dueFromLastDone, firstDue, isSchedule, latestReading, nextDueAfterDone, nextRenewal,
+  occurrenceOnOrAfter, occurrenceOnOrBefore, occurrences, renewalDue, usageDue, type FixedSchedule, type Schedule, type Unit,
 } from '../src/schedule';
 
 describe('intervals', () => {
@@ -38,6 +38,42 @@ describe('first due date', () => {
     expect(firstDue({ kind: 'after-done', every: 3, unit: 'month' }, '2031-10-16', '2031-08-01')).toBe('2031-11-01');
     expect(firstDue({ kind: 'after-done', every: 3, unit: 'month' }, '2031-10-16')).toBe('2031-10-16');
   });
+});
+
+describe('the last occurrence on or before a day', () => {
+  const monthly: FixedSchedule = { kind: 'fixed', every: 1, unit: 'month', anchor: '2031-01-31' };
+  test('before the anchor there is none', () => expect(occurrenceOnOrBefore(monthly, '2031-01-30')).toBeNull());
+  test('the anchor itself', () => expect(occurrenceOnOrBefore(monthly, '2031-01-31')).toBe('2031-01-31'));
+  test('a day that is an occurrence', () => expect(occurrenceOnOrBefore(monthly, '2031-02-28')).toBe('2031-02-28'));
+  test('the month end, kept through short months', () => expect(occurrenceOnOrBefore(monthly, '2031-10-16')).toBe('2031-09-30'));
+  test('years later, every 2 weeks', () =>
+    expect(occurrenceOnOrBefore({ kind: 'fixed', every: 2, unit: 'week', anchor: '2020-01-07' }, '2031-10-16')).toBe('2031-10-14'));
+  test('agrees with the next occurrence for every day of a year', () => {
+    const s: FixedSchedule = { kind: 'fixed', every: 3, unit: 'month', anchor: '2030-11-30' };
+    for (let d = new Date(Date.UTC(2030, 11, 1)); d.getUTCFullYear() < 2032; d.setUTCDate(d.getUTCDate() + 1)) {
+      const day = d.toISOString().slice(0, 10);
+      const before = occurrenceOnOrBefore(s, day)!;
+      expect(before <= day).toBe(true);
+      expect(occurrenceOnOrAfter(s, before)).toBe(before);
+      expect(occurrenceOnOrAfter(s, day) === day ? before === day : occurrenceOnOrAfter(s, day) > day).toBe(true);
+    }
+  });
+});
+
+describe('due from when it was last done', () => {
+  const today = '2031-10-16';
+  const afterDone: Schedule = { kind: 'after-done', every: 3, unit: 'month' };
+  const fixed: Schedule = { kind: 'fixed', every: 1, unit: 'month', anchor: '2031-01-01' };
+  test('after-done, not done yet: due today, so it needs doing', () => expect(dueFromLastDone(afterDone, today, { kind: 'not-yet' })).toBe(today));
+  test('after-done, done today: one interval on', () => expect(dueFromLastDone(afterDone, today, { kind: 'done', on: today })).toBe('2032-01-16'));
+  test('after-done, done long ago: already overdue', () => expect(dueFromLastDone(afterDone, today, { kind: 'done', on: '2031-05-01' })).toBe('2031-08-01'));
+  test('fixed, not done yet: its next date', () => expect(dueFromLastDone(fixed, today, { kind: 'not-yet' })).toBe('2031-11-01'));
+  test("fixed, it's overdue: the date that passed", () => expect(dueFromLastDone(fixed, today, { kind: 'overdue' })).toBe('2031-10-01'));
+  test("fixed, it's overdue on its first date: today", () =>
+    expect(dueFromLastDone({ ...fixed, anchor: '2031-12-01' }, today, { kind: 'overdue' })).toBe(today));
+  test('fixed, done on a day: the next date after it', () => expect(dueFromLastDone(fixed, today, { kind: 'done', on: '2031-08-20' })).toBe('2031-09-01'));
+  test('fixed, overdue when today is one of its dates: the date before', () =>
+    expect(dueFromLastDone(fixed, '2031-10-01', { kind: 'overdue' })).toBe('2031-09-01'));
 });
 
 describe('wording', () => {
