@@ -77,6 +77,49 @@
   }
 }
 
+/*
+ * Printing. The frame never prints: no app bar, no bottom bar and no padding for it. A page that
+ * marks one element `data-hh-print` prints that element alone, whatever else is open: everything
+ * outside it is hidden, and the elements around it lose their padding, fixed heights, positioning
+ * and clipping, so a list inside a dialog or a full-height layout flows onto as many pages as it
+ * needs. `data-hh-bottom-nav` sits on <html> too, so the bar is matched as `nav[...]` only.
+ */
+@media print {
+  :root {
+    --hh-bottom-nav: 0px !important;
+  }
+  :root[data-hh-bottom-nav] body {
+    padding-bottom: 0 !important;
+  }
+  hh-app-bar,
+  nav[data-hh-bottom-nav] {
+    display: none !important;
+  }
+  body:has([data-hh-print]) :not([data-hh-print], [data-hh-print] *, :has([data-hh-print])) {
+    display: none !important;
+  }
+  body:has([data-hh-print]),
+  body :has([data-hh-print]),
+  [data-hh-print] {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    transform: none !important;
+    opacity: 1 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black;
+  }
+}
+
 /* Bottom padding that clears the iPhone home indicator; dialogs use it as bottom sheets. */
 .safe-bottom {
   padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
