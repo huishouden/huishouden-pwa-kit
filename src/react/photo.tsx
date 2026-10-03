@@ -78,7 +78,7 @@ export function PhotoPicker({ photo, fallback, label, size = 96, options, onSave
                   step={0.1}
                   value={draft.position}
                   onChange={(e) => void make(draft.file, Number(e.target.value))}
-                  className="mt-1 block w-full accent-forest-700"
+                  className="mt-1 block w-full accent-primary"
                 />
               </label>
             )}

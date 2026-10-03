@@ -140,7 +140,7 @@ export function Field({ label, children, hint }) {
     return (_jsxs("label", { className: "block", children: [_jsx("span", { className: "mb-1.5 block text-sm font-medium text-ink-soft", children: label }), children, hint && _jsx("span", { className: "mt-1 block text-sm text-muted", children: hint })] }));
 }
 export function Checkbox({ checked, onChange, children }) {
-    return (_jsxs("label", { className: "flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-1 text-base text-ink", children: [_jsx("input", { type: "checkbox", className: "h-5 w-5 shrink-0 accent-forest-700", checked: checked, onChange: (e) => onChange(e.target.checked) }), _jsx("span", { className: "min-w-0", children: children })] }));
+    return (_jsxs("label", { className: "flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-1 text-base text-ink", children: [_jsx("input", { type: "checkbox", className: "h-5 w-5 shrink-0 accent-primary", checked: checked, onChange: (e) => onChange(e.target.checked) }), _jsx("span", { className: "min-w-0", children: children })] }));
 }
 /** "Overdue" and "Soon" labels; nothing for the rest, so the eye goes to what needs doing. */
 export function StatusPill({ state }) {

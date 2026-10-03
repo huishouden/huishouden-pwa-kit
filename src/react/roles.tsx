@@ -77,11 +77,11 @@ export function GiversField({ value, onChange, helpers, name = (e) => e }: { val
       <legend className="mb-1.5 block text-sm font-medium text-ink-soft">Who can give it</legend>
       <div className="flex flex-col">
         <label className="flex min-h-11 cursor-pointer items-center gap-3 px-1 text-base text-ink">
-          <input type="radio" name="givers" className="h-5 w-5 accent-forest-700" checked={value.givers === 'all'} onChange={() => onChange({ ...value, givers: 'all' })} />
+          <input type="radio" name="givers" className="h-5 w-5 accent-primary" checked={value.givers === 'all'} onChange={() => onChange({ ...value, givers: 'all' })} />
           All helpers
         </label>
         <label className="flex min-h-11 cursor-pointer items-center gap-3 px-1 text-base text-ink">
-          <input type="radio" name="givers" className="h-5 w-5 accent-forest-700" checked={value.givers === 'approved'} onChange={() => onChange({ ...value, givers: 'approved' })} />
+          <input type="radio" name="givers" className="h-5 w-5 accent-primary" checked={value.givers === 'approved'} onChange={() => onChange({ ...value, givers: 'approved' })} />
           Only approved helpers
         </label>
         {value.givers === 'approved' && (

@@ -82,8 +82,8 @@ forest-600. Only the glyph changes between apps: portal `home` (a door), Tasks `
   alone), the app's own tabs or switchers in the `nav` slot (beside the name on tablets, a second
   row on phones; section tabs move to the bottom bar on phones, below), app buttons in the `actions` slot, and on the right "Sign in with Google" or the
   signed-in profile photo (`.hh-avatar`) opening the account menu: name, email, Theme (Automatic,
-  Light, Dark), All apps, Privacy, Sign out, and the running version; signed out, a Settings button
-  beside Sign in opens Theme and Privacy. The bar follows the suite's theme by itself. Sticky, cream, a stone-200 rule below,
+  Light, Dark), All apps, Privacy, Sign out, and the running version; signed out, a "Theme and privacy"
+  button (sliders) beside Sign in opens them. The bar follows the suite's theme by itself. Sticky, cream, a stone-200 rule below,
   content width 1200px.
 - Sections: `SectionTabs` from `/react/ui`, never hand-built. From 640px they are a segmented
   control in the app bar. On phones they are a bar fixed to the bottom edge (no sideways-scrolling
@@ -210,7 +210,7 @@ birthday, Biscuit!"). It is the only place an exclamation mark or decorative col
 
 Every app has a dark theme, and one choice serves the whole suite: Automatic (the device's
 setting, the default), Light or Dark, in the app bar's menu (signed in: the account menu; signed
-out: Settings beside Sign in). The apps share one site, so choosing Dark in Pet turns the portal,
+out: the sliders button beside Sign in). The apps share one site, so choosing Dark in Pet turns the portal,
 Groceries and every other app dark too, open tabs included. `@huishouden/pwa-kit/theme` keeps the
 choice (`hh-theme` in localStorage) and puts `.dark` on `<html>`; `pwaApp` adds a small script to
 `<head>` that does so before the first paint, so a dark screen never flashes light. React apps
