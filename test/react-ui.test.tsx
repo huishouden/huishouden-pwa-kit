@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, mock, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { readdirSync, readFileSync } from 'node:fs';
-import { act } from 'react';
+import { act, useState } from 'react';
 import type { Root } from 'react-dom/client';
 import { checkSource } from '../src/design-check';
 import type { CalendarMatch } from '../src/calendar';
@@ -12,7 +12,7 @@ if (typeof document === 'undefined') GlobalRegistrator.register({ url: 'https://
 afterAll(() => GlobalRegistrator.unregister());
 const { createRoot } = await import('react-dom/client');
 
-const { Dialog, SampleBanner, SectionTabs, Toast, StatusPill, useToast } = await import('../src/react/ui');
+const { Chip, Dialog, Field, SampleBanner, SectionTabs, Toast, StatusPill, useToast } = await import('../src/react/ui');
 const { ClockProvider, useClock } = await import('../src/react/clock');
 const { CalendarImportDialog, CalendarHint } = await import('../src/react/calendar');
 const { ContactDialog, ContactCard } = await import('../src/react/contacts');
@@ -45,6 +45,121 @@ describe('Dialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     click(document.querySelector('[aria-label=Close]'));
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Dialog focus', () => {
+  // A new-job form: a name, then chips and a select further down. The parent re-renders on its own
+  // (a clock tick, a snapshot) and hands the dialog a new onClose arrow each time, as apps do.
+  let rerenderParent = () => {};
+  function NewJob({ onClose }: { onClose: () => void }) {
+    const [name, setName] = useState('');
+    const [kind, setKind] = useState('after-done');
+    const [unit, setUnit] = useState('month');
+    return (
+      <Dialog title="New job" onClose={onClose}>
+        <Field label="What">
+          <input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Chip active={kind === 'after-done'} onClick={() => setKind('after-done')}>Counted from done</Chip>
+        <Chip active={kind === 'fixed'} onClick={() => setKind('fixed')}>On set dates</Chip>
+        <select id="unit" aria-label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)}>
+          <option value="month">months</option>
+          <option value="week">weeks</option>
+        </select>
+      </Dialog>
+    );
+  }
+  function Parent({ onClose }: { onClose: () => void }) {
+    const [, setTick] = useState(0);
+    rerenderParent = () => setTick((t) => t + 1);
+    return <NewJob onClose={() => onClose()} />;
+  }
+  const type = (input: HTMLInputElement, value: string) =>
+    act(() => {
+      input.focus();
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  /** A tap: focus moves to what was tapped, then it is clicked. */
+  const tap = (el: HTMLElement) =>
+    act(() => {
+      el.focus();
+      el.click();
+    });
+  const onPhone = (coarse: boolean) => {
+    const real = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ ...real.call(window, q), matches: coarse && q === '(pointer: coarse)' })) as typeof window.matchMedia;
+    return () => void (window.matchMedia = real);
+  };
+
+  test('on a phone: no field takes focus on open, and focus stays on the chip or select tapped while the parent re-renders', () => {
+    const restore = onPhone(true);
+    try {
+      const onClose = mock(() => {});
+      render(<Parent onClose={onClose} />);
+      const panel = document.querySelector<HTMLElement>('[role=dialog]')!;
+      const name = document.getElementById('name') as HTMLInputElement;
+      // The dialog holds focus, so no on-screen keyboard until a field is tapped.
+      expect(document.activeElement).toBe(panel);
+
+      type(name, 'Change HVAC filter');
+      expect(name.value).toBe('Change HVAC filter');
+      panel.scrollTop = 240;
+      const chip = byText('On set dates')!;
+      tap(chip);
+      expect(chip.getAttribute('aria-pressed')).toBe('true');
+      for (let i = 0; i < 3; i++) act(() => rerenderParent());
+      expect(document.activeElement).toBe(chip);
+      expect(document.activeElement).not.toBe(name);
+
+      const unit = document.getElementById('unit') as HTMLSelectElement;
+      tap(unit);
+      act(() => {
+        unit.value = 'week';
+        unit.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      act(() => rerenderParent());
+      expect(document.activeElement).toBe(unit);
+      expect(panel.scrollTop).toBe(240);
+
+      // The newest onClose is the one Escape calls.
+      act(() => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      restore();
+    }
+  });
+
+  test('with a mouse: the first field takes focus once, and re-renders leave focus where it was moved', () => {
+    const restore = onPhone(false);
+    try {
+      render(<Parent onClose={() => {}} />);
+      const name = document.getElementById('name') as HTMLInputElement;
+      expect(document.activeElement).toBe(name);
+      type(name, 'Clean gutters');
+      const unit = document.getElementById('unit') as HTMLSelectElement;
+      tap(unit);
+      for (let i = 0; i < 3; i++) act(() => rerenderParent());
+      expect(document.activeElement).toBe(unit);
+    } finally {
+      restore();
+    }
+  });
+
+  test('a field focused with autoFocus keeps it', () => {
+    const restore = onPhone(false);
+    try {
+      render(
+        <Dialog title="New list" onClose={() => {}}>
+          <input id="first" />
+          <input id="second" autoFocus />
+        </Dialog>,
+      );
+      expect(document.activeElement?.id).toBe('second');
+    } finally {
+      restore();
+    }
   });
 });
 

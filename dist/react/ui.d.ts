@@ -31,7 +31,12 @@ export declare function Chip({ active, onClick, children, label }: {
 }): import("react").JSX.Element;
 /**
  * A dialog: bottom sheet on phones, centred on tablets; title and close row; Escape and the scrim
- * close it; the first field (or button) takes focus. `wide` for a dialog with a table or two columns.
+ * close it. `wide` for a dialog with a table or two columns.
+ *
+ * Focus is placed once, when it opens, and never again: re-renders (a clock tick, a snapshot, a
+ * new `onClose` arrow from the parent) leave it where the person put it. With a mouse the first
+ * field takes it (or a field already focused with `autoFocus`); on a touch screen the dialog
+ * itself does, so the keyboard only opens when a field is tapped.
  */
 export declare function Dialog({ title, onClose, children, footer, wide }: {
     title: string;

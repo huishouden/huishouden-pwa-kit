@@ -43,6 +43,27 @@ export declare function occurrenceOnOrAfter(s: FixedSchedule, day: Ymd): Ymd;
 export declare const occurrenceAfter: (s: FixedSchedule, day: Ymd) => Ymd;
 /** Every occurrence of a fixed schedule from `from` to `to`, both included. */
 export declare function occurrences(s: FixedSchedule, from: Ymd, to: Ymd): Ymd[];
+/** The last occurrence of a fixed schedule on or before `day`; null when `day` is before the anchor. */
+export declare function occurrenceOnOrBefore(s: FixedSchedule, day: Ymd): Ymd | null;
+/**
+ * When a job was last done, as a person answers "When was it last done?" for a new job (or an
+ * edited one): not done yet, overdue (a fixed schedule's last date has passed undone), or a day.
+ */
+export type LastDone = {
+    kind: 'not-yet';
+} | {
+    kind: 'overdue';
+} | {
+    kind: 'done';
+    on: Ymd;
+};
+/**
+ * The next due date from when it was last done. Not done yet: an after-done job is due today (it
+ * needs doing; nothing says it was done), a fixed one on its next date. Overdue: today, or for a
+ * fixed schedule the last of its dates before today. Done on a day: one interval later, or a
+ * fixed schedule's next date after it; either may have passed, so the job shows overdue.
+ */
+export declare function dueFromLastDone(s: Schedule, today: Ymd, last: LastDone): Ymd;
 /**
  * The first due date for a new or edited schedule. Fixed: the first occurrence on or after today.
  * After-done: one interval after the last time it was done, or today when it never was.
