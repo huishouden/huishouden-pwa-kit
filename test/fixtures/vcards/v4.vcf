@@ -1,0 +1,19 @@
+BEGIN:VCARD
+VERSION:4.0
+KIND:individual
+FN:Sam Demo
+N:Demo;Sam;;Dr.;
+TEL;VALUE=uri;TYPE="voice,home":tel:+1-555-010-0191
+TEL;VALUE=uri;PREF=1;TYPE="voice,cell":tel:+1-555-010-0192
+EMAIL;TYPE=work:sam.demo@example.com
+ORG:Example Clinic;Pediatrics
+TITLE:Pediatrician
+URL:https://clinic.example.com/dr-demo
+ADR;TYPE=work;LABEL="1 Example Way\nSpringfield, IL 62704":;;1 Example Way;Springfield;IL;62704;
+END:VCARD
+BEGIN:VCARD
+VERSION:4.0
+KIND:org
+FN:Example Lawn Care
+TEL;VALUE=uri;TYPE=work:tel:+1-555-010-0193
+END:VCARD

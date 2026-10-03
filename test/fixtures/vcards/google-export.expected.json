@@ -1,0 +1,51 @@
+[
+  {
+    "card": {
+      "name": "Riley Sample",
+      "phones": [
+        {
+          "value": "555-010-0161",
+          "label": "Mobile"
+        }
+      ],
+      "emails": [
+        {
+          "value": "riley.sample@example.com",
+          "label": "Home"
+        }
+      ],
+      "address": "400 Demo Avenue, Springfield, OR 97477, US",
+      "organization": "Example Realty",
+      "title": "Leasing agent"
+    },
+    "fill": {
+      "name": "Riley Sample",
+      "phone": "555-010-0161",
+      "email": "riley.sample@example.com",
+      "address": "400 Demo Avenue, Springfield, OR 97477, US",
+      "role": "Leasing agent, Example Realty"
+    }
+  },
+  {
+    "card": {
+      "name": "Avery Placeholder",
+      "phones": [
+        {
+          "value": "555-010-0162",
+          "label": "Other"
+        }
+      ],
+      "emails": [
+        {
+          "value": "avery@example.com",
+          "label": "Babysitting"
+        }
+      ]
+    },
+    "fill": {
+      "name": "Avery Placeholder",
+      "phone": "555-010-0162",
+      "email": "avery@example.com"
+    }
+  }
+]

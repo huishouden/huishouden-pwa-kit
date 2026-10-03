@@ -1,0 +1,32 @@
+[
+  {
+    "card": {
+      "name": "José Ejemplo",
+      "phones": [
+        {
+          "value": "555-010-0171",
+          "label": "Mobile"
+        },
+        {
+          "value": "555-010-0172",
+          "label": "Home"
+        }
+      ],
+      "emails": [
+        {
+          "value": "jose@example.com",
+          "label": "Home"
+        }
+      ],
+      "address": "Calle Ejemplo 5, Piso 2, Springfield, 00000",
+      "note": "Jardinero. Viene los martes — llamar antes."
+    },
+    "fill": {
+      "name": "José Ejemplo",
+      "phone": "555-010-0171",
+      "email": "jose@example.com",
+      "address": "Calle Ejemplo 5, Piso 2, Springfield, 00000",
+      "notes": "Other phones: 555-010-0172 (home)\nJardinero. Viene los martes — llamar antes."
+    }
+  }
+]

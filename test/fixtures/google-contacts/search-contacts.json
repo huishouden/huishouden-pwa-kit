@@ -1,0 +1,27 @@
+{
+  "results": [
+    {
+      "person": {
+        "resourceName": "people/c1001",
+        "etag": "%EgUBAgMuNxoEAQIFByIMbEtkRXhhbXBsZTE=",
+        "names": [{ "metadata": { "primary": true }, "displayName": "Jordan Example", "familyName": "Example", "givenName": "Jordan" }],
+        "phoneNumbers": [
+          { "metadata": { "primary": false }, "value": "(555) 010-0143", "type": "work", "formattedType": "Work" },
+          { "metadata": { "primary": true }, "value": "(555) 010-0142", "type": "mobile", "formattedType": "Mobile" }
+        ],
+        "emailAddresses": [{ "metadata": { "primary": true }, "value": "jordan@example.com", "type": "home", "formattedType": "Home" }],
+        "addresses": [{ "metadata": { "primary": true }, "formattedValue": "12 Example Street\nApt 3\nSpringfield, IL 62704\nUS", "type": "home", "formattedType": "Home" }],
+        "organizations": [{ "metadata": { "primary": true }, "name": "Example Property Management", "title": "Landlord" }],
+        "urls": [{ "value": "https://rentals.example.com", "type": "homePage", "formattedType": "Home Page" }],
+        "biographies": [{ "value": "Call before 8 pm.", "contentType": "TEXT_PLAIN" }]
+      }
+    },
+    {
+      "person": {
+        "resourceName": "people/c1002",
+        "names": [{ "metadata": { "primary": true }, "displayName": "Jordan Sample" }],
+        "emailAddresses": [{ "metadata": { "primary": true }, "value": "jordan.sample@example.com" }]
+      }
+    }
+  ]
+}
