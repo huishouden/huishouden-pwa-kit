@@ -640,7 +640,7 @@ const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
  * The rule a handful of dates follow, or null when they follow none: the occurrences of a repeating
  * calendar event, say. Weekly (the same weekday, every N weeks: the largest step every gap is a
  * multiple of, so a skipped holiday week doesn't break it), monthly on the same day or the same
- * nth weekday, or yearly. Needs at least two different dates; starts on the first.
+ * nth weekday, yearly, or weekly on several weekdays (Monday and Thursday). Needs at least two different dates; starts on the first.
  */
 export function inferRule(dates: Ymd[]): EventRule | null {
   const days = [...new Set(dates.filter(isYmd))].sort();
@@ -653,7 +653,27 @@ export function inferRule(dates: Ymd[]): EventRule | null {
   if (weeks >= 1 && weeks <= 3) return { freq: 'week', every: weeks, start };
   const monthly = monthlyRule(days);
   if (monthly) return monthly;
-  return weeks >= 1 && weeks <= 8 ? { freq: 'week', every: weeks, start } : null;
+  if (weeks >= 1 && weeks <= 8) return { freq: 'week', every: weeks, start };
+  return weekdaysRule(days);
+}
+
+/**
+ * Several weekdays every N weeks ("Monday and Thursday"): the weekdays the dates fall on, the
+ * largest step between the weeks they are in, kept only when the dates fill at least three in four
+ * of the days that rule gives between the first and the last (a skipped holiday is fine; dates
+ * scattered over the week are not a schedule).
+ */
+function weekdaysRule(days: Ymd[]): EventRule | null {
+  const start = days[0];
+  const sunday = addDays(start, -weekday(start));
+  const weekOf = (d: Ymd) => Math.round(daysBetween(sunday, addDays(d, -weekday(d))) / 7);
+  const steps = [...new Set(days.map(weekOf))].filter((w) => w > 0);
+  if (steps.length === 0) return null;
+  const every = steps.reduce(gcd);
+  if (every > 3) return null;
+  const rule = cleanRule({ freq: 'week', every, start, days: [...new Set(days.map(weekday))] });
+  if (!days.every((d) => fitsRule(rule, d))) return null;
+  return days.length / ruleOccurrences(rule, start, days[days.length - 1]).length >= 0.75 ? rule : null;
 }
 
 function monthlyRule(days: Ymd[]): EventRule | null {

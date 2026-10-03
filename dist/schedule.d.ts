@@ -278,7 +278,7 @@ export declare function prepWhen(deadline: number, now: number): string;
  * The rule a handful of dates follow, or null when they follow none: the occurrences of a repeating
  * calendar event, say. Weekly (the same weekday, every N weeks: the largest step every gap is a
  * multiple of, so a skipped holiday week doesn't break it), monthly on the same day or the same
- * nth weekday, or yearly. Needs at least two different dates; starts on the first.
+ * nth weekday, yearly, or weekly on several weekdays (Monday and Thursday). Needs at least two different dates; starts on the first.
  */
 export declare function inferRule(dates: Ymd[]): EventRule | null;
 /** Something to do before each occurrence ("Take the garbage out"), when, and whether to send a reminder then. */
