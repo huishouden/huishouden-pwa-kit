@@ -130,3 +130,18 @@ export declare const FIREBASE_WEB_SDK = "12.19.0";
  * HH_STAGING_ACCESS_TOKEN and HH_STAGING_SA; call `test.skip(!process.env.HH_STAGING_SA)` around it.
  */
 export declare function signInTestUser(page: Page, { email, path, sdkVersion, env }: SignInTestUserOptions): Promise<void>;
+export interface PortalTodoOptions {
+    /** `done` (default) or `cancel`, which also confirms. */
+    action?: 'done' | 'cancel';
+    /** The portal's To-do page (default `/todo`, the site root's: the portal is at `/` on the one site). */
+    path?: string;
+    /** How long to wait for the app's item to be published (default 30 s: apps publish a few seconds after a change). */
+    timeout?: number;
+}
+/**
+ * Finds `title` on the portal's To-do tab (a list item named for it, published by an app through
+ * `./todos`) and runs its Done or Cancel there, confirming a cancel, then waits for the item to leave
+ * the list. For an app's signed-in staging test: create a record in the app, run this, then check the
+ * app's own data changed. Each staging site is a full mirror, so the portal is at `/` on it.
+ */
+export declare function runPortalTodo(page: Page, title: string, { action, path, timeout }?: PortalTodoOptions): Promise<void>;
