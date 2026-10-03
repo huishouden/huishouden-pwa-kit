@@ -295,7 +295,9 @@ reads them and runs the actions the app wrote down.
   named members): the same the app's rules allow, so the portal hides what a role can't do. Cancel
   is the app's own notion and stays visible in its history (a cancelled to-do, a paused job, a
   skipped checklist item, a dismissed reminder). Use placeholders for anything about the moment it
-  runs (`'$today'`, `'$today+3m'`, `'$now'`, `'$me'`), never a date worked out when publishing.
+  runs (`'$today'`, `'$today+3m'`, `'$now'`, `'$me'`, and `{ $nextDue: { schedule, due } }` for a
+  repeating job's next due date, `./schedule` `nextDueAfterDone` as of the tap), never a date worked
+  out when publishing.
 - **When**: `syncTodos(app, items)` on open and a few seconds after the data changes, alongside
   `syncAgenda`. A record done or cancelled anywhere drops out on the next sync; the portal removes
   the item itself when it runs an action, and Undo writes the records and the item back.
