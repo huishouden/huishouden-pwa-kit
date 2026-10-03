@@ -8,6 +8,8 @@ import {
   redact,
   reportError,
   resetObservability,
+  hasSensitiveWords,
+  setSensitiveWords,
   startObservability,
   track,
   trackView,
@@ -171,5 +173,55 @@ describe('reporting', () => {
     trackView('history');
     expect(calls.some((c) => c.fn === 'setCustomAttribute' && c.args[0] === 'view' && c.args[1] === 'history')).toBe(true);
     expect(calls.find((c) => c.fn === 'addPageAction')?.args).toEqual(['view', { view: 'history' }]);
+  });
+});
+
+describe("sensitive words (medicine and people's names)", () => {
+  afterEach(() => setSensitiveWords('health', []));
+
+  test('redact takes them out wherever they appear, ignoring case, longest first', () => {
+    setSensitiveWords('health', ['Lisinopril 10 mg', 'Lisinopril', 'Ada Example', 'ab']);
+    expect(redact("Couldn't save LISINOPRIL 10 mg for ada example")).toBe("Couldn't save [redacted] for [redacted]");
+    expect(redact('lisinopril dose')).toBe('[redacted] dose');
+    // Too short to be a name worth blanking: ordinary text stays readable.
+    expect(redact('about the tablets')).toBe('about the tablets');
+    expect(hasSensitiveWords('Metformin')).toBe(false);
+    setSensitiveWords('health', []);
+    expect(redact('Lisinopril')).toBe('Lisinopril');
+  });
+
+  test("the agent's own obfuscation rule follows words set after it started", () => {
+    const rule = AGENT_INIT.obfuscate.find((r) => r.replacement === '[redacted]')!;
+    expect('Warfarin 5 mg'.replace(rule.regex, rule.replacement)).toBe('Warfarin 5 mg');
+    setSensitiveWords('health', ['Warfarin 5 mg']);
+    expect('Saved Warfarin 5 mg'.replace(rule.regex, rule.replacement)).toBe('Saved [redacted]');
+    expect(rule.regex).toBeInstanceOf(RegExp);
+  });
+
+  test('handled errors, usage counts and views never carry them', async () => {
+    const { calls, loader } = fakeAgent();
+    startObservability({ app: 'health', env: ENV, loader });
+    await tick();
+    setSensitiveWords('health', ['Metformin 500 mg', 'Grandma Example']);
+    reportError(new Error('Missing Metformin 500 mg for Grandma Example'), { where: 'save Metformin 500 mg' });
+    track('give Metformin 500 mg', { who: 'Grandma Example' });
+    trackView('Grandma Example');
+    const sent = JSON.stringify(calls.map((c) => c.args.map((a) => (a instanceof Error ? { message: a.message, stack: a.stack } : a))));
+    expect(sent).not.toContain('Metformin');
+    expect(sent).not.toContain('Grandma');
+    expect(sent).toContain('[redacted]');
+  });
+
+  test('an uncaught error naming one is dropped and sent again redacted', async () => {
+    const { calls, loader } = fakeAgent();
+    startObservability({ app: 'health', env: ENV, loader });
+    await tick();
+    setSensitiveWords('health', ['Atorvastatin']);
+    const handler = calls.find((c) => c.fn === 'setErrorHandler')!.args[0] as (e: Error | string) => boolean;
+    expect(handler(new Error('TypeError in Atorvastatin row'))).toBe(true);
+    const resent = calls.filter((c) => c.fn === 'noticeError').map((c) => c.args[0] as Error);
+    expect(resent).toHaveLength(1);
+    expect(resent[0].message).toBe('TypeError in [redacted] row');
+    expect(handler(new Error('Something else broke'))).toBe(false);
   });
 });
