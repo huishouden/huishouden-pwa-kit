@@ -67,9 +67,12 @@ describe('siteConfig', () => {
 
   test('a path without its slash redirects to it', () => {
     expect(config.redirects).toEqual([
-      { source: '/baby', destination: '/baby/', type: 301 },
-      { source: '/pet', destination: '/pet/', type: 301 },
+      { regex: '^/baby$', destination: '/baby/', type: 301 },
+      { regex: '^/pet$', destination: '/pet/', type: 301 },
     ]);
+    const re = new RegExp(config.redirects![1].regex!);
+    expect(re.test('/pet')).toBe(true);
+    for (const p of ['/pet/', '/pet/x', '/petals']) expect(re.test(p), p).toBe(false);
   });
 
   test("security headers everywhere but Firebase's /__/; each app only its own features", () => {
