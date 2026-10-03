@@ -54,3 +54,14 @@ export function lineChart(points: readonly ChartPoint[], { width, height, pad = 
   const path = out.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join(' ');
   return { points: out, min, max, path, ...(target ? { targetY: round(y(target)) } : {}) };
 }
+
+/** The categorical chart colours (DESIGN.md "Colour"), in order; never more than eight. */
+export const CHART_COLOURS = ['#2d6a4f', '#c86d51', '#b08d57', '#5b7a99', '#8a6f9e', '#6f8f72', '#a8735a', '#78716c'] as const;
+
+/** The same set in dark: forest-400 and stone-400 for the two that sink into forest-800, so each is at least 3:1. */
+export const CHART_COLOURS_DARK = ['#74c69d', '#c86d51', '#b08d57', '#5b7a99', '#8a6f9e', '#6f8f72', '#a8735a', '#a8a29e'] as const;
+
+/** The categorical colours for the theme showing now (`useTheme().dark`). */
+export function chartColours(dark: boolean): readonly string[] {
+  return dark ? CHART_COLOURS_DARK : CHART_COLOURS;
+}

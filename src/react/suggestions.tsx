@@ -184,12 +184,12 @@ export function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead,
     </div>
   );
   return (
-    <section ref={card} tabIndex={-1} className="rounded-2xl border border-stone-200 bg-white px-4 py-2 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-forest-200 dark:border-forest-600 dark:bg-forest-800" aria-label={label}>
+    <section ref={card} tabIndex={-1} className="rounded-2xl border border-line bg-surface px-4 py-2 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-forest-200" aria-label={label}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {icon}
-        <p role="status" className="min-w-0 flex-1 text-base text-stone-700 [overflow-wrap:anywhere]">
-          {lead}: <span className="font-medium text-stone-800 dark:text-stone-100">{titleOf(first)}</span>
-          {detailOf(first) && <span className="text-stone-600 dark:text-stone-300"> · {detailOf(first)}</span>}
+        <p role="status" className="min-w-0 flex-1 text-base text-ink-soft [overflow-wrap:anywhere]">
+          {lead}: <span className="font-medium text-ink">{titleOf(first)}</span>
+          {detailOf(first) && <span className="text-muted"> · {detailOf(first)}</span>}
         </p>
         {rest.length > 0 && (
           <button type="button" className={ghostButton} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={listId}>
@@ -199,12 +199,12 @@ export function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead,
         {actions(first)}
       </div>
       {open && rest.length > 0 && (
-        <ul id={listId} className="mt-1 divide-y divide-stone-200 border-t border-stone-200" aria-label={moreLabel}>
+        <ul id={listId} className="mt-1 divide-y divide-line border-t border-line" aria-label={moreLabel}>
           {rest.map((m) => (
             <li key={idOf(m)} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 pl-8">
               <p className="min-w-0 flex-1 text-base [overflow-wrap:anywhere]">
-                <span className="font-medium text-stone-800 dark:text-stone-100">{titleOf(m)}</span>
-                {detailOf(m) && <span className="text-stone-600 dark:text-stone-300"> · {detailOf(m)}</span>}
+                <span className="font-medium text-ink">{titleOf(m)}</span>
+                {detailOf(m) && <span className="text-muted"> · {detailOf(m)}</span>}
               </p>
               {actions(m)}
             </li>

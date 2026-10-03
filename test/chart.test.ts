@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { lineChart } from '../src/chart';
+import { CHART_COLOURS, CHART_COLOURS_DARK, chartColours, lineChart } from '../src/chart';
 
 const DAY = 86_400_000;
 const points = [
@@ -35,5 +35,30 @@ describe('lineChart', () => {
     const g = lineChart([{ at: 0, value: 52 }, { at: DAY, value: 55 }], { width: 100, height: 50, step: 5, minMargin: 1 })!;
     expect(g.min % 5).toBe(0);
     expect(g.max % 5).toBe(0);
+  });
+});
+
+describe('chart colours', () => {
+  const lum = (hex: string) =>
+    hex
+      .slice(1)
+      .match(/../g)!
+      .map((x) => parseInt(x, 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+      .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const ratio = (a: string, b: string) => {
+    const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+    return (x + 0.05) / (y + 0.05);
+  };
+
+  test('eight in both themes, the same order', () => {
+    expect(CHART_COLOURS).toHaveLength(8);
+    expect(CHART_COLOURS_DARK).toHaveLength(8);
+    expect(chartColours(false)).toBe(CHART_COLOURS);
+    expect(chartColours(true)).toBe(CHART_COLOURS_DARK);
+  });
+
+  test('every dark colour is at least 3:1 on a dark surface (forest-800)', () => {
+    for (const c of CHART_COLOURS_DARK) expect(ratio(c, '#12301f')).toBeGreaterThanOrEqual(3);
   });
 });

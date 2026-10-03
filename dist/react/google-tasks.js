@@ -61,5 +61,5 @@ export function googleTaskDue(t, now = Date.now()) {
  * Add and Not this one (`SuggestionsCard`). `listTitle` names the Google list it came from.
  */
 export function GoogleTasksSuggestions({ suggestions, listTitle, onAdd, onDismiss, now = Date.now() }) {
-    return (_jsx(SuggestionsCard, { suggestions: suggestions, idOf: (t) => t.id, titleOf: (t) => t.title, detailOf: (t) => [googleTaskDue(t, now), listTitle?.(t.listId)].filter(Boolean).join(' · ') || null, lead: "New in Google Tasks", label: "New in Google Tasks", moreLabel: "More new Google Tasks", icon: _jsx(ListTodo, { size: 20, className: "shrink-0 text-forest-700 dark:text-forest-300", "aria-hidden": "true" }), onAdd: onAdd, onDismiss: onDismiss }));
+    return (_jsx(SuggestionsCard, { suggestions: suggestions, idOf: (t) => t.id, titleOf: (t) => t.title, detailOf: (t) => [googleTaskDue(t, now), listTitle?.(t.listId)].filter(Boolean).join(' · ') || null, lead: "New in Google Tasks", label: "New in Google Tasks", moreLabel: "More new Google Tasks", icon: _jsx(ListTodo, { size: 20, className: "shrink-0 text-link", "aria-hidden": "true" }), onAdd: onAdd, onDismiss: onDismiss }));
 }

@@ -87,7 +87,7 @@ export function GoogleTasksSuggestions({ suggestions, listTitle, onAdd, onDismis
       lead="New in Google Tasks"
       label="New in Google Tasks"
       moreLabel="More new Google Tasks"
-      icon={<ListTodo size={20} className="shrink-0 text-forest-700 dark:text-forest-300" aria-hidden="true" />}
+      icon={<ListTodo size={20} className="shrink-0 text-link" aria-hidden="true" />}
       onAdd={onAdd}
       onDismiss={onDismiss}
     />

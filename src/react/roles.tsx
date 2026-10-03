@@ -29,7 +29,7 @@ export function useRole(household: Pick<Household, 'members' | 'roles'> | null |
 
 /** "Only admins and members can change settings." where a control is left out for this role. */
 export function RoleNote({ action, className = '' }: { action: RoleAction; className?: string }) {
-  return <p className={`text-sm text-stone-600 dark:text-stone-300 ${className}`}>{refusal(action)}</p>;
+  return <p className={`text-sm text-muted ${className}`}>{refusal(action)}</p>;
 }
 
 /** A member's role, for admins: a select with the four roles. */
@@ -48,10 +48,10 @@ export function RoleSelect({ value, onChange, label, disabled }: { value: Role; 
 /** Each role in one line, under the household's member list. */
 export function RoleList() {
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-stone-600 dark:text-stone-300">
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-muted">
       {ROLES.map((r) => (
         <div key={r} className="contents">
-          <dt className="font-semibold text-stone-800 dark:text-stone-100">{ROLE_LABELS[r]}</dt>
+          <dt className="font-semibold text-ink">{ROLE_LABELS[r]}</dt>
           <dd>{ROLE_DESCRIPTIONS[r]}</dd>
         </div>
       ))}
@@ -74,20 +74,20 @@ export function GiversField({ value, onChange, helpers, name = (e) => e }: { val
     onChange({ ...value, approvedHelpers: on ? [...new Set([...value.approvedHelpers, email])] : value.approvedHelpers.filter((e) => e !== email) });
   return (
     <fieldset>
-      <legend className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-200">Who can give it</legend>
+      <legend className="mb-1.5 block text-sm font-medium text-ink-soft">Who can give it</legend>
       <div className="flex flex-col">
-        <label className="flex min-h-11 cursor-pointer items-center gap-3 px-1 text-base text-stone-800 dark:text-stone-100">
+        <label className="flex min-h-11 cursor-pointer items-center gap-3 px-1 text-base text-ink">
           <input type="radio" name="givers" className="h-5 w-5 accent-forest-700" checked={value.givers === 'all'} onChange={() => onChange({ ...value, givers: 'all' })} />
           All helpers
         </label>
-        <label className="flex min-h-11 cursor-pointer items-center gap-3 px-1 text-base text-stone-800 dark:text-stone-100">
+        <label className="flex min-h-11 cursor-pointer items-center gap-3 px-1 text-base text-ink">
           <input type="radio" name="givers" className="h-5 w-5 accent-forest-700" checked={value.givers === 'approved'} onChange={() => onChange({ ...value, givers: 'approved' })} />
           Only approved helpers
         </label>
         {value.givers === 'approved' && (
           <div className="ml-8">
             {helpers.length === 0 ? (
-              <p className="text-sm text-stone-600 dark:text-stone-300">No helpers yet. An admin can make someone a helper in the household settings.</p>
+              <p className="text-sm text-muted">No helpers yet. An admin can make someone a helper in the household settings.</p>
             ) : (
               helpers.map((h) => (
                 <Checkbox key={h} checked={value.approvedHelpers.includes(h)} onChange={(on) => toggle(h, on)}>
@@ -98,7 +98,7 @@ export function GiversField({ value, onChange, helpers, name = (e) => e }: { val
           </div>
         )}
       </div>
-      <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">Admins and members can always give it; kids can’t.</p>
+      <p className="mt-1 text-sm text-muted">Admins and members can always give it; kids can’t.</p>
     </fieldset>
   );
 }

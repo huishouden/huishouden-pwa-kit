@@ -212,6 +212,148 @@ export async function expectHuishoudenFrame(page, { app, portalUrl, path }) {
     expect(font, 'app bar typeface').toMatch(/^["']?Inter\b/);
 }
 /**
+ * The suite's theme (DESIGN.md "Dark") on the running app. With the choice on Automatic and the
+ * device dark, the page is dark from its first paint: `.dark` on <html>, a dark `color-scheme`,
+ * page and app bar on dark backgrounds, the dark status-bar colour, and (with `contrast`) no
+ * visible text under 4.5:1. Turning the device light then turns the page light without a reload.
+ */
+export async function expectThemeConsistent(page, { path, contrast = true, ignore } = {}) {
+    if (path !== undefined)
+        await page.goto(path, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => localStorage.setItem('hh-theme', 'auto'));
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.reload({ waitUntil: 'networkidle' });
+    // The inline script pwaApp adds to <head> is what makes the first paint dark.
+    await expect(page.locator('head script[data-hh-theme-boot]'), 'theme set before the first paint').toHaveCount(1);
+    const dark = await page.evaluate(readTheme);
+    expect(dark.dark, '.dark on <html>').toBe(true);
+    expect(dark.colorScheme, 'color-scheme').toBe('dark');
+    expect(dark.themeColor, 'theme-color meta').toBe('#081c15');
+    expect(dark.body, `page background ${dark.bodyColor} is dark`).toBeLessThan(0.05);
+    if (dark.bar !== null)
+        expect(dark.bar, `app bar background ${dark.barColor} is dark`).toBeLessThan(0.05);
+    if (contrast) {
+        const failures = (await page.evaluate(lowContrastText)).filter((f) => !ignore?.test(f.text));
+        expect(failures, 'text under 4.5:1 in dark').toEqual([]);
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('dark')), { message: 'follows the device back to light' }).toBe(false);
+    const light = await page.evaluate(readTheme);
+    expect(light.body, `page background ${light.bodyColor} is light`).toBeGreaterThan(0.8);
+}
+/** In the page: what the theme looks like now. Luminance 0 (black) to 1 (white). */
+function readTheme() {
+    const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    // Computed colours may be oklch() (Tailwind's own palette); the canvas turns any of them into sRGB.
+    const rgba = (c) => {
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillStyle = '#000';
+        ctx.fillStyle = c;
+        ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+        return [r, g, b, a / 255];
+    };
+    const lum = (c) => {
+        const [r, g, b] = rgba(c).slice(0, 3).map((v) => {
+            const s = v / 255;
+            return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const bodyColor = getComputedStyle(document.body).backgroundColor;
+    const header = document.querySelector('hh-app-bar')?.shadowRoot?.querySelector('header');
+    const barColor = header ? getComputedStyle(header).backgroundColor : '';
+    return {
+        dark: document.documentElement.classList.contains('dark'),
+        colorScheme: getComputedStyle(document.documentElement).colorScheme,
+        themeColor: document.querySelector('meta[name="theme-color"]')?.getAttribute('content') ?? '',
+        body: lum(bodyColor),
+        bodyColor,
+        bar: header ? lum(barColor) : null,
+        barColor,
+    };
+}
+/**
+ * In the page: visible text whose colour is under 4.5:1 (3:1 for 24px, or 18.66px bold) against
+ * the first solid background behind it. Text over images, inside hidden or faded parts, and SVG
+ * text are left out. At most 12, worst first.
+ */
+export function lowContrastText() {
+    const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    // Computed colours may be oklch() (Tailwind's own palette); the canvas turns any of them into sRGB.
+    const rgba = (c) => {
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillStyle = '#000';
+        ctx.fillStyle = c;
+        ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+        return [r, g, b, a / 255];
+    };
+    const parse = (c) => rgba(c);
+    const lum = ([r, g, b]) => [r, g, b]
+        .map((v) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    })
+        .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+    const over = (top, under) => {
+        const a = top[3];
+        return [top[0] * a + under[0] * (1 - a), top[1] * a + under[1] * (1 - a), top[2] * a + under[2] * (1 - a), 1];
+    };
+    const backgroundOf = (el) => {
+        const layers = [];
+        for (let node = el; node; node = node.parentElement ?? (node.getRootNode().host ?? null)) {
+            const style = getComputedStyle(node);
+            if (style.backgroundImage !== 'none' && !style.backgroundImage.startsWith('linear-gradient'))
+                return null;
+            const bg = parse(style.backgroundColor);
+            if (bg[3] > 0)
+                layers.push(bg);
+            if (bg[3] >= 1)
+                break;
+        }
+        let result = [255, 255, 255, 1];
+        for (const layer of layers.reverse())
+            result = over(layer, result);
+        return result;
+    };
+    const hidden = (el) => {
+        for (let node = el; node; node = node.parentElement) {
+            const style = getComputedStyle(node);
+            if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) < 0.95 || node.getAttribute('aria-hidden') === 'true')
+                return true;
+        }
+        return false;
+    };
+    const seen = new Set();
+    const failures = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+        const el = text.parentElement;
+        if (!el || seen.has(el) || !text.textContent?.trim())
+            continue;
+        seen.add(el);
+        if (el.closest('svg, script, style, noscript, [data-hh-contrast-ignore]') || el.disabled)
+            continue;
+        const box = el.getBoundingClientRect();
+        if (box.width === 0 || box.height === 0 || hidden(el))
+            continue;
+        const style = getComputedStyle(el);
+        const bg = backgroundOf(el);
+        if (!bg)
+            continue;
+        const fg = over(parse(style.color), bg);
+        const [a, b] = [lum(fg), lum(bg)].sort((x, y) => y - x);
+        const ratio = (a + 0.05) / (b + 0.05);
+        const size = parseFloat(style.fontSize);
+        const large = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700);
+        if (ratio < (large ? 3 : 4.5) - 0.01) {
+            failures.push({ text: text.textContent.trim().slice(0, 60), ratio: Math.round(ratio * 100) / 100, color: style.color, background: `rgb(${bg.slice(0, 3).map(Math.round).join(', ')})` });
+        }
+    }
+    return failures.sort((x, y) => x.ratio - y.ratio).slice(0, 12);
+}
+/**
  * Serves a stand-in for Google Identity Services (https://accounts.google.com/gsi/client) so
  * `googleAccessToken` gets a token with no Google account: the token client grants every scope
  * asked for (or fails as `fail` says), and One Tap reports "not displayed". Each request is

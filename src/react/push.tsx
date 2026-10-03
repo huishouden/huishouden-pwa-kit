@@ -75,12 +75,12 @@ export function NotificationsCard({ db, householdId, user, app, vapidKey, offTex
     <section className={plain ? '' : `${cardClass} p-6`} aria-label="Notifications on this device">
       <h3 className={overline}>Notifications on this device</h3>
       {!vapidKey ? (
-        <p className="mt-2 text-base text-stone-600 dark:text-stone-300">Notifications are not set up for this app yet.</p>
+        <p className="mt-2 text-base text-muted">Notifications are not set up for this app yet.</p>
       ) : !support.supported ? (
-        <p className="mt-2 text-base text-stone-600 dark:text-stone-300">{support.message}</p>
+        <p className="mt-2 text-base text-muted">{support.message}</p>
       ) : (
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <p className="min-w-0 flex-1 text-base text-stone-600 dark:text-stone-300">{state === 'on' ? onText : offText}</p>
+          <p className="min-w-0 flex-1 text-base text-muted">{state === 'on' ? onText : offText}</p>
           {state === 'on' ? (
             <button type="button" className={secondaryButton} onClick={() => void turnOff()}>
               <BellOff size={18} /> Turn off
@@ -93,7 +93,7 @@ export function NotificationsCard({ db, householdId, user, app, vapidKey, offTex
         </div>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-base text-red-700 dark:text-red-300">
+        <p role="alert" className="mt-2 text-base text-error">
           {error}
         </p>
       )}

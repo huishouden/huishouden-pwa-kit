@@ -13,8 +13,9 @@
 @source '../dist/react';
 
 /*
- * Dark mode is the app's choice, not the device's: `dark:` styles apply under a `.dark` class (an app
- * with a dark setting puts it on <html>), so apps without one never turn dark on a dark-mode phone.
+ * Dark is the suite's one setting (Automatic, Light or Dark in the app bar's menu), applied as a
+ * `.dark` class on <html> by @huishouden/pwa-kit/theme before the first paint. `dark:` styles follow
+ * that class, not the device directly, so Light stays light on a dark-mode phone.
  */
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -36,18 +37,43 @@
   --font-sans: var(--hh-font);
 }
 
+/*
+ * Semantic colours (theme.css): one class that is right in light and dark. Prefer these to a
+ * palette colour plus its `dark:` twin: bg-page, bg-surface (cards, dialogs, bars), bg-sunken
+ * (insets), text-ink, text-ink-soft, text-muted (secondary), border-line / divide-line,
+ * bg-primary + text-on-primary (hover:bg-primary-hover), text-link, bg-tint / bg-tint-strong
+ * (selected, hover), text-positive, text-attention (readable terracotta) / bg-attention-fill (icons, dots) / bg-attention-tint, text-error /
+ * bg-error-tint.
+ */
+@theme inline {
+  --color-page: var(--hh-page);
+  --color-surface: var(--hh-surface);
+  --color-sunken: var(--hh-sunken);
+  --color-ink: var(--hh-ink);
+  --color-ink-soft: var(--hh-ink-soft);
+  --color-muted: var(--hh-muted);
+  --color-line: var(--hh-line);
+  --color-primary: var(--hh-primary);
+  --color-primary-hover: var(--hh-primary-hover);
+  --color-on-primary: var(--hh-on-primary);
+  --color-link: var(--hh-link);
+  --color-tint: var(--hh-tint);
+  --color-tint-strong: var(--hh-tint-strong);
+  --color-positive: var(--hh-positive);
+  --color-attention: var(--hh-attention-text);
+  --color-attention-fill: var(--hh-attention);
+  --color-attention-tint: var(--hh-attention-tint);
+  --color-error: var(--hh-error);
+  --color-error-tint: var(--hh-error-tint);
+}
+
 @layer base {
   body {
     font-family: var(--hh-font);
-    background-color: var(--hh-cream);
+    background-color: var(--hh-page);
     color: var(--hh-ink);
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
-  }
-
-  .dark body {
-    background-color: var(--hh-forest-900);
-    color: #f5f5f4;
   }
 
   :focus-visible {
@@ -117,6 +143,9 @@
     box-shadow: none !important;
     background: white !important;
     color: black;
+  }
+  body {
+    background: white !important;
   }
 }
 
