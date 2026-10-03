@@ -2,8 +2,12 @@ import { expect, type APIRequestContext, type BrowserContext, type Page } from '
 import { CONTENT_SECURITY_POLICY, permissionsPolicy, type DeviceFeatures } from './security-headers.js';
 import { mintCustomToken, stagingCredentialsFromEnv, stagingWebConfig, testUser } from './staging.js';
 
+// Paths: every helper's default is `./`, which is BASE_URL itself. On the suite's one site BASE_URL
+// is the app's path (`https://<site>/pet/`), so pass relative paths (`?tab=care`, `settings`): a
+// leading `/` goes to the site root, which is the portal (docs/one-site.md).
+
 /** Loads `path` and fails on any uncaught page error. Returns the errors seen for further checks. */
-export async function expectCleanLoad(page: Page, path = '/'): Promise<string[]> {
+export async function expectCleanLoad(page: Page, path = './'): Promise<string[]> {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(path, { waitUntil: 'networkidle' });
@@ -15,7 +19,7 @@ export async function expectCleanLoad(page: Page, path = '/'): Promise<string[]>
  * Installability as browsers judge it: a standalone manifest with a 512px icon, every icon URL
  * loading, and a service worker controlling the page after one reload.
  */
-export async function expectInstallable(page: Page, request: APIRequestContext, path = '/') {
+export async function expectInstallable(page: Page, request: APIRequestContext, path = './') {
   await page.goto(path, { waitUntil: 'networkidle' });
   const href = await page.locator('link[rel="manifest"]').first().getAttribute('href');
   expect(href, 'manifest link').toBeTruthy();
@@ -62,7 +66,7 @@ export async function expectGoogleSignInPopup(
   page: Page,
   context: BrowserContext,
   openPopup: (page: Page) => Promise<void>,
-  path = '/',
+  path = './',
 ) {
   await page.goto(path, { waitUntil: 'networkidle' });
   await page.reload({ waitUntil: 'networkidle' });
@@ -75,11 +79,11 @@ export async function expectGoogleSignInPopup(
 }
 
 /**
- * The site's security headers as served (STANDARD.md "Security headers"): `url` (default `/`) is
+ * The site's security headers as served (STANDARD.md "Security headers"): `url` (default `./`, the app's own path) is
  * frame-denied, sniff-proof and sends only the device permissions in `features`, while the same
  * origin's `/__/auth/handler` is not frame-denied, so Google sign-in keeps working.
  */
-export async function expectSecurityHeaders(request: APIRequestContext, url = '/', features: DeviceFeatures = {}) {
+export async function expectSecurityHeaders(request: APIRequestContext, url = './', features: DeviceFeatures = {}) {
   const res = await request.get(url);
   expect(res.ok(), `${url} loads`).toBe(true);
   const h = res.headers();
@@ -133,7 +137,7 @@ export interface ScreenshotOptions {
  */
 export async function captureScreenshot(page: Page, name: string, options: ScreenshotOptions = {}) {
   // SCREENSHOT_DIR lets CI shoot the same scenes into before/ and after/ folders for PR evidence.
-  const { path = '/', fixedTime, dir = process.env.SCREENSHOT_DIR || 'docs/screenshots', prepare } = options;
+  const { path = './', fixedTime, dir = process.env.SCREENSHOT_DIR || 'docs/screenshots', prepare } = options;
   if (fixedTime) await page.clock.setFixedTime(fixedTime);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(path, { waitUntil: 'networkidle' });
@@ -238,7 +242,7 @@ export async function stubCalendar(page: Page | BrowserContext, { events, cached
 export interface SignInTestUserOptions {
   /** One of the seeded test users (`TEST_USERS` in `@huishouden/pwa-kit/staging`). */
   email: string;
-  /** Page to open once signed in (default `/`). */
+  /** Page to open once signed in, relative to BASE_URL (default `./`, the app's own path). */
   path?: string;
   /** Firebase JS SDK version loaded from gstatic for the sign-in (default `FIREBASE_WEB_SDK`). */
   sdkVersion?: string;
@@ -260,7 +264,7 @@ export const FIREBASE_WEB_SDK = '12.19.0';
  * app's own Firebase finds it on load, exactly as after a real sign-in. Needs the staging CI job's
  * HH_STAGING_ACCESS_TOKEN and HH_STAGING_SA; call `test.skip(!process.env.HH_STAGING_SA)` around it.
  */
-export async function signInTestUser(page: Page, { email, path = '/', sdkVersion = FIREBASE_WEB_SDK, env = process.env }: SignInTestUserOptions) {
+export async function signInTestUser(page: Page, { email, path = './', sdkVersion = FIREBASE_WEB_SDK, env = process.env }: SignInTestUserOptions) {
   const { accessToken, serviceAccount } = stagingCredentialsFromEnv(env);
   testUser(email);
   const res = await page.goto('/__/firebase/init.json');

@@ -29,12 +29,12 @@ jobs:
   pwa:
     uses: huishouden/pwa-kit/.github/workflows/pwa.yml@v0
     permissions:
-      contents: write # README screenshots, PR evidence branch
+      contents: write # README screenshots, PR evidence branch, the hosting release asset
       id-token: write
       pull-requests: write # before/after comment on PRs
     with:
-      hosting-target: APP_TARGET
-      site-url: https://APP_SITE.web.app
+      base: /APP_PATH/ # the app's path on the suite's one site (docs/one-site.md)
+      site-url: https://FAMILY_SITE.web.app/APP_PATH/
       staging-ref: ${{ inputs.staging-ref }}
 
   release:

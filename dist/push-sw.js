@@ -17,21 +17,28 @@ export function installPushHandlers(sw) {
             data = { body: event.data ? event.data.text() : '' };
         }
         const title = typeof data.title === 'string' && data.title ? data.title : 'Reminder';
+        // The worker's scope is the app's path on the shared site (/pet/), so its icons and home are there.
+        const scope = sw.registration.scope || sw.location.origin + '/';
         event.waitUntil(sw.registration.showNotification(title, {
             body: typeof data.body === 'string' ? data.body : '',
             tag: typeof data.tag === 'string' ? data.tag : undefined,
-            icon: typeof data.icon === 'string' ? data.icon : '/pwa-192.png',
-            badge: '/pwa-192.png',
-            data: { url: typeof data.url === 'string' ? data.url : '/' },
+            icon: typeof data.icon === 'string' ? data.icon : scope + 'pwa-192.png',
+            badge: scope + 'pwa-192.png',
+            data: { url: typeof data.url === 'string' ? data.url : scope },
         }));
     });
     sw.addEventListener('notificationclick', (event) => {
         event.notification.close();
-        const target = new URL((event.notification.data && event.notification.data.url) || '/', sw.location.origin);
+        const scope = sw.registration.scope || sw.location.origin + '/';
+        const target = new URL((event.notification.data && event.notification.data.url) || scope, scope);
         event.waitUntil((async () => {
             const windows = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
-            // An open window of the same app is reused: focused and moved to the deep link.
-            const open = windows.find((w) => new URL(w.url).origin === target.origin);
+            // An open window of the same app is reused: focused and moved to the deep link. Every app
+            // shares one origin (pwa-kit docs/one-site.md), so "the same app" is a window under the
+            // link's app path: this worker's scope, or the link's first folder for another app's link.
+            const folder = /^\/[^/]+\//.exec(target.pathname);
+            const home = target.href.startsWith(scope) ? scope : folder ? target.origin + folder[0] : null;
+            const open = home ? windows.find((w) => w.url.startsWith(home)) : undefined;
             if (open) {
                 await open.focus();
                 if (open.url !== target.href && typeof open.navigate === 'function')

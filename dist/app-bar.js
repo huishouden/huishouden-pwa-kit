@@ -37,7 +37,7 @@ export function versionLabel(app, version) {
         return '';
     return [SUITE_NAME, isSuite(app) ? '' : app.trim(), version.trim()].filter(Boolean).join(' ');
 }
-/** Whether `url` points at the page's own site, where an "All apps" link would go nowhere new. */
+/** Whether `url` points at the page's own origin. */
 export function sameSite(url, base) {
     try {
         return new URL(url, base).origin === new URL(base).origin;
@@ -389,7 +389,8 @@ export class HhAppBar extends Base {
             menu.append(paragraph('who-email', email));
         const items = document.createElement('div');
         items.className = 'items';
-        if (!sameSite(this.portalUrl, location.href)) {
+        // Every app shares the portal's origin (docs/one-site.md), so only the portal itself, by name, lacks the link.
+        if (!isSuite(this.app)) {
             const all = document.createElement('a');
             all.className = 'item';
             all.href = this.portalUrl;
