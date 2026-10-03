@@ -12,7 +12,8 @@ if (typeof document === 'undefined') GlobalRegistrator.register({ url: 'https://
 afterAll(() => GlobalRegistrator.unregister());
 const { createRoot } = await import('react-dom/client');
 
-const { Chip, Dialog, Field, SampleBanner, SectionTabs, Toast, StatusPill, useToast } = await import('../src/react/ui');
+const { Chip, Dialog, Field, SampleBanner, SectionTabs, Toast, StatusPill, splitTabs, useToast } = await import('../src/react/ui');
+const { Clock, History, Home, Phone, Shield, Wrench } = await import('lucide-react');
 const { ClockProvider, useClock } = await import('../src/react/clock');
 const { CalendarImportDialog, CalendarHint } = await import('../src/react/calendar');
 const { ContactDialog, ContactCard } = await import('../src/react/contacts');
@@ -198,6 +199,84 @@ test('section tabs mark the current one and report taps', () => {
   expect(onTab).toHaveBeenCalledWith('b');
   render(<SectionTabs tabs={[]} tab="a" onTab={onTab} />);
   expect(document.querySelector('nav')).toBeNull();
+});
+
+describe('section tabs on phones: the bottom bar', () => {
+  const six = [
+    { id: 'overview', label: 'Overview', icon: Home, primary: true },
+    { id: 'upkeep', label: 'Upkeep', icon: Wrench, primary: true },
+    { id: 'regular', label: 'Regular', icon: Clock, primary: true },
+    { id: 'history', label: 'History', icon: History, primary: true },
+    { id: 'warranties', label: 'Warranties', icon: Shield },
+    { id: 'contacts', label: 'Contacts', icon: Phone },
+  ];
+  const bar = () => document.querySelector<HTMLElement>('nav[data-hh-bottom-nav]');
+  const barButtons = () => Array.from(bar()!.querySelectorAll('button'));
+
+  test('four or fewer all fit; else the primaries, or the first four when none is marked', () => {
+    const four = six.slice(0, 4).map(({ primary: _, ...t }) => t);
+    expect(splitTabs(four)).toEqual({ bar: four, more: [] });
+    expect(splitTabs(six).bar.map((t) => t.id)).toEqual(['overview', 'upkeep', 'regular', 'history']);
+    expect(splitTabs(six).more.map((t) => t.id)).toEqual(['warranties', 'contacts']);
+    const picked = six.map((t) => ({ ...t, primary: t.id === 'contacts' || t.id === 'overview' }));
+    expect(splitTabs(picked)).toEqual({ bar: [picked[0], picked[5]], more: picked.slice(1, 5) });
+    const unmarked = six.map(({ primary: _, ...t }) => t);
+    expect(splitTabs(unmarked).bar.map((t) => t.id)).toEqual(['overview', 'upkeep', 'regular', 'history']);
+  });
+
+  test('a labelled nav with icons, the current one marked, outside the app bar slot', () => {
+    const onTab = mock((_: string) => {});
+    const { root } = render(<SectionTabs tabs={six.slice(0, 3)} tab="upkeep" onTab={onTab} />);
+    expect(bar()!.getAttribute('aria-label')).toBe('Sections');
+    expect(bar()!.hasAttribute('slot')).toBe(false);
+    expect(bar()!.parentElement).toBe(document.body);
+    expect(document.querySelector('nav[slot=nav]')!.hasAttribute('data-bottom-nav')).toBe(true);
+    expect(barButtons().map((b) => b.textContent)).toEqual(['Overview', 'Upkeep', 'Regular']);
+    expect(barButtons().every((b) => b.querySelector('svg'))).toBe(true);
+    expect(bar()!.querySelector('[aria-current=page]')!.textContent).toBe('Upkeep');
+    click(barButtons()[2]);
+    expect(onTab).toHaveBeenCalledWith('regular');
+    expect(document.documentElement.hasAttribute('data-hh-bottom-nav')).toBe(true);
+    act(() => root.unmount());
+    expect(document.documentElement.hasAttribute('data-hh-bottom-nav')).toBe(false);
+  });
+
+  test('short labels in the bar, the full one in the app bar', () => {
+    render(<SectionTabs tabs={[{ id: 'a', label: 'Appointments', short: 'Visits', icon: Clock }]} tab="a" onTab={() => {}} />);
+    expect(barButtons()[0].textContent).toBe('Visits');
+    expect(document.querySelector('nav[slot=nav] button')!.textContent).toBe('Appointments');
+  });
+
+  test('More opens a sheet with the rest; picking one closes it', () => {
+    const onTab = mock((_: string) => {});
+    render(<SectionTabs tabs={six} tab="overview" onTab={onTab} />);
+    expect(barButtons().map((b) => b.textContent)).toEqual(['Overview', 'Upkeep', 'Regular', 'History', 'More']);
+    const more = barButtons()[4];
+    expect(more.getAttribute('aria-label')).toBe('More');
+    expect(more.getAttribute('aria-haspopup')).toBe('dialog');
+    click(more);
+    const sheet = document.querySelector('[role=dialog]')!;
+    expect(sheet.getAttribute('aria-label')).toBe('More');
+    const items = Array.from(sheet.querySelectorAll('ul button'));
+    expect(items.map((b) => b.textContent)).toEqual(['Warranties', 'Contacts']);
+    click(items[1]);
+    expect(onTab).toHaveBeenCalledWith('contacts');
+    expect(document.querySelector('[role=dialog]')).toBeNull();
+  });
+
+  test('a section under More marks More and itself in the sheet', () => {
+    render(<SectionTabs tabs={six} tab="warranties" onTab={() => {}} />);
+    expect(bar()!.querySelector('[aria-current=page]')).toBeNull();
+    const more = barButtons()[4];
+    expect(more.getAttribute('aria-label')).toBe('More, showing Warranties');
+    click(more);
+    expect(document.querySelector('[role=dialog] [aria-current=page]')!.textContent).toBe('Warranties');
+  });
+
+  test('no tabs, no bar', () => {
+    render(<SectionTabs tabs={[]} tab="" onTab={() => {}} />);
+    expect(bar()).toBeNull();
+  });
 });
 
 test('status pill labels only what needs attention', () => {

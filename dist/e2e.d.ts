@@ -34,6 +34,22 @@ export declare function expectSecurityHeaders(request: APIRequestContext, url?: 
  * chip and the short text side by side. Restores the viewport afterwards.
  */
 export declare function expectCompactSampleBanner(page: Page, path?: string): Promise<void>;
+export interface BottomNavOptions {
+    /** Page to load first; leave unset to check the page as it is. */
+    path?: string;
+    /** The bottom bar's labels in order, More included when the app has one ("Overview", …, "More"). */
+    labels?: string[];
+    /** What the More sheet lists, in order. */
+    more?: string[];
+}
+/**
+ * The phone's bottom tab bar (`SectionTabs` from /react/ui, DESIGN.md "Frame") at 390×844: one
+ * labelled nav fixed to the bottom edge, at most five items of 48px or more, the current section
+ * marked, the app bar's own tabs gone, the page padded so its end clears the bar, and More (when
+ * there is one) opening a sheet that covers the bar. Then at 1280×800 the bar is gone and the tabs
+ * are back in the app bar. Restores the viewport afterwards.
+ */
+export declare function expectBottomNav(page: Page, { path, labels, more }?: BottomNavOptions): Promise<void>;
 export interface ScreenshotOptions {
     path?: string;
     /** Freeze the page clock so date-dependent screens render the same on every run. */
