@@ -8,13 +8,37 @@ import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource
  */
 export function pwaApp(options) {
     const { overrides = {} } = options;
-    return [buildStamp(), telemetryChunks(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
+    const base = normalizeBase(options.base);
+    return [sitePath(base), buildStamp(), telemetryChunks(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
             registerType: 'autoUpdate',
             includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
+            base,
+            scope: base,
             ...overrides,
             manifest: { ...webManifest(options), ...(overrides.manifest || {}) },
             workbox: pwaWorkbox(options),
         })];
+}
+/** `pet`, `/pet` or `/pet/` as `/pet/`; empty or missing as `/`. */
+export function normalizeBase(base) {
+    const trimmed = (base ?? '').replace(/^\/+|\/+$/g, '');
+    return trimmed ? `/${trimmed}/` : '/';
+}
+/** Sets Vite's `base` from `pwaApp({ base })`, so the app states its path once. */
+export function sitePath(base) {
+    return {
+        name: 'huishouden-site-path',
+        config: () => ({ base }),
+    };
+}
+/**
+ * Navigations the worker at `base` must leave to the network: Firebase's `/__/` pages and, for the
+ * portal, every other app's path on the same site.
+ */
+export function navigationDenylist(options) {
+    const paths = (options.otherApps ?? []).map((p) => p.replace(/^\/+|\/+$/g, '')).filter(Boolean);
+    const escaped = paths.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    return [...FIREBASE_RESERVED_PATHS, ...(escaped.length ? [new RegExp(`^/(?:${escaped.join('|')})(?:/|$)`)] : [])];
 }
 /**
  * The Workbox options `pwaApp` passes. The kit's entries in `importScripts`, `runtimeCaching` and
@@ -25,8 +49,8 @@ export function pwaWorkbox(options) {
     const { importScripts = [], runtimeCaching = [], globIgnores = [], ...workboxOverrides } = options.overrides?.workbox ?? {};
     return {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: FIREBASE_RESERVED_PATHS,
+        navigateFallback: `${normalizeBase(options.base)}index.html`,
+        navigateFallbackDenylist: navigationDenylist(options),
         ...workboxOverrides,
         importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...(sharesContacts(options) ? [SHARE_SW_FILE] : []), ...importScripts],
         runtimeCaching: [...(options.ocr ? [OCR_CACHE] : []), ...runtimeCaching],
@@ -35,8 +59,9 @@ export function pwaWorkbox(options) {
 }
 /** The web app manifest `pwaApp` writes (before `overrides.manifest`). */
 export function webManifest(options) {
+    const base = normalizeBase(options.base);
     return {
-        id: '/',
+        id: base,
         name: options.name,
         short_name: options.shortName ?? options.name,
         description: options.description,
@@ -44,13 +69,13 @@ export function webManifest(options) {
         background_color: options.backgroundColor,
         display: 'standalone',
         orientation: 'any',
-        start_url: '/',
-        scope: '/',
-        ...(options.shareTarget ? { share_target: sharesContacts(options) ? SHARE_TARGET_FILES : SHARE_TARGET } : {}),
+        start_url: base,
+        scope: base,
+        ...(options.shareTarget ? { share_target: sharesContacts(options) ? SHARE_TARGET_FILES : { ...SHARE_TARGET, action: base } } : {}),
         icons: options.icons ?? [
-            { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-            { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-            { src: '/pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+            { src: `${base}pwa-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: `${base}pwa-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: `${base}pwa-maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
     };
 }
@@ -61,7 +86,7 @@ const escapeAttr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').repla
  * Any description or og:/twitter: tags already in index.html are replaced.
  */
 export function linkPreview(options) {
-    const base = options.url?.replace(/\/$/, '') ?? '';
+    const base = options.url?.replace(/\/$/, '') ?? normalizeBase(options.base).replace(/\/$/, '');
     const tags = [
         ['name', 'description', options.description],
         ['property', 'og:type', 'website'],
@@ -76,7 +101,7 @@ export function linkPreview(options) {
         ['name', 'twitter:description', options.description],
         ['name', 'twitter:image', `${base}/og.png`],
     ];
-    if (base)
+    if (options.url)
         tags.push(['property', 'og:url', `${base}/`]);
     return {
         name: 'huishouden-link-preview',

@@ -144,8 +144,15 @@ describe('<hh-app-bar>', () => {
     expect(img.getAttribute('src')).toBe('https://photos.example.com/sam.png');
   });
 
-  test('no "All apps" on the portal itself; Privacy stays', () => {
+  test("an app on the portal's own site still links to all apps", () => {
     const { bar, $ } = mount({ 'portal-url': '/' });
+    bar.user = { email: 'sam@example.com' };
+    const links = Array.from($('.menu')!.querySelectorAll('a.item')).map((a) => [a.textContent, a.getAttribute('href')]);
+    expect(links).toEqual([['All apps', '/'], ['Privacy', new URL('/privacy', location.href).href]]);
+  });
+
+  test('no "All apps" on the portal itself; Privacy stays', () => {
+    const { bar, $ } = mount({ 'portal-url': '/', app: 'Huishouden' });
     bar.user = { email: 'sam@example.com' };
     const links = Array.from($('.menu')!.querySelectorAll('a.item')).map((a) => a.textContent);
     expect(links).toEqual(['Privacy']);

@@ -1,11 +1,23 @@
 import { type VitePWAOptions } from 'vite-plugin-pwa';
 export interface PwaAppOptions {
+    /**
+     * The path the app is served under on the suite's one site (docs/one-site.md): `/pet/` for an
+     * app, `/` for the portal. Sets Vite's `base`, and the manifest's `id`, `start_url`, `scope`,
+     * icons and share target, the service worker's scope and its navigation fallback. Default `/`.
+     */
+    base?: string;
+    /**
+     * The portal only: paths of the other apps on the same site (`['pet', 'baby']`). The portal's
+     * worker (scope `/`) then leaves navigations to them to the network instead of answering with
+     * the portal, until the app's own worker takes over its path.
+     */
+    otherApps?: string[];
     name: string;
     shortName?: string;
     description: string;
     themeColor: string;
     backgroundColor: string;
-    /** Manifest icons; defaults to /pwa-192.png, /pwa-512.png, /pwa-maskable-512.png (what pwa-icons writes). */
+    /** Manifest icons; defaults to <base>pwa-192.png, pwa-512.png, pwa-maskable-512.png (what pwa-icons writes). */
     icons?: {
         src: string;
         sizes: string;
@@ -15,7 +27,7 @@ export interface PwaAppOptions {
     /** Files in public/ to precache besides the build output (icons, favicons). */
     includeAssets?: string[];
     /**
-     * The app's public address (https://<site>.web.app). Link previews need absolute URLs for the
+     * The app's public address, with its path (`https://<site>.web.app/pet/`). Link previews need absolute URLs for the
      * page and image; without it they fall back to relative ones, which some messengers ignore.
      */
     url?: string;
@@ -34,7 +46,7 @@ export interface PwaAppOptions {
     /**
      * Show the installed app in the phone's Share menu (Android and desktop Chrome; iOS has no share
      * targets), so Google Maps → Share → the app opens it with the place. Adds a manifest
-     * `share_target` that launches `/?share_title=…&share_text=…&share_url=…`; read it with
+     * `share_target` that launches `<base>?share_title=…&share_text=…&share_url=…`; read it with
      * `readSharedPlace(location)` from `@huishouden/pwa-kit/places`.
      *
      * `{ contacts: true }` also takes contact cards (Contacts → Share → the app): the share target
@@ -53,6 +65,11 @@ export interface PwaAppOptions {
  * standalone manifest with 192/512/maskable icons from public/, and Firebase-safe navigation.
  */
 export declare function pwaApp(options: PwaAppOptions): ({
+    name: string;
+    config: () => {
+        base: string;
+    };
+} | {
     name: string;
     config: () => {
         define: {
@@ -95,6 +112,20 @@ export declare function pwaApp(options: PwaAppOptions): ({
         }): string;
     }): void;
 } | import("vite").Plugin<any>)[];
+/** `pet`, `/pet` or `/pet/` as `/pet/`; empty or missing as `/`. */
+export declare function normalizeBase(base?: string): string;
+/** Sets Vite's `base` from `pwaApp({ base })`, so the app states its path once. */
+export declare function sitePath(base: string): {
+    name: string;
+    config: () => {
+        base: string;
+    };
+};
+/**
+ * Navigations the worker at `base` must leave to the network: Firebase's `/__/` pages and, for the
+ * portal, every other app's path on the same site.
+ */
+export declare function navigationDenylist(options: Pick<PwaAppOptions, 'base' | 'otherApps'>): RegExp[];
 /**
  * The Workbox options `pwaApp` passes. The kit's entries in `importScripts`, `runtimeCaching` and
  * `globIgnores` are kept and an app's `overrides.workbox` entries are added after them; other
@@ -158,15 +189,6 @@ export declare function webManifest(options: PwaAppOptions): {
     }[];
     share_target?: {
         action: string;
-        method: "GET";
-        enctype: string;
-        params: {
-            title: string;
-            text: string;
-            url: string;
-        };
-    } | {
-        action: string;
         method: "POST";
         enctype: string;
         params: {
@@ -174,6 +196,15 @@ export declare function webManifest(options: PwaAppOptions): {
                 name: string;
                 accept: string[];
             }[];
+            title: string;
+            text: string;
+            url: string;
+        };
+    } | {
+        action: string;
+        method: "GET";
+        enctype: string;
+        params: {
             title: string;
             text: string;
             url: string;
@@ -195,7 +226,7 @@ export declare function webManifest(options: PwaAppOptions): {
  * Twitter tags, written from the same name and description as the manifest so there is one source.
  * Any description or og:/twitter: tags already in index.html are replaced.
  */
-export declare function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' | 'url'>): {
+export declare function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' | 'url' | 'base'>): {
     name: string;
     transformIndexHtml(html: string): string;
 };
