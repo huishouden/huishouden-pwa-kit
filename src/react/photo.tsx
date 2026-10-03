@@ -61,7 +61,7 @@ export function PhotoPicker({ photo, fallback, label, size = 96, options, onSave
         style={{ width: size, height: size }}
       >
         {avatar}
-        <span className="absolute right-0 bottom-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-forest-700 text-white" aria-hidden="true">
+        <span className="absolute right-0 bottom-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface bg-primary text-on-primary" aria-hidden="true">
           <Camera size={16} />
         </span>
       </button>
@@ -69,7 +69,7 @@ export function PhotoPicker({ photo, fallback, label, size = 96, options, onSave
         {draft ? (
           <>
             {slides && (
-              <label className="block text-sm font-medium text-stone-700">
+              <label className="block text-sm font-medium text-ink-soft">
                 Position
                 <input
                   type="range"
@@ -112,7 +112,7 @@ export function PhotoPicker({ photo, fallback, label, size = 96, options, onSave
           </div>
         )}
         {error && (
-          <p role="alert" className="text-sm text-red-700">
+          <p role="alert" className="text-sm text-error">
             {error}
           </p>
         )}

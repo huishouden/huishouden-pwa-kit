@@ -19,18 +19,75 @@
   --hh-terracotta-light: #ffdbcf;
   /* Terracotta for text: 6.7:1 on white, 5.2:1 on terracotta-light (terracotta itself is 3.6:1). */
   --hh-terracotta-dark: #94452f;
-  --hh-ink: #292524;
-  --hh-muted: #57534e;
   --hh-radius: 0.75rem;
   --hh-radius-lg: 1.25rem;
   --hh-font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /*
+   * Semantic colours: what a colour is for, light here and dark under `.dark` on <html> (the kit's
+   * ./theme puts it there). Tailwind apps use them as bg-page, bg-surface, text-ink, text-muted,
+   * border-line, … (tailwind.css), so one class is right in both themes.
+   */
+  --hh-page: var(--hh-cream);
+  --hh-surface: #fff;
+  --hh-sunken: #f5f5f4;
+  --hh-ink: #292524;
+  --hh-ink-soft: #44403c;
+  --hh-muted: #57534e;
+  --hh-line: #e7e5e4;
+  --hh-primary: var(--hh-forest-700);
+  --hh-primary-hover: var(--hh-forest-600);
+  --hh-on-primary: #fff;
+  --hh-link: var(--hh-forest-700);
+  --hh-tint: var(--hh-forest-50);
+  --hh-tint-strong: var(--hh-forest-100);
+  --hh-positive: var(--hh-forest-600);
+  --hh-attention: var(--hh-terracotta);
+  --hh-attention-text: var(--hh-terracotta-dark);
+  --hh-attention-tint: var(--hh-terracotta-light);
+  --hh-error: #b91c1c;
+  --hh-error-tint: #fef2f2;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root[data-theme='auto'] {
-    --hh-cream: #081c15;
-    --hh-ink: #f5f5f4;
-    --hh-muted: #d6d3d1;
+/* Dark (DESIGN.md "Dark"): the forest scale, not grey. Every text pair here is at least 4.5:1. */
+:root.dark {
+  --hh-page: var(--hh-forest-900);
+  --hh-surface: var(--hh-forest-800);
+  --hh-sunken: var(--hh-forest-900);
+  --hh-ink: #f5f5f4;
+  --hh-ink-soft: #e7e5e4;
+  --hh-muted: #d6d3d1;
+  --hh-line: var(--hh-forest-600);
+  --hh-primary: var(--hh-forest-400);
+  --hh-primary-hover: var(--hh-forest-300);
+  --hh-on-primary: var(--hh-forest-900);
+  --hh-link: var(--hh-forest-300);
+  --hh-tint: var(--hh-forest-700);
+  --hh-tint-strong: var(--hh-forest-700);
+  --hh-positive: var(--hh-forest-300);
+  --hh-attention: var(--hh-terracotta);
+  --hh-attention-text: var(--hh-terracotta-light);
+  --hh-attention-tint: var(--hh-terracotta-dark);
+  --hh-error: #fca5a5;
+  --hh-error-tint: var(--hh-forest-800);
+  color-scheme: dark;
+}
+
+/* Paper is light whatever the screen shows (./theme also drops `.dark` while printing). */
+@media print {
+  :root.dark {
+    --hh-page: #fff;
+    --hh-surface: #fff;
+    --hh-sunken: #f5f5f4;
+    --hh-ink: #292524;
+    --hh-ink-soft: #44403c;
+    --hh-muted: #57534e;
+    --hh-line: #e7e5e4;
+    --hh-link: var(--hh-forest-700);
+    --hh-attention-text: var(--hh-terracotta-dark);
+    --hh-attention-tint: var(--hh-terracotta-light);
+    --hh-error: #b91c1c;
+    color-scheme: light;
   }
 }
 
@@ -43,16 +100,16 @@
   padding: 0.625rem 1.25rem;
   border: 0;
   border-radius: var(--hh-radius);
-  background: var(--hh-forest-700);
-  color: #fff;
+  background: var(--hh-primary);
+  color: var(--hh-on-primary);
   font: 500 1rem/1.25 var(--hh-font);
   cursor: pointer;
 }
-.hh-button:hover { background: var(--hh-forest-800); }
+.hh-button:hover { background: var(--hh-primary-hover); }
 .hh-button:focus-visible { outline: 3px solid var(--hh-terracotta); outline-offset: 2px; }
 .hh-button[disabled] { opacity: 0.6; cursor: default; }
-.hh-button--quiet { background: transparent; color: var(--hh-forest-700); }
-.hh-button--quiet:hover { background: var(--hh-forest-50); }
+.hh-button--quiet { background: transparent; color: var(--hh-link); }
+.hh-button--quiet:hover { background: var(--hh-tint); }
 
 /* Signed-in indicator: round Google profile photo, or the initial on a forest circle. */
 .hh-avatar {
@@ -78,6 +135,6 @@
 hh-app-bar:not(:defined) {
   display: block;
   min-height: calc(69px + env(safe-area-inset-top));
-  background: var(--hh-cream);
-  border-bottom: 1px solid #e7e5e4;
+  background: var(--hh-page);
+  border-bottom: 1px solid var(--hh-line);
 }

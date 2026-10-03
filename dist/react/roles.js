@@ -19,7 +19,7 @@ export function useRole(household, email) {
 }
 /** "Only admins and members can change settings." where a control is left out for this role. */
 export function RoleNote({ action, className = '' }) {
-    return _jsx("p", { className: `text-sm text-stone-600 dark:text-stone-300 ${className}`, children: refusal(action) });
+    return _jsx("p", { className: `text-sm text-muted ${className}`, children: refusal(action) });
 }
 /** A member's role, for admins: a select with the four roles. */
 export function RoleSelect({ value, onChange, label, disabled }) {
@@ -27,7 +27,7 @@ export function RoleSelect({ value, onChange, label, disabled }) {
 }
 /** Each role in one line, under the household's member list. */
 export function RoleList() {
-    return (_jsx("dl", { className: "grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-stone-600 dark:text-stone-300", children: ROLES.map((r) => (_jsxs("div", { className: "contents", children: [_jsx("dt", { className: "font-semibold text-stone-800 dark:text-stone-100", children: ROLE_LABELS[r] }), _jsx("dd", { children: ROLE_DESCRIPTIONS[r] })] }, r))) }));
+    return (_jsx("dl", { className: "grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-muted", children: ROLES.map((r) => (_jsxs("div", { className: "contents", children: [_jsx("dt", { className: "font-semibold text-ink", children: ROLE_LABELS[r] }), _jsx("dd", { children: ROLE_DESCRIPTIONS[r] })] }, r))) }));
 }
 /**
  * "Who can give it" on a medicine course: all helpers (the default) or only the chosen ones.
@@ -36,5 +36,5 @@ export function RoleList() {
  */
 export function GiversField({ value, onChange, helpers, name = (e) => e }) {
     const toggle = (email, on) => onChange({ ...value, approvedHelpers: on ? [...new Set([...value.approvedHelpers, email])] : value.approvedHelpers.filter((e) => e !== email) });
-    return (_jsxs("fieldset", { children: [_jsx("legend", { className: "mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-200", children: "Who can give it" }), _jsxs("div", { className: "flex flex-col", children: [_jsxs("label", { className: "flex min-h-11 cursor-pointer items-center gap-3 px-1 text-base text-stone-800 dark:text-stone-100", children: [_jsx("input", { type: "radio", name: "givers", className: "h-5 w-5 accent-forest-700", checked: value.givers === 'all', onChange: () => onChange({ ...value, givers: 'all' }) }), "All helpers"] }), _jsxs("label", { className: "flex min-h-11 cursor-pointer items-center gap-3 px-1 text-base text-stone-800 dark:text-stone-100", children: [_jsx("input", { type: "radio", name: "givers", className: "h-5 w-5 accent-forest-700", checked: value.givers === 'approved', onChange: () => onChange({ ...value, givers: 'approved' }) }), "Only approved helpers"] }), value.givers === 'approved' && (_jsx("div", { className: "ml-8", children: helpers.length === 0 ? (_jsx("p", { className: "text-sm text-stone-600 dark:text-stone-300", children: "No helpers yet. An admin can make someone a helper in the household settings." })) : (helpers.map((h) => (_jsx(Checkbox, { checked: value.approvedHelpers.includes(h), onChange: (on) => toggle(h, on), children: name(h) }, h)))) }))] }), _jsx("p", { className: "mt-1 text-sm text-stone-600 dark:text-stone-300", children: "Admins and members can always give it; kids can\u2019t." })] }));
+    return (_jsxs("fieldset", { children: [_jsx("legend", { className: "mb-1.5 block text-sm font-medium text-ink-soft", children: "Who can give it" }), _jsxs("div", { className: "flex flex-col", children: [_jsxs("label", { className: "flex min-h-11 cursor-pointer items-center gap-3 px-1 text-base text-ink", children: [_jsx("input", { type: "radio", name: "givers", className: "h-5 w-5 accent-forest-700", checked: value.givers === 'all', onChange: () => onChange({ ...value, givers: 'all' }) }), "All helpers"] }), _jsxs("label", { className: "flex min-h-11 cursor-pointer items-center gap-3 px-1 text-base text-ink", children: [_jsx("input", { type: "radio", name: "givers", className: "h-5 w-5 accent-forest-700", checked: value.givers === 'approved', onChange: () => onChange({ ...value, givers: 'approved' }) }), "Only approved helpers"] }), value.givers === 'approved' && (_jsx("div", { className: "ml-8", children: helpers.length === 0 ? (_jsx("p", { className: "text-sm text-muted", children: "No helpers yet. An admin can make someone a helper in the household settings." })) : (helpers.map((h) => (_jsx(Checkbox, { checked: value.approvedHelpers.includes(h), onChange: (on) => toggle(h, on), children: name(h) }, h)))) }))] }), _jsx("p", { className: "mt-1 text-sm text-muted", children: "Admins and members can always give it; kids can\u2019t." })] }));
 }

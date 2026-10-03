@@ -11,20 +11,20 @@
  */
 import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { type LucideIcon } from 'lucide-react';
-export declare const inputClass = "w-full min-h-11 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-base text-stone-800 outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:border-forest-600 dark:bg-forest-900 dark:text-stone-100 dark:focus:ring-forest-700";
+export declare const inputClass = "w-full min-h-11 rounded-xl border border-line bg-white px-3 py-2.5 text-base text-ink outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:bg-forest-900 dark:focus:ring-forest-700";
 /** A select styled like the inputs. */
-export declare const selectClass = "w-full min-h-11 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-base text-stone-800 outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:border-forest-600 dark:bg-forest-900 dark:text-stone-100 dark:focus:ring-forest-700 appearance-auto";
-export declare const primaryButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-forest-700 px-4 py-2.5 font-medium text-white transition-colors duration-150 hover:bg-forest-600 disabled:opacity-50 dark:bg-forest-400 dark:text-forest-900 dark:hover:bg-forest-300";
-export declare const ghostButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 font-medium text-stone-600 transition-colors duration-150 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-forest-700";
+export declare const selectClass = "w-full min-h-11 rounded-xl border border-line bg-white px-3 py-2.5 text-base text-ink outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:bg-forest-900 dark:focus:ring-forest-700 appearance-auto";
+export declare const primaryButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 font-medium text-on-primary transition-colors duration-150 hover:bg-primary-hover disabled:opacity-50";
+export declare const ghostButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 font-medium text-muted transition-colors duration-150 hover:bg-stone-100 dark:hover:bg-forest-700";
 /** The second action next to a primary button. */
-export declare const secondaryButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 font-medium text-stone-600 transition-colors duration-150 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-forest-700 border border-stone-200 bg-white disabled:opacity-50 dark:border-forest-600 dark:bg-forest-800";
-export declare const iconButton = "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-stone-600 transition-colors duration-150 hover:bg-stone-100 disabled:opacity-30 dark:text-stone-300 dark:hover:bg-forest-700";
+export declare const secondaryButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 font-medium text-muted transition-colors duration-150 hover:bg-stone-100 dark:hover:bg-forest-700 border border-line bg-surface disabled:opacity-50";
+export declare const iconButton = "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted transition-colors duration-150 hover:bg-stone-100 disabled:opacity-30 dark:hover:bg-forest-700";
 /** Footer button that deletes; the destructive action stays quiet until asked for. */
-export declare const deleteButton = "mr-auto inline-flex min-h-11 items-center gap-2 rounded-xl px-3 font-medium text-red-700 hover:bg-stone-100 dark:text-red-300 dark:hover:bg-forest-700";
-export declare const cardClass = "rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-forest-600 dark:bg-forest-800";
-export declare const overline = "text-xs font-semibold uppercase tracking-wide text-stone-600 dark:text-stone-300";
+export declare const deleteButton = "mr-auto inline-flex min-h-11 items-center gap-2 rounded-xl px-3 font-medium text-error hover:bg-stone-100 dark:hover:bg-forest-700";
+export declare const cardClass = "rounded-2xl border border-line bg-surface shadow-sm";
+export declare const overline = "text-xs font-semibold uppercase tracking-wide text-muted";
 /** A text link with a 44px target: phone numbers, Open in Google Maps, Open in Calendar. */
-export declare const linkClass = "-mx-2 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 font-medium text-forest-700 underline-offset-4 transition-colors duration-150 hover:bg-forest-50 hover:underline dark:text-forest-300 dark:hover:bg-forest-700";
+export declare const linkClass = "-mx-2 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 font-medium text-link underline-offset-4 transition-colors duration-150 hover:bg-tint hover:underline";
 export declare function Chip({ active, onClick, children, label }: {
     active?: boolean;
     onClick: () => void;

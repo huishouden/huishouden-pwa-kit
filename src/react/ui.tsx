@@ -15,33 +15,33 @@ import { ChevronDown, Ellipsis, EyeOff, Plus, X, type LucideIcon } from 'lucide-
 import { personColour, personInitial, personName } from '../people';
 
 export const inputClass =
-  'w-full min-h-11 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-base text-stone-800 outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:border-forest-600 dark:bg-forest-900 dark:text-stone-100 dark:focus:ring-forest-700';
+  'w-full min-h-11 rounded-xl border border-line bg-white px-3 py-2.5 text-base text-ink outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:bg-forest-900 dark:focus:ring-forest-700';
 
 /** A select styled like the inputs. */
 export const selectClass = `${inputClass} appearance-auto`;
 
 export const primaryButton =
-  'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-forest-700 px-4 py-2.5 font-medium text-white transition-colors duration-150 hover:bg-forest-600 disabled:opacity-50 dark:bg-forest-400 dark:text-forest-900 dark:hover:bg-forest-300';
+  'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 font-medium text-on-primary transition-colors duration-150 hover:bg-primary-hover disabled:opacity-50';
 
 export const ghostButton =
-  'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 font-medium text-stone-600 transition-colors duration-150 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-forest-700';
+  'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 font-medium text-muted transition-colors duration-150 hover:bg-stone-100 dark:hover:bg-forest-700';
 
 /** The second action next to a primary button. */
-export const secondaryButton = `${ghostButton} border border-stone-200 bg-white disabled:opacity-50 dark:border-forest-600 dark:bg-forest-800`;
+export const secondaryButton = `${ghostButton} border border-line bg-surface disabled:opacity-50`;
 
 export const iconButton =
-  'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-stone-600 transition-colors duration-150 hover:bg-stone-100 disabled:opacity-30 dark:text-stone-300 dark:hover:bg-forest-700';
+  'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted transition-colors duration-150 hover:bg-stone-100 disabled:opacity-30 dark:hover:bg-forest-700';
 
 /** Footer button that deletes; the destructive action stays quiet until asked for. */
-export const deleteButton = 'mr-auto inline-flex min-h-11 items-center gap-2 rounded-xl px-3 font-medium text-red-700 hover:bg-stone-100 dark:text-red-300 dark:hover:bg-forest-700';
+export const deleteButton = 'mr-auto inline-flex min-h-11 items-center gap-2 rounded-xl px-3 font-medium text-error hover:bg-stone-100 dark:hover:bg-forest-700';
 
-export const cardClass = 'rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-forest-600 dark:bg-forest-800';
+export const cardClass = 'rounded-2xl border border-line bg-surface shadow-sm';
 
-export const overline = 'text-xs font-semibold uppercase tracking-wide text-stone-600 dark:text-stone-300';
+export const overline = 'text-xs font-semibold uppercase tracking-wide text-muted';
 
 /** A text link with a 44px target: phone numbers, Open in Google Maps, Open in Calendar. */
 export const linkClass =
-  '-mx-2 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 font-medium text-forest-700 underline-offset-4 transition-colors duration-150 hover:bg-forest-50 hover:underline dark:text-forest-300 dark:hover:bg-forest-700';
+  '-mx-2 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 font-medium text-link underline-offset-4 transition-colors duration-150 hover:bg-tint hover:underline';
 
 export function Chip({ active, onClick, children, label }: { active?: boolean; onClick: () => void; children: ReactNode; label?: string }) {
   return (
@@ -53,7 +53,7 @@ export function Chip({ active, onClick, children, label }: { active?: boolean; o
       className={`inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 ${
         active
           ? 'border-forest-700 bg-forest-700 text-white dark:border-forest-300 dark:bg-forest-300 dark:text-forest-900'
-          : 'border-stone-200 bg-white text-stone-700 hover:border-forest-400 dark:border-forest-600 dark:bg-forest-800 dark:text-stone-200'
+          : 'border-line bg-surface text-ink-soft hover:border-forest-400'
       }`}
     >
       {children}
@@ -176,7 +176,7 @@ export function SuggestionChip({
           type="button"
           onClick={onRemove}
           aria-label={removeLabel}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-forest-700 hover:bg-forest-100 dark:text-forest-100 dark:hover:bg-forest-700"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-forest-700 hover:bg-tint-strong dark:text-forest-100"
         >
           <X size={large ? 18 : 16} aria-hidden="true" />
         </button>
@@ -195,7 +195,7 @@ export function SuggestionChip({
             >
               <EyeOff size={18} aria-hidden="true" /> {removeLabel}
             </button>
-            {hint && <p className="mt-3 text-sm text-stone-600 dark:text-stone-300">{hint}</p>}
+            {hint && <p className="mt-3 text-sm text-muted">{hint}</p>}
           </Dialog>,
           document.body,
         )}
@@ -236,11 +236,11 @@ export function Dialog({ title, onClose, children, footer, wide }: { title: stri
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`safe-bottom outline-none max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl dark:bg-forest-800 ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`}
+        className={`safe-bottom outline-none max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-surface p-6 shadow-2xl sm:rounded-3xl ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between gap-4">
-          <h2 className="text-xl font-semibold text-stone-800 dark:text-stone-100">{title}</h2>
+          <h2 className="text-xl font-semibold text-ink">{title}</h2>
           <button type="button" onClick={onClose} className={iconButton} aria-label="Close">
             <X size={20} />
           </button>
@@ -258,16 +258,16 @@ const touchScreen = () => typeof matchMedia === 'function' && matchMedia('(point
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-200">{label}</span>
+      <span className="mb-1.5 block text-sm font-medium text-ink-soft">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-sm text-stone-600 dark:text-stone-300">{hint}</span>}
+      {hint && <span className="mt-1 block text-sm text-muted">{hint}</span>}
     </label>
   );
 }
 
 export function Checkbox({ checked, onChange, children }: { checked: boolean; onChange: (checked: boolean) => void; children: ReactNode }) {
   return (
-    <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-1 text-base text-stone-800 dark:text-stone-100">
+    <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-1 text-base text-ink">
       <input type="checkbox" className="h-5 w-5 shrink-0 accent-forest-700" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span className="min-w-0">{children}</span>
     </label>
@@ -279,16 +279,16 @@ export type Attention = 'overdue' | 'soon' | 'ok' | 'unknown';
 /** "Overdue" and "Soon" labels; nothing for the rest, so the eye goes to what needs doing. */
 export function StatusPill({ state }: { state: Attention }) {
   if (state === 'overdue')
-    return <span className="inline-flex shrink-0 items-center rounded-full bg-terracotta-light px-2.5 py-0.5 text-sm font-semibold text-terracotta-dark">Overdue</span>;
+    return <span className="inline-flex shrink-0 items-center rounded-full bg-attention-tint px-2.5 py-0.5 text-sm font-semibold text-attention">Overdue</span>;
   if (state === 'soon')
-    return <span className="inline-flex shrink-0 items-center rounded-full border border-stone-200 bg-white px-2.5 py-0.5 text-sm font-semibold text-stone-700 dark:border-forest-600 dark:bg-forest-800 dark:text-stone-200">Soon</span>;
+    return <span className="inline-flex shrink-0 items-center rounded-full border border-line bg-surface px-2.5 py-0.5 text-sm font-semibold text-ink-soft">Soon</span>;
   return null;
 }
 
 /** A failed action in words, with Try again. */
 export function ErrorNotice({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-red-50 px-3 py-2 text-base text-red-700 dark:bg-forest-800 dark:text-red-300">
+    <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-error-tint px-3 py-2 text-base text-error">
       <span className="min-w-0 flex-1">{message}</span>
       <button type="button" className="min-h-11 rounded-xl px-3 font-semibold underline-offset-4 hover:underline" onClick={onRetry}>
         Try again
@@ -320,11 +320,11 @@ export function SampleBanner({
   return (
     <div role="note" data-sample-banner className={`${cardClass} flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1 sm:px-4 sm:py-1.5 ${className}`}>
       <div data-sample-line className="flex min-h-11 w-full min-w-0 items-center gap-3 sm:w-auto sm:flex-1 sm:gap-4">
-        <span data-sample-chip className="shrink-0 rounded-full bg-terracotta-light px-3 py-1 text-sm font-semibold whitespace-nowrap text-terracotta-dark">
+        <span data-sample-chip className="shrink-0 rounded-full bg-attention-tint px-3 py-1 text-sm font-semibold whitespace-nowrap text-attention">
           Sample data
         </span>
         {notice ? (
-          typeof notice === 'string' ? <p className="min-w-0 flex-1 text-base text-stone-600 dark:text-stone-300">{notice}</p> : <div className="min-w-0 flex-1">{notice}</div>
+          typeof notice === 'string' ? <p className="min-w-0 flex-1 text-base text-muted">{notice}</p> : <div className="min-w-0 flex-1">{notice}</div>
         ) : (
           <>
             <button
@@ -332,17 +332,17 @@ export function SampleBanner({
               data-sample-short
               aria-expanded={open}
               onClick={() => setOpen((o) => !o)}
-              className="flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-xl text-left text-sm text-stone-600 sm:hidden dark:text-stone-300"
+              className="flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-xl text-left text-sm text-muted sm:hidden"
             >
               <span className="truncate">{short}</span>
               <ChevronDown size={16} strokeWidth={2.2} aria-hidden className={`shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
               <span className="sr-only">{open ? 'Hide details' : 'Details'}</span>
             </button>
-            <p className="hidden min-w-0 flex-1 text-base text-stone-600 sm:block dark:text-stone-300">{text}</p>
+            <p className="hidden min-w-0 flex-1 text-base text-muted sm:block">{text}</p>
           </>
         )}
       </div>
-      {open && !notice && <p className="w-full pb-1.5 text-sm text-stone-600 sm:hidden dark:text-stone-300">{text}</p>}
+      {open && !notice && <p className="w-full pb-1.5 text-sm text-muted sm:hidden">{text}</p>}
       {children}
     </div>
   );
@@ -392,7 +392,7 @@ export function SectionTabs({ tabs, tab, onTab }: { tabs: Tab[]; tab: string; on
         slot="nav"
         data-bottom-nav=""
         aria-label="Sections"
-        className="hidden w-full gap-1 overflow-x-auto rounded-2xl border border-stone-200 bg-white p-1 sm:flex sm:w-auto dark:border-forest-600 dark:bg-forest-800"
+        className="hidden w-full gap-1 overflow-x-auto rounded-2xl border border-line bg-surface p-1 sm:flex sm:w-auto"
       >
         {tabs.map((t) => (
           <button
@@ -401,7 +401,7 @@ export function SectionTabs({ tabs, tab, onTab }: { tabs: Tab[]; tab: string; on
             onClick={() => onTab(t.id)}
             aria-current={t.id === tab ? 'page' : undefined}
             className={`min-h-11 flex-1 rounded-xl px-2 text-sm font-medium whitespace-nowrap transition-colors duration-150 sm:flex-none sm:px-5 sm:text-base ${
-              t.id === tab ? 'bg-forest-700 text-white dark:bg-forest-400 dark:text-forest-900' : 'text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-forest-700'
+              t.id === tab ? 'bg-primary text-on-primary' : 'text-muted hover:bg-stone-100 dark:hover:bg-forest-700'
             }`}
           >
             {t.label}
@@ -430,7 +430,7 @@ function BottomNav({ tabs, tab, onTab }: { tabs: Tab[]; tab: string; onTab: (id:
         type="button"
         {...props}
         className={`flex min-h-16 w-full min-w-0 flex-col items-center justify-center gap-1 px-1 text-xs font-medium transition-colors duration-150 ${
-          active ? 'text-forest-700 dark:text-forest-300' : 'text-stone-600 dark:text-stone-300'
+          active ? 'text-link' : 'text-muted'
         }`}
       >
         <span
@@ -448,7 +448,7 @@ function BottomNav({ tabs, tab, onTab }: { tabs: Tab[]; tab: string; onTab: (id:
       <nav
         {...{ [BOTTOM_NAV_ATTR]: '' }}
         aria-label="Sections"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] sm:hidden dark:border-forest-600 dark:bg-forest-800"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] sm:hidden"
       >
         <ul className="mx-auto flex max-w-lg">
           {bar.map((t) => item(t.id, t.short ?? t.label, t.icon, t.id === tab, { onClick: () => onTab(t.id), 'aria-current': t.id === tab ? 'page' : undefined }))}
@@ -477,7 +477,7 @@ function BottomNav({ tabs, tab, onTab }: { tabs: Tab[]; tab: string; onTab: (id:
                       onTab(t.id);
                     }}
                     className={`flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-base font-medium transition-colors duration-150 ${
-                      active ? 'bg-forest-50 text-forest-700 dark:bg-forest-700 dark:text-forest-200' : 'text-stone-800 hover:bg-stone-100 dark:text-stone-100 dark:hover:bg-forest-700'
+                      active ? 'bg-tint text-forest-700 dark:text-forest-200' : 'text-ink hover:bg-stone-100 dark:hover:bg-forest-700'
                     }`}
                   >
                     {Icon ? <Icon size={22} aria-hidden /> : null}

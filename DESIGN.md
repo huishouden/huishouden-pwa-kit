@@ -81,8 +81,9 @@ forest-600. Only the glyph changes between apps: portal `home` (a door), Tasks `
   linking to the portal, "Huishouden" over the app's short name (the portal shows "Huishouden"
   alone), the app's own tabs or switchers in the `nav` slot (beside the name on tablets, a second
   row on phones; section tabs move to the bottom bar on phones, below), app buttons in the `actions` slot, and on the right "Sign in with Google" or the
-  signed-in profile photo (`.hh-avatar`) opening the account menu: name, email, All apps, Sign out,
-  and the running version. `theme="dark"` for dark screens. Sticky, cream, a stone-200 rule below,
+  signed-in profile photo (`.hh-avatar`) opening the account menu: name, email, Theme (Automatic,
+  Light, Dark), All apps, Privacy, Sign out, and the running version; signed out, a Settings button
+  beside Sign in opens Theme and Privacy. The bar follows the suite's theme by itself. Sticky, cream, a stone-200 rule below,
   content width 1200px.
 - Sections: `SectionTabs` from `/react/ui`, never hand-built. From 640px they are a segmented
   control in the app bar. On phones they are a bar fixed to the bottom edge (no sideways-scrolling
@@ -103,17 +104,25 @@ forest-600. Only the glyph changes between apps: portal `home` (a door), Tasks `
 
 Only these, from `@huishouden/pwa-kit/theme.css` (Tailwind names in brackets):
 
-| Role | Light | Dark |
-|---|---|---|
-| Page | cream `#faf9f5` (`bg-cream`) | forest-900 |
-| Surface (cards, dialogs, bars) | white | forest-800 |
-| Text | stone-800 | stone-100 |
-| Secondary text | stone-600 (never lighter than stone-500 on white) | stone-300 |
-| Borders, dividers | stone-200 | forest-600 |
-| Primary (buttons, links, selected, focus) | forest-700, hover forest-600 | forest-400 on forest-900 text |
-| Positive values, success | forest-600 | forest-300 |
-| Attention (over budget, needs today) | terracotta `#c86d51` for fills and icons; terracotta-dark `#94452f` for text; tint terracotta-light | terracotta |
-| Error (failed action only) | red-700 | red-300 |
+| Role | Class (both themes) | Light | Dark |
+|---|---|---|---|
+| Page | `bg-page` | cream `#faf9f5` | forest-900 |
+| Surface (cards, dialogs, bars) | `bg-surface` | white | forest-800 |
+| Inset (a well inside a card) | `bg-sunken` | stone-100 | forest-900 |
+| Text | `text-ink` | stone-800 | stone-100 |
+| Strong secondary text (labels) | `text-ink-soft` | stone-700 | stone-200 |
+| Secondary text | `text-muted` | stone-600 (never lighter than stone-500 on white) | stone-300 |
+| Borders, dividers | `border-line`, `divide-line` | stone-200 | forest-600 |
+| Primary (buttons, selected) | `bg-primary text-on-primary`, `hover:bg-primary-hover` | forest-700 / white, hover forest-600 | forest-400 / forest-900, hover forest-300 |
+| Links, selected text | `text-link` | forest-700 | forest-300 |
+| Selected or hovered row | `bg-tint`, `bg-tint-strong` | forest-50, forest-100 | forest-700 |
+| Positive values, success | `text-positive` | forest-600 | forest-300 |
+| Attention (over budget, needs today) | `bg-attention-fill` for fills and icons; `text-attention` for text; `bg-attention-tint` | terracotta `#c86d51`; terracotta-dark `#94452f`; terracotta-light | terracotta; terracotta-light; terracotta-dark |
+| Error (failed action only) | `text-error`, `bg-error-tint` | red-700 on red-50 | red-300 on forest-800 |
+
+Prefer the class in the second column: it is right in both themes, so a screen needs no `dark:`
+twin. A palette colour (`bg-forest-600`) is for what has no role above, such as a chart series,
+and then carries its own `dark:` colour.
 
 Charts and categories use the muted categorical set, in this order:
 forest-600, terracotta, `#b08d57` (ochre), `#5b7a99` (slate blue), `#8a6f9e` (heather),
@@ -197,13 +206,36 @@ birthday, Biscuit!"). It is the only place an exclamation mark or decorative col
 - Text contrast ≥ 4.5:1 (3:1 for 24px+). Targets ≥ 44px. Visible focus ring (forest or terracotta).
 - Every icon-only button has an `aria-label`. Live regions for values that update on their own.
 
-## Dark and ambient modes
+## Dark
 
-Dark uses the forest scale, not grey: forest-900 page, forest-800 surfaces, stone-100 text,
-forest-400 primary. Dark is the app's setting, not the device's: an app that offers it puts `.dark`
-on `<html>`, and `@huishouden/pwa-kit/tailwind.css` makes `dark:` (and the `react/ui` components)
-follow that class, so apps without the setting stay light on a dark-mode phone. Ambient/dock modes are dark with larger type and no interactive chrome
-except an exit control.
+Every app has a dark theme, and one choice serves the whole suite: Automatic (the device's
+setting, the default), Light or Dark, in the app bar's menu (signed in: the account menu; signed
+out: Settings beside Sign in). The apps share one site, so choosing Dark in Pet turns the portal,
+Groceries and every other app dark too, open tabs included. `@huishouden/pwa-kit/theme` keeps the
+choice (`hh-theme` in localStorage) and puts `.dark` on `<html>`; `pwaApp` adds a small script to
+`<head>` that does so before the first paint, so a dark screen never flashes light. React apps
+read it with `useTheme()` (`/react/theme`) when they need to know, e.g. for a chart colour.
+
+- **Forest, not grey.** forest-900 page, forest-800 surfaces, forest-600 rules, stone-100 text,
+  stone-300 secondary text, forest-400 primary with forest-900 text, forest-300 links. The table
+  under Colour gives each role's class; use it rather than writing `dark:` twins.
+- **Contrast.** Text is at least 4.5:1 against what is behind it (3:1 at 24px or 18.66px bold),
+  in dark as in light. Terracotta itself is 3.9:1 on forest-800, so it is a fill or an icon in dark,
+  never text: attention text is terracotta-light (`text-attention`), the tint behind it
+  terracotta-dark. Errors are red-300. `expectThemeConsistent` checks the visible text.
+- **Status colours.** Overdue and over-budget keep terracotta; positive and done are forest-300;
+  the amber pending dot stays amber; person colours keep their white initial. A status never
+  relies on colour alone.
+- **Celebrations in dark.** The card is forest-800 with a forest-600 border, the title forest-300,
+  the terracotta badge unchanged and the confetti in the dark chart colours.
+- **Images and charts.** Photos are shown as they are, on a surface, never on a white box; line
+  and bar charts use forest-300 for the main series and forest-600 rules (`QuantityChart` does).
+  The categorical set swaps its two dark members, forest-600 for forest-400 and stone-500 for
+  stone-400 (`#a8a29e`), so every colour is at least 3:1 on forest-800; the rest stay.
+- **Paper is light.** Printing drops `.dark` (and the tokens fall back to light), so a printout is
+  black on white whatever the screen shows.
+- **Ambient and dock modes** are dark with larger type and no interactive chrome except an exit
+  control.
 
 ## Enforcement
 
@@ -211,5 +243,6 @@ except an exit control.
 |---|---|---|
 | `pwa-design-check` | CI build job, every PR | Off-palette Tailwind colours, gradients, raw hex, `backdrop-blur`, other fonts, emoji in UI text |
 | `expectHuishoudenFrame` | Smoke tests against the live site | App bar present, logo links to the portal, the app's name, Inter |
+| `expectThemeConsistent` | Smoke tests against the live site | Dark from the first paint on a dark device: `.dark`, dark page and bar, the dark status bar, no visible text under 4.5:1; back to light when the device is |
 | `expectBottomNav` | Smoke tests against the live site | Phone sections in a fixed bottom bar: at most five 48px items, current marked, content clear of it, More sheet over it; tabs back in the app bar on tablets |
 | `huishouden/design-language` reviewer | `cr review` on every PR | Everything above that needs judgment: hierarchy, copy tone, component shapes, consistency with the other apps |
