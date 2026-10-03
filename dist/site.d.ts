@@ -25,6 +25,8 @@ export declare function normalizePath(path: string): string;
  * An absolute link into this app, for anything that leaves the page (agenda items, reminders,
  * invitations): `appUrl(import.meta.env.BASE_URL, '?tab=care')`. The origin is the page's, so a
  * staging build links to staging. `origin` is for code that runs without a page (tests, scripts).
+ * The household rules accept only https links on agenda items and reminders, so a page served over
+ * http (a local dev or emulator server) should pass the production origin instead.
  */
 export declare function appUrl(base: string, path?: string, origin?: string): string;
 /** Checks the registry and returns the apps on the shared site, the portal (`/`) first. */
