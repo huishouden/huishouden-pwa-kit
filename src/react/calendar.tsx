@@ -79,8 +79,8 @@ export function matchWhen(m: CalendarMatch): string {
 
 /** One line before Google's first permission window, or why the search is off. */
 export function CalendarHint({ app, available }: { app: string; available: boolean }) {
-  if (!available) return <p className="text-base text-stone-600">Sign in to search your calendar.</p>;
-  if (!calendarAsked(app)) return <p className="text-base text-stone-600">Google will ask once to let {app} read your calendar. {app} never changes it.</p>;
+  if (!available) return <p className="text-base text-muted">Sign in to search your calendar.</p>;
+  if (!calendarAsked(app)) return <p className="text-base text-muted">Google will ask once to let {app} read your calendar. {app} never changes it.</p>;
   return null;
 }
 
@@ -95,7 +95,7 @@ export function CalendarFind({ auth, app, query, available, onPick }: { auth: Au
     <div className="space-y-2">
       <button
         type="button"
-        className={`${ghostButton} bg-forest-50 text-forest-700 hover:bg-forest-100 disabled:opacity-50`}
+        className={`${ghostButton} bg-tint text-link hover:bg-tint-strong disabled:opacity-50`}
         disabled={!available || !q || search.state.status === 'searching'}
         onClick={() => void search.run(query)}
       >
@@ -104,7 +104,7 @@ export function CalendarFind({ auth, app, query, available, onPick }: { auth: Au
       <CalendarHint app={app} available={available} />
       {search.state.status === 'error' && <ErrorNotice message={search.state.message} onRetry={() => void search.run(query)} />}
       {search.state.status === 'done' && search.state.matches.length === 0 && (
-        <p role="status" className="text-base text-stone-600">
+        <p role="status" className="text-base text-muted">
           No events matching "{q}" in your calendars from last week to a year ahead.
         </p>
       )}
@@ -118,12 +118,12 @@ export function CalendarFind({ auth, app, query, available, onPick }: { auth: Au
                   onPick(m);
                   search.reset();
                 }}
-                className="w-full rounded-xl border border-stone-200 px-3 py-2 text-left hover:border-forest-500 hover:bg-forest-50"
+                className="w-full rounded-xl border border-line px-3 py-2 text-left hover:border-forest-500 hover:bg-tint"
               >
-                <span className="block font-medium text-stone-800 [overflow-wrap:anywhere]">{m.title}</span>
-                <span className="block text-sm text-stone-600">{matchWhen(m)}</span>
+                <span className="block font-medium text-ink [overflow-wrap:anywhere]">{m.title}</span>
+                <span className="block text-sm text-muted">{matchWhen(m)}</span>
                 {m.location && (
-                  <span className="flex items-start gap-1 text-sm text-stone-600 [overflow-wrap:anywhere]">
+                  <span className="flex items-start gap-1 text-sm text-muted [overflow-wrap:anywhere]">
                     <MapPin size={14} className="mt-0.5 shrink-0" aria-hidden="true" /> {m.location}
                   </span>
                 )}
@@ -139,7 +139,7 @@ export function CalendarFind({ auth, app, query, available, onPick }: { auth: Au
 /** The linked calendar event inside a dialog, with a way to unlink it. */
 export function LinkedEvent({ link, onUnlink }: { link?: string; onUnlink: () => void }) {
   return (
-    <div className="flex items-center gap-2 rounded-xl bg-forest-50 py-0.5 pr-1 pl-3 text-base text-stone-700">
+    <div className="flex items-center gap-2 rounded-xl bg-tint py-0.5 pr-1 pl-3 text-base text-ink-soft">
       <span className="min-w-0 flex-1">From your calendar.</span>
       {link && (
         <a className={linkClass} href={link} target="_blank" rel="noopener noreferrer">
@@ -198,28 +198,28 @@ export function CalendarImportDialog({ state, records, intro, noneFound, allImpo
         </>
       }
     >
-      <p className="text-base text-stone-600">{intro}</p>
+      <p className="text-base text-muted">{intro}</p>
       {children}
       <div className="mt-4">
         {(state.status === 'searching' || state.status === 'idle') && (
-          <p role="status" className="text-base text-stone-600">
+          <p role="status" className="text-base text-muted">
             Searching your calendars
           </p>
         )}
         {state.status === 'error' && <ErrorNotice message={state.message} onRetry={onRetry} />}
         {state.status === 'done' && fresh.length === 0 && (
-          <p role="status" className="text-base text-stone-600">
+          <p role="status" className="text-base text-muted">
             {state.matches.length ? allImported : noneFound}
           </p>
         )}
         {fresh.length > 0 && (
-          <ul className="divide-y divide-stone-200 rounded-2xl border border-stone-200" aria-label="Calendar events">
+          <ul className="divide-y divide-line rounded-2xl border border-line" aria-label="Calendar events">
             {fresh.map((m) => (
               <li key={`${m.id}-${m.start}`} className="flex items-center gap-3 px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-stone-800 [overflow-wrap:anywhere]">{m.title}</p>
-                  <p className="text-sm text-stone-600">{matchWhen(m)}</p>
-                  {m.location && <p className="text-sm text-stone-600 [overflow-wrap:anywhere]">{m.location}</p>}
+                  <p className="font-medium text-ink [overflow-wrap:anywhere]">{m.title}</p>
+                  <p className="text-sm text-muted">{matchWhen(m)}</p>
+                  {m.location && <p className="text-sm text-muted [overflow-wrap:anywhere]">{m.location}</p>}
                 </div>
                 <button type="button" className={secondaryButton} onClick={() => onAdd([m])} aria-label={`Add ${m.title}`}>
                   <Plus size={18} /> Add
@@ -321,7 +321,7 @@ export function CalendarSuggestions({ suggestions, onAdd, onDismiss, now = Date.
       lead="New in your calendar"
       label="New in your calendar"
       moreLabel="More new calendar events"
-      icon={<CalendarPlus size={20} className="shrink-0 text-forest-700 dark:text-forest-300" aria-hidden="true" />}
+      icon={<CalendarPlus size={20} className="shrink-0 text-link" aria-hidden="true" />}
       onAdd={onAdd}
       onDismiss={onDismiss}
     />

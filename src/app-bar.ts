@@ -17,6 +17,7 @@
  * `undefined` while the session is being restored so neither the avatar nor Sign in flashes.
  */
 import { GLYPHS, logoSvg, type Glyph } from './logo';
+import { THEME_LABELS, THEME_MODES, getThemeMode, onThemeChange, setThemeMode, startTheme } from './theme';
 
 /** What the bar shows of the signed-in person. A Firebase `User` fits as it is. */
 export interface AppBarUser {
@@ -86,26 +87,27 @@ const STYLE = `
   z-index: 30;
   font-family: var(--hh-font, 'Inter', ui-sans-serif, system-ui, sans-serif);
   -webkit-tap-highlight-color: transparent;
-  --bar-bg: var(--hh-cream, #faf9f5);
-  --bar-border: #e7e5e4;
-  --bar-overline: #57534e;
-  --bar-title: var(--hh-forest-700, #1b4332);
-  --menu-bg: #fff;
-  --menu-border: #e7e5e4;
-  --menu-text: #292524;
-  --menu-muted: #57534e;
-  --item-text: var(--hh-forest-700, #1b4332);
-  --item-hover: var(--hh-forest-50, #f0f7f2);
-  --primary-bg: var(--hh-forest-700, #1b4332);
-  --primary-hover: var(--hh-forest-600, #2d6a4f);
-  --primary-text: #fff;
+  --bar-bg: var(--hh-page, #faf9f5);
+  --bar-border: var(--hh-line, #e7e5e4);
+  --bar-overline: var(--hh-muted, #57534e);
+  --bar-title: var(--hh-link, #1b4332);
+  --menu-bg: var(--hh-surface, #fff);
+  --menu-border: var(--hh-line, #e7e5e4);
+  --menu-text: var(--hh-ink, #292524);
+  --menu-muted: var(--hh-muted, #57534e);
+  --item-text: var(--hh-link, #1b4332);
+  --item-hover: var(--hh-tint, #f0f7f2);
+  --primary-bg: var(--hh-primary, #1b4332);
+  --primary-hover: var(--hh-primary-hover, #2d6a4f);
+  --primary-text: var(--hh-on-primary, #fff);
   --focus: var(--hh-terracotta, #c86d51);
 }
+/* Dark whatever the page says; the page's own .dark (./theme) already turns the bar dark through the variables above. */
 :host([theme='dark']) {
   --bar-bg: var(--hh-forest-900, #081c15);
-  --bar-border: var(--hh-forest-800, #12301f);
+  --bar-border: var(--hh-forest-600, #2d6a4f);
   --bar-overline: #d6d3d1;
-  --bar-title: #faf9f5;
+  --bar-title: var(--hh-forest-300, #95d5b2);
   --menu-bg: var(--hh-forest-800, #12301f);
   --menu-border: var(--hh-forest-600, #2d6a4f);
   --menu-text: #f5f5f4;
@@ -185,7 +187,7 @@ button { font-family: inherit; }
   height: 44px;
   padding: 0;
   overflow: hidden;
-  border: 2px solid #fff;
+  border: 2px solid var(--menu-bg);
   border-radius: 999px;
   background: var(--hh-forest-600, #2d6a4f);
   color: #fff;
@@ -196,12 +198,28 @@ button { font-family: inherit; }
   cursor: pointer;
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
+.menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--bar-title);
+  cursor: pointer;
+}
+.menu-button:hover { background: var(--item-hover); }
+.menu-button svg { width: 22px; height: 22px; }
+.signed-out { display: flex; align-items: center; gap: 4px; }
 .menu {
   position: absolute;
   top: 56px;
   right: 0;
   z-index: 40;
-  width: 256px;
+  width: 280px;
   max-width: calc(100vw - 32px);
   padding: 16px;
   border: 1px solid var(--menu-border);
@@ -232,11 +250,37 @@ button { font-family: inherit; }
   cursor: pointer;
 }
 .item:hover { background: var(--item-hover); }
+.theme-label { margin-top: 12px; font-size: 14px; line-height: 20px; font-weight: 500; color: var(--menu-muted); }
+.who-name + .theme-label, .who-email + .theme-label { margin-top: 12px; }
+.menu > .theme-label:first-child { margin-top: 0; }
+.modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px;
+  border: 1px solid var(--menu-border);
+  border-radius: 12px;
+}
+.mode {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--menu-text);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.mode:hover { background: var(--item-hover); }
+.mode[aria-pressed='true'] { background: var(--primary-bg); color: var(--primary-text); font-weight: 600; }
 .menu .version { margin-top: 8px; font-size: 12px; line-height: 16px; color: var(--menu-muted); }
-.signin, .avatar, .item { transition: background-color 150ms ease-out; }
+.signin, .avatar, .item, .mode, .menu-button { transition: background-color 150ms ease-out; }
 a:focus-visible, button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) {
-  .signin, .avatar, .item { transition: none; }
+  .signin, .avatar, .item, .mode, .menu-button { transition: none; }
 }
 `;
 
@@ -267,6 +311,7 @@ export class HhAppBar extends Base {
   #open = false;
   #root: ShadowRoot;
   #menuId = `hh-account-menu-${Math.random().toString(36).slice(2, 8)}`;
+  #offTheme: (() => void) | undefined;
 
   constructor() {
     super();
@@ -313,6 +358,9 @@ export class HhAppBar extends Base {
         (this as Record<string, unknown>)[key] = value;
       }
     }
+    startTheme();
+    this.#offTheme?.();
+    this.#offTheme = onThemeChange(this.#syncThemeChoice);
     this.#renderHome();
     this.#renderAccount();
     this.#syncNav();
@@ -320,6 +368,8 @@ export class HhAppBar extends Base {
 
   disconnectedCallback() {
     this.#setOpen(false);
+    this.#offTheme?.();
+    this.#offTheme = undefined;
   }
 
   attributeChangedCallback(name: string) {
@@ -374,7 +424,27 @@ export class HhAppBar extends Base {
         button.innerHTML = '<span>Sign in<span class="long">&nbsp;with Google</span></span>';
       }
       button.addEventListener('click', () => this.#emit(SIGN_IN_EVENT));
-      account.append(button);
+      // Signed out there is no avatar, so the theme and Privacy sit behind a small settings button.
+      const trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.className = 'menu-button';
+      trigger.setAttribute('part', 'menu-button');
+      trigger.setAttribute('aria-label', 'Settings');
+      trigger.innerHTML = SETTINGS_ICON; // trusted: static markup
+      this.#wireTrigger(trigger);
+      const menu = this.#menu();
+      menu.append(...this.#themeChoice());
+      const items = document.createElement('div');
+      items.className = 'items';
+      items.append(this.#privacyLink());
+      menu.append(items);
+      const version = versionLabel(this.app, this.version);
+      if (version) menu.append(paragraph('version', version));
+      const wrap = document.createElement('div');
+      wrap.className = 'signed-out';
+      wrap.append(trigger, button);
+      account.append(wrap, menu);
+      if (focused === 'menu-button') trigger.focus();
       return;
     }
 
@@ -405,17 +475,12 @@ export class HhAppBar extends Base {
     } else {
       avatar.append(initial());
     }
-    avatar.addEventListener('click', () => this.#setOpen(!this.#open));
+    this.#wireTrigger(avatar);
 
-    const menu = document.createElement('div');
-    menu.id = this.#menuId;
-    menu.className = 'menu';
-    menu.setAttribute('part', 'menu');
-    menu.hidden = !this.#open;
-    menu.setAttribute('role', 'group');
-    menu.setAttribute('aria-label', 'Account');
+    const menu = this.#menu();
     if (name) menu.append(paragraph('who-name', name));
     if (email) menu.append(paragraph('who-email', email));
+    menu.append(...this.#themeChoice());
     const items = document.createElement('div');
     items.className = 'items';
     // Every app shares the portal's origin (docs/one-site.md), so only the portal itself, by name, lacks the link.
@@ -426,11 +491,7 @@ export class HhAppBar extends Base {
       all.textContent = 'All apps';
       items.append(all);
     }
-    const privacy = document.createElement('a');
-    privacy.className = 'item';
-    privacy.href = privacyUrl(this.portalUrl, location.href);
-    privacy.textContent = 'Privacy';
-    items.append(privacy);
+    items.append(this.#privacyLink());
     const out = document.createElement('button');
     out.type = 'button';
     out.className = 'item';
@@ -448,10 +509,65 @@ export class HhAppBar extends Base {
     if (focused === 'avatar') avatar.focus();
   }
 
+  #wireTrigger(trigger: HTMLButtonElement) {
+    trigger.dataset.trigger = '';
+    trigger.setAttribute('aria-haspopup', 'true');
+    trigger.setAttribute('aria-controls', this.#menuId);
+    trigger.setAttribute('aria-expanded', String(this.#open));
+    trigger.addEventListener('click', () => this.#setOpen(!this.#open));
+  }
+
+  #menu() {
+    const menu = document.createElement('div');
+    menu.id = this.#menuId;
+    menu.className = 'menu';
+    menu.setAttribute('part', 'menu');
+    menu.hidden = !this.#open;
+    menu.setAttribute('role', 'group');
+    menu.setAttribute('aria-label', this.#user ? 'Account' : 'Settings');
+    return menu;
+  }
+
+  #privacyLink() {
+    const privacy = document.createElement('a');
+    privacy.className = 'item';
+    privacy.href = privacyUrl(this.portalUrl, location.href);
+    privacy.textContent = 'Privacy';
+    return privacy;
+  }
+
+  /** "Theme" and Automatic / Light / Dark: the suite's one choice (./theme), for every app at once. */
+  #themeChoice(): HTMLElement[] {
+    const label = paragraph('theme-label', 'Theme');
+    label.id = `${this.#menuId}-theme`;
+    const modes = document.createElement('div');
+    modes.className = 'modes';
+    modes.setAttribute('role', 'group');
+    modes.setAttribute('aria-labelledby', label.id);
+    modes.setAttribute('part', 'theme');
+    const chosen = getThemeMode();
+    for (const mode of THEME_MODES) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mode';
+      b.dataset.mode = mode;
+      b.textContent = THEME_LABELS[mode];
+      b.setAttribute('aria-pressed', String(mode === chosen));
+      b.addEventListener('click', () => setThemeMode(mode));
+      modes.append(b);
+    }
+    return [label, modes];
+  }
+
+  #syncThemeChoice = () => {
+    const chosen = getThemeMode();
+    this.#root.querySelectorAll<HTMLButtonElement>('.mode').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === chosen)));
+  };
+
   #setOpen(open: boolean, { restoreFocus = false } = {}) {
     if (open === this.#open) return;
     this.#open = open;
-    const avatar = this.#root.querySelector<HTMLButtonElement>('.avatar');
+    const avatar = this.#root.querySelector<HTMLButtonElement>('[data-trigger]');
     const menu = this.#root.querySelector<HTMLElement>('.menu');
     avatar?.setAttribute('aria-expanded', String(open));
     if (menu) menu.hidden = !open;
@@ -487,6 +603,10 @@ export class HhAppBar extends Base {
     this.dispatchEvent(new CustomEvent(type, { bubbles: true, composed: true }));
   }
 }
+
+// lucide "settings-2" (two sliders), stroke 2, coloured by the text colour.
+const SETTINGS_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 17H5"/><path d="M19 7h-9"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>';
 
 function paragraph(className: string, text: string) {
   const p = document.createElement('p');

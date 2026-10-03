@@ -230,6 +230,15 @@ export declare function linkPreview(options: Pick<PwaAppOptions, 'name' | 'descr
     name: string;
     transformIndexHtml(html: string): string;
 };
+/**
+ * The suite's light/dark choice (./theme) applied before the first paint: a small inline script at
+ * the end of <head> puts `.dark` on <html> and sets `color-scheme` and the theme-color meta, so a
+ * dark page never flashes light while the app's bundle loads.
+ */
+export declare function themeBoot(): {
+    name: string;
+    transformIndexHtml(html: string): string;
+};
 /** File-name prefix of the New Relic agent's chunks (`./observability`). */
 export declare const TELEMETRY_PREFIX = "hh-telemetry-";
 /** Those chunks, left out of the precache (`globIgnores`), whatever the assets directory. */

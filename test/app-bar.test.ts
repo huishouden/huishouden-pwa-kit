@@ -136,6 +136,50 @@ describe('<hh-app-bar>', () => {
     expect($('.menu')!.hidden).toBe(true);
   });
 
+  test('the account menu offers Automatic, Light and Dark for the whole suite', () => {
+    localStorage.removeItem('hh-theme');
+    const { bar, $ } = mount();
+    bar.user = { email: 'sam@example.com' };
+    ($('.avatar') as HTMLButtonElement).click();
+    const group = $('.menu .modes')!;
+    expect(group.getAttribute('role')).toBe('group');
+    expect(bar.shadowRoot!.getElementById(group.getAttribute('aria-labelledby')!)!.textContent).toBe('Theme');
+    const modes = Array.from(group.querySelectorAll<HTMLButtonElement>('.mode'));
+    expect(modes.map((b) => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([
+      ['Automatic', 'true'],
+      ['Light', 'false'],
+      ['Dark', 'false'],
+    ]);
+    modes[2].click();
+    expect(localStorage.getItem('hh-theme')).toBe('dark');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(modes.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true']);
+    // The menu stays open so the change can be seen and undone.
+    expect($('.menu')!.hidden).toBe(false);
+    modes[1].click();
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    localStorage.removeItem('hh-theme');
+  });
+
+  test('signed out: a Settings button opens the theme choice and Privacy', () => {
+    const { bar, $ } = mount();
+    bar.user = null;
+    const trigger = $('.menu-button') as HTMLButtonElement;
+    expect(trigger.getAttribute('aria-label')).toBe('Settings');
+    expect(trigger.getAttribute('aria-controls')).toBe($('.menu')!.id);
+    expect($('.menu')!.hidden).toBe(true);
+    trigger.click();
+    const menu = $('.menu')!;
+    expect(menu.hidden).toBe(false);
+    expect(menu.getAttribute('aria-label')).toBe('Settings');
+    expect(Array.from(menu.querySelectorAll('.mode')).map((b) => b.textContent)).toEqual(['Automatic', 'Light', 'Dark']);
+    expect(Array.from(menu.querySelectorAll('a.item')).map((a) => a.textContent)).toEqual(['Privacy']);
+    expect(menu.querySelector('button.item')).toBeNull();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(menu.hidden).toBe(true);
+    expect($('.signin')).not.toBeNull();
+  });
+
   test('the photo carries no referrer', () => {
     const { bar, $ } = mount();
     bar.user = { email: 'sam@example.com', photoURL: 'https://photos.example.com/sam.png' };

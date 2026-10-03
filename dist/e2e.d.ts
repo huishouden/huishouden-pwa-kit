@@ -78,6 +78,33 @@ export interface FrameOptions {
  * logo linking to the portal, the app's name, and the bar set in Inter.
  */
 export declare function expectHuishoudenFrame(page: Page, { app, portalUrl, path }: FrameOptions): Promise<void>;
+export interface ThemeOptions {
+    /** Page to load; defaults to the page as it is (reloaded). */
+    path?: string;
+    /** Also check that visible text reaches 4.5:1 (3:1 when large) against what is behind it, in dark. Default true. */
+    contrast?: boolean;
+    /** Text to leave out of the contrast check (a photo caption, a colour swatch). */
+    ignore?: RegExp;
+}
+export interface ContrastFailure {
+    text: string;
+    ratio: number;
+    color: string;
+    background: string;
+}
+/**
+ * The suite's theme (DESIGN.md "Dark") on the running app. With the choice on Automatic and the
+ * device dark, the page is dark from its first paint: `.dark` on <html>, a dark `color-scheme`,
+ * page and app bar on dark backgrounds, the dark status-bar colour, and (with `contrast`) no
+ * visible text under 4.5:1. Turning the device light then turns the page light without a reload.
+ */
+export declare function expectThemeConsistent(page: Page, { path, contrast, ignore }?: ThemeOptions): Promise<void>;
+/**
+ * In the page: visible text whose colour is under 4.5:1 (3:1 for 24px, or 18.66px bold) against
+ * the first solid background behind it. Text over images, inside hidden or faded parts, and SVG
+ * text are left out. At most 12, worst first.
+ */
+export declare function lowContrastText(): ContrastFailure[];
 export interface GoogleTokenStubOptions {
     /** The access token handed out (default "test-token"). */
     token?: string;

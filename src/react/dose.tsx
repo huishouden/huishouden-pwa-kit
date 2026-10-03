@@ -71,7 +71,7 @@ export function LabelScan({ onRead, intro = 'Take a photo of the pharmacy label.
   const lines = (scan.status === 'done' ? scan.text : '').split(/\n+/).map((l) => l.trim()).filter(Boolean);
 
   return (
-    <div className="space-y-3 rounded-2xl border border-stone-200 p-4 dark:border-forest-600">
+    <div className="space-y-3 rounded-2xl border border-line p-4">
       <input
         ref={photo}
         type="file"
@@ -87,24 +87,24 @@ export function LabelScan({ onRead, intro = 'Take a photo of the pharmacy label.
       <button type="button" className={secondaryButton} disabled={scan.status === 'reading'} onClick={() => photo.current?.click()}>
         <ScanText size={18} /> {scan.status === 'reading' ? `Reading the label ${Math.round(scan.progress * 100)}%` : scan.status === 'done' ? 'Scan again' : 'Scan the label'}
       </button>
-      {scan.status === 'idle' && <p className="text-sm text-stone-600 dark:text-stone-300">{intro}</p>}
+      {scan.status === 'idle' && <p className="text-sm text-muted">{intro}</p>}
       {scan.status === 'error' && (
-        <p role="alert" className="text-base text-red-700 dark:text-red-300">
+        <p role="alert" className="text-base text-error">
           Couldn't read that photo. Try again in good light with the label flat, or fill it in below.
         </p>
       )}
       {scan.status === 'done' && (
-        <div role="status" className="space-y-3 text-base text-stone-700 dark:text-stone-200">
+        <div role="status" className="space-y-3 text-base text-ink-soft">
           {scan.filled.length === 0 ? (
             <p>Nothing on that photo could be filled in. Try again closer, or fill it in below.</p>
           ) : (
             <section aria-label="Filled in from the label">
-              <p className="font-medium text-forest-700 dark:text-forest-300">Filled in from the label. Check each field before saving.</p>
+              <p className="font-medium text-link">Filled in from the label. Check each field before saving.</p>
               <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
                 {scan.filled.map((f) => (
                   <div key={f.label} className="contents">
-                    <dt className="text-stone-600 dark:text-stone-300">{f.label}</dt>
-                    <dd className="text-stone-800 dark:text-stone-100">{f.value}</dd>
+                    <dt className="text-muted">{f.label}</dt>
+                    <dd className="text-ink">{f.value}</dd>
                   </div>
                 ))}
               </dl>
@@ -112,7 +112,7 @@ export function LabelScan({ onRead, intro = 'Take a photo of the pharmacy label.
           )}
           {scan.parsed.assumptions.length > 0 && (
             <section aria-label="Check these">
-              <p className="text-sm font-medium text-stone-800 dark:text-stone-100">Check these</p>
+              <p className="text-sm font-medium text-ink">Check these</p>
               <ul className="list-disc pl-5 text-sm">
                 {scan.parsed.assumptions.map((a) => (
                   <li key={a}>{a}</li>
@@ -122,8 +122,8 @@ export function LabelScan({ onRead, intro = 'Take a photo of the pharmacy label.
           )}
           {scan.parsed.unparsed.length > 0 && (
             <section aria-label="Read but not used">
-              <p className="text-sm font-medium text-stone-800 dark:text-stone-100">Read but not used</p>
-              <p className="text-sm text-stone-600 dark:text-stone-300">Nothing above holds these lines. Add anything that matters to the notes yourself.</p>
+              <p className="text-sm font-medium text-ink">Read but not used</p>
+              <p className="text-sm text-muted">Nothing above holds these lines. Add anything that matters to the notes yourself.</p>
               <ul aria-label="Not used" className="mt-1 list-disc pl-5 text-sm">
                 {scan.parsed.unparsed.map((u) => (
                   <li key={u}>{u}</li>
@@ -132,12 +132,12 @@ export function LabelScan({ onRead, intro = 'Take a photo of the pharmacy label.
             </section>
           )}
           {scan.parsed.ignored.length > 0 && (
-            <p className="text-sm text-stone-600 dark:text-stone-300">
+            <p className="text-sm text-muted">
               Left out: {scan.parsed.ignored.length === 1 ? 'one pharmacy line' : `${scan.parsed.ignored.length} pharmacy lines`} (prescription number, quantity, address and the like).
             </p>
           )}
           {lines.length > 0 && (
-            <details className="text-sm text-stone-600 dark:text-stone-300">
+            <details className="text-sm text-muted">
               <summary className="cursor-pointer select-none py-1">Everything read from the photo</summary>
               <ul aria-label="Read from the photo" className="mt-1 space-y-0.5 pl-1">
                 {lines.map((l, i) => (

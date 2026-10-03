@@ -274,8 +274,8 @@ export function ContactDialog({
         </>
       }
     >
-      <section className="mb-5 space-y-3 rounded-2xl border border-stone-200 p-4" aria-labelledby="own-contacts">
-        <p id="own-contacts" className="text-sm font-medium text-stone-700">
+      <section className="mb-5 space-y-3 rounded-2xl border border-line p-4" aria-labelledby="own-contacts">
+        <p id="own-contacts" className="text-sm font-medium text-ink-soft">
           Already in your contacts?
         </p>
         <div className="flex flex-wrap gap-2">
@@ -313,7 +313,7 @@ export function ContactDialog({
               void findInGoogle();
             }}
           >
-            <label htmlFor="google-contacts-query" className="block text-sm font-medium text-stone-700">
+            <label htmlFor="google-contacts-query" className="block text-sm font-medium text-ink-soft">
               Name, email or phone
             </label>
             <div className="flex gap-2">
@@ -322,33 +322,33 @@ export function ContactDialog({
                 <Search size={18} aria-hidden="true" /> Search
               </button>
             </div>
-            <p className="text-sm text-stone-600">If Google says it hasn’t verified this app, choose Advanced, then continue: the app only reads your contacts.</p>
+            <p className="text-sm text-muted">If Google says it hasn’t verified this app, choose Advanced, then continue: the app only reads your contacts.</p>
           </form>
         )}
         {own.status === 'busy' && (
-          <p role="status" className="text-base text-stone-600">
+          <p role="status" className="text-base text-muted">
             {own.doing}
           </p>
         )}
         {own.status === 'none' && (
-          <p role="status" className="text-base text-stone-600">
+          <p role="status" className="text-base text-muted">
             {own.message}
           </p>
         )}
         {own.status === 'error' && <ErrorNotice message={own.message} onRetry={own.retry} />}
         {own.status === 'choose' && (
           <div className="space-y-1.5">
-            <p className="text-sm text-stone-600">{own.source === 'google' ? 'Choose who to add.' : `${CARD_WORDS[own.source][0].toUpperCase()}${CARD_WORDS[own.source].slice(1)} has ${own.cards.length} people. Choose one.`}</p>
+            <p className="text-sm text-muted">{own.source === 'google' ? 'Choose who to add.' : `${CARD_WORDS[own.source][0].toUpperCase()}${CARD_WORDS[own.source].slice(1)} has ${own.cards.length} people. Choose one.`}</p>
             <ul className="grid gap-1.5" aria-label="Contacts to choose from">
               {own.cards.map((c, i) => (
                 <li key={i}>
                   <button
                     type="button"
                     onClick={() => fillFromContact(c, own.source)}
-                    className="w-full rounded-xl border border-stone-200 px-3 py-2 text-left hover:border-forest-500 hover:bg-forest-50"
+                    className="w-full rounded-xl border border-line px-3 py-2 text-left hover:border-forest-500 hover:bg-tint"
                   >
-                    <span className="block font-medium text-stone-800 [overflow-wrap:anywhere]">{c.name}</span>
-                    {contactSummary(c) && <span className="block text-sm text-stone-600 [overflow-wrap:anywhere]">{contactSummary(c)}</span>}
+                    <span className="block font-medium text-ink [overflow-wrap:anywhere]">{c.name}</span>
+                    {contactSummary(c) && <span className="block text-sm text-muted [overflow-wrap:anywhere]">{contactSummary(c)}</span>}
                   </button>
                 </li>
               ))}
@@ -356,13 +356,13 @@ export function ContactDialog({
           </div>
         )}
         {own.status === 'done' && (
-          <p role="status" className="text-base text-stone-700">
+          <p role="status" className="text-base text-ink-soft">
             {own.filled.length ? `Filled in the ${listWords(own.filled)} from ${CARD_WORDS[own.source]}. Check them before saving.` : `${own.name} had no details to fill in.`}
           </p>
         )}
       </section>
 
-      <section className="mb-5 space-y-3 rounded-2xl border border-stone-200 p-4">
+      <section className="mb-5 space-y-3 rounded-2xl border border-line p-4">
         <form
           className="space-y-1.5"
           onSubmit={(e) => {
@@ -370,7 +370,7 @@ export function ContactDialog({
             void find();
           }}
         >
-          <label htmlFor="place-query" className="block text-sm font-medium text-stone-700">
+          <label htmlFor="place-query" className="block text-sm font-medium text-ink-soft">
             Find a business
           </label>
           <div className="flex gap-2">
@@ -382,7 +382,7 @@ export function ContactDialog({
         </form>
         {search.status === 'error' && <ErrorNotice message="Couldn't reach OpenStreetMap. Check the connection." onRetry={() => void find()} />}
         {search.status === 'done' && search.places.length === 0 && (
-          <p role="status" className="text-base text-stone-600">
+          <p role="status" className="text-base text-muted">
             No places found for "{search.query}".
           </p>
         )}
@@ -390,18 +390,18 @@ export function ContactDialog({
           <ul className="grid gap-1.5" aria-label="Places">
             {search.places.slice(0, 5).map((p) => (
               <li key={p.osmUrl}>
-                <button type="button" onClick={() => pick(p)} className="w-full rounded-xl border border-stone-200 px-3 py-2 text-left hover:border-forest-500 hover:bg-forest-50">
-                  <span className="block font-medium text-stone-800 [overflow-wrap:anywhere]">{p.name}</span>
-                  {p.address && <span className="block text-sm text-stone-600 [overflow-wrap:anywhere]">{p.address}</span>}
+                <button type="button" onClick={() => pick(p)} className="w-full rounded-xl border border-line px-3 py-2 text-left hover:border-forest-500 hover:bg-tint">
+                  <span className="block font-medium text-ink [overflow-wrap:anywhere]">{p.name}</span>
+                  {p.address && <span className="block text-sm text-muted [overflow-wrap:anywhere]">{p.address}</span>}
                   {(p.phone || p.website) && (
-                    <span className="block text-sm text-stone-600 [overflow-wrap:anywhere]">{[p.phone, p.website?.replace(/^https?:\/\//, '')].filter(Boolean).join(' · ')}</span>
+                    <span className="block text-sm text-muted [overflow-wrap:anywhere]">{[p.phone, p.website?.replace(/^https?:\/\//, '')].filter(Boolean).join(' · ')}</span>
                   )}
                 </button>
               </li>
             ))}
           </ul>
         )}
-        <div className="flex flex-wrap items-center gap-x-3 text-sm text-stone-600">
+        <div className="flex flex-wrap items-center gap-x-3 text-sm text-muted">
           <span>Results from OpenStreetMap. Missing a phone number? Check Google Maps.</span>
           {mapsQuery && (
             <a className={`${linkClass} text-sm`} href={mapsSearchUrl(mapsQuery)} target="_blank" rel="noopener noreferrer">
@@ -409,8 +409,8 @@ export function ContactDialog({
             </a>
           )}
         </div>
-        <div className="space-y-2 border-t border-stone-200 pt-3">
-          <p className="text-sm text-stone-600">Not listed? Take a screenshot of the business in Google Maps, then choose it here.</p>
+        <div className="space-y-2 border-t border-line pt-3">
+          <p className="text-sm text-muted">Not listed? Take a screenshot of the business in Google Maps, then choose it here.</p>
           <div className="flex flex-wrap gap-2">
             <button type="button" className={secondaryButton} disabled={fill.status === 'reading'} onClick={() => fileInput.current?.click()}>
               <ImageUp size={18} aria-hidden="true" /> Fill from a screenshot
@@ -455,7 +455,7 @@ export function ContactDialog({
             </div>
           )}
           {fill.status === 'reading' && (
-            <p role="status" className="text-base text-stone-600">
+            <p role="status" className="text-base text-muted">
               {fill.progress === undefined ? 'Getting the text reader ready…' : `Reading the screenshot… ${Math.round(fill.progress * 100)}%`}
             </p>
           )}
@@ -480,7 +480,7 @@ export function ContactDialog({
           <input className={inputClass} value={name} maxLength={CONTACT_LIMITS.name} onChange={(e) => setName(e.target.value)} placeholder={namePlaceholder} />
         </Field>
         <fieldset>
-          <legend className="mb-1.5 block text-sm font-medium text-stone-700">Role</legend>
+          <legend className="mb-1.5 block text-sm font-medium text-ink-soft">Role</legend>
           <div className="mb-2 flex flex-wrap gap-2">
             {roles.map((r) => (
               <Chip key={r} active={role.trim().toLowerCase() === r.toLowerCase()} onClick={() => setRole(r)}>
@@ -545,7 +545,7 @@ function FillNote({ source, place, filled }: { source: FillSource; place: Parsed
   const from = SOURCE_WORDS[source];
   const unparsed = place.unparsed.slice(0, 8);
   return (
-    <div role="status" className="space-y-1 text-base text-stone-700">
+    <div role="status" className="space-y-1 text-base text-ink-soft">
       {filled.length ? (
         <p>
           Filled in the {listWords(filled)} from {from}. Check them before saving.
@@ -557,7 +557,7 @@ function FillNote({ source, place, filled }: { source: FillSource; place: Parsed
         </p>
       )}
       {unparsed.length > 0 && (
-        <details className="text-sm text-stone-500">
+        <details className="text-sm text-muted">
           <summary className="cursor-pointer select-none py-1">Show the text that wasn't used</summary>
           <ul className="mt-1 list-disc pl-5">
             {unparsed.map((line, i) => (
@@ -583,7 +583,7 @@ export function PrivateCheckbox({ checked, onChange }: { checked: boolean; onCha
       <Checkbox checked={checked} onChange={onChange}>
         Only admins and members
       </Checkbox>
-      <p className="ml-9 text-sm text-stone-600 dark:text-stone-300">Helpers and kids won’t see it.</p>
+      <p className="ml-9 text-sm text-muted">Helpers and kids won’t see it.</p>
     </div>
   );
 }
@@ -591,7 +591,7 @@ export function PrivateCheckbox({ checked, onChange }: { checked: boolean; onCha
 /** The quiet "Private" marker on a record only admins and members see. */
 export function PrivateMark() {
   return (
-    <span className="inline-flex items-center gap-1 text-sm font-medium text-stone-600 dark:text-stone-300">
+    <span className="inline-flex items-center gap-1 text-sm font-medium text-muted">
       <Lock size={14} aria-hidden="true" /> Private
     </span>
   );
@@ -609,7 +609,7 @@ export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: C
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className={overline}>{role}</p>
-          <h3 className="mt-0.5 text-xl font-semibold text-stone-800 [overflow-wrap:anywhere]">{c.name}</h3>
+          <h3 className="mt-0.5 text-xl font-semibold text-ink [overflow-wrap:anywhere]">{c.name}</h3>
           {c.private && <PrivateMark />}
         </div>
         {onEdit && (
@@ -641,9 +641,9 @@ export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: C
         )}
       </div>
       {c.address && (
-        <div className="mt-1 text-base text-stone-700">
+        <div className="mt-1 text-base text-ink-soft">
           <p className="flex items-start gap-1.5">
-            <MapPin size={18} className="mt-0.5 shrink-0 text-stone-600" aria-hidden="true" /> <span className="[overflow-wrap:anywhere]">{c.address}</span>
+            <MapPin size={18} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" /> <span className="[overflow-wrap:anywhere]">{c.address}</span>
           </p>
           {maps && (
             <a className={linkClass} href={maps} target="_blank" rel="noopener noreferrer">
@@ -652,7 +652,7 @@ export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: C
           )}
         </div>
       )}
-      {c.notes && <p className="mt-2 text-base whitespace-pre-line text-stone-600">{c.notes}</p>}
+      {c.notes && <p className="mt-2 text-base whitespace-pre-line text-muted">{c.notes}</p>}
     </section>
   );
 }

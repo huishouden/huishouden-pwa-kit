@@ -77,8 +77,8 @@ export function RulePicker({ rule, onChange, today, label = 'Repeats' }: { rule:
       : [];
 
   return (
-    <fieldset className="space-y-3 rounded-2xl border border-stone-200 p-4 dark:border-forest-600">
-      <legend className="px-1 text-sm font-medium text-stone-700 dark:text-stone-200">{label}</legend>
+    <fieldset className="space-y-3 rounded-2xl border border-line p-4">
+      <legend className="px-1 text-sm font-medium text-ink-soft">{label}</legend>
       <div className="flex flex-wrap gap-2">
         <Chip active={mode === 'week'} onClick={() => setMode('week')}>Every week</Chip>
         <Chip active={mode === 'weeks'} onClick={() => setMode('weeks')}>Every few weeks</Chip>
@@ -87,7 +87,7 @@ export function RulePicker({ rule, onChange, today, label = 'Repeats' }: { rule:
       </div>
 
       {(mode === 'weeks' || mode === 'month') && (
-        <label className="flex items-center gap-2 text-base text-stone-700 dark:text-stone-200">
+        <label className="flex items-center gap-2 text-base text-ink-soft">
           <span>Every</span>
           <select
             className={`${selectClass} w-auto tabular-nums`}
@@ -148,8 +148,8 @@ export function PrepPicker({ prep, onChange, placeholder = 'Take the garbage out
   const preset = prep ? PREP_PRESETS.find((p) => samePrep(p.offset, prep.offset)) : undefined;
   const set = (patch: Partial<EventPrep>) => prep && onChange({ ...prep, ...patch });
   return (
-    <fieldset className="space-y-3 rounded-2xl border border-stone-200 p-4 dark:border-forest-600">
-      <legend className="px-1 text-sm font-medium text-stone-700 dark:text-stone-200">Something to do before</legend>
+    <fieldset className="space-y-3 rounded-2xl border border-line p-4">
+      <legend className="px-1 text-sm font-medium text-ink-soft">Something to do before</legend>
       <Checkbox checked={!!prep} onChange={(on) => onChange(on ? { title: suggestedTitle, offset: PREP_PRESETS[0].offset, remind: true } : null)}>
         Something to do before each one
       </Checkbox>
@@ -171,7 +171,7 @@ export function PrepPicker({ prep, onChange, placeholder = 'Take the garbage out
           <div className="flex flex-wrap items-end gap-3">
             {!preset && (
               <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-200">Days before</span>
+                <span className="mb-1.5 block text-sm font-medium text-ink-soft">Days before</span>
                 <select className={`${selectClass} w-auto tabular-nums`} value={prep.offset.daysBefore} onChange={(e) => set({ offset: { ...prep.offset, daysBefore: Number(e.target.value) } })}>
                   {Array.from({ length: MAX_PREP_DAYS + 1 }, (_, n) => (
                     <option key={n} value={n}>{n === 0 ? 'Same day' : n}</option>
@@ -180,7 +180,7 @@ export function PrepPicker({ prep, onChange, placeholder = 'Take the garbage out
               </label>
             )}
             <label className="block">
-              <span className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-200">By</span>
+              <span className="mb-1.5 block text-sm font-medium text-ink-soft">By</span>
               <input
                 className={`${inputClass} w-auto`}
                 type="time"
@@ -189,7 +189,7 @@ export function PrepPicker({ prep, onChange, placeholder = 'Take the garbage out
               />
             </label>
           </div>
-          <p className="text-sm text-stone-600 dark:text-stone-300">{describePrep(prep.offset)}.</p>
+          <p className="text-sm text-muted">{describePrep(prep.offset)}.</p>
           <Checkbox checked={prep.remind} onChange={(remind) => set({ remind })}>
             Send a reminder then
           </Checkbox>

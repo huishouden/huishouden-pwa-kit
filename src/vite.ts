@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { VitePWA, type VitePWAOptions } from 'vite-plugin-pwa';
 import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
+import { THEME_BOOT_SCRIPT } from './theme.js';
 import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource } from './share-sw.js';
 
 export interface PwaAppOptions {
@@ -65,7 +66,7 @@ export interface PwaAppOptions {
 export function pwaApp(options: PwaAppOptions) {
   const { overrides = {} } = options;
   const base = normalizeBase(options.base);
-  return [sitePath(base), buildStamp(), telemetryChunks(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
+  return [sitePath(base), buildStamp(), telemetryChunks(), linkPreview(options), themeBoot(), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
     registerType: 'autoUpdate',
     includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
     base,
@@ -171,6 +172,21 @@ export function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' 
       const cleaned = html.replace(/\s*<meta\s+(?:name="description"|(?:property|name)="(?:og|twitter):[^"]*")[^>]*>/g, '');
       const meta = tags.map(([attr, key, value]) => `    <meta ${attr}="${key}" content="${escapeAttr(value)}" />`).join('\n');
       return cleaned.replace(/<\/head>/, `${meta}\n  </head>`);
+    },
+  };
+}
+
+/**
+ * The suite's light/dark choice (./theme) applied before the first paint: a small inline script at
+ * the end of <head> puts `.dark` on <html> and sets `color-scheme` and the theme-color meta, so a
+ * dark page never flashes light while the app's bundle loads.
+ */
+export function themeBoot() {
+  return {
+    name: 'huishouden-theme-boot',
+    transformIndexHtml(html: string) {
+      if (html.includes('data-hh-theme-boot')) return html;
+      return html.replace(/<\/head>/, `    <script data-hh-theme-boot>${THEME_BOOT_SCRIPT}</script>\n  </head>`);
     },
   };
 }
