@@ -88,8 +88,15 @@ async function loadRegistry(): Promise<unknown> {
 
 /** The latest published build of `repo` for `flavor`: its asset id, or null when it has none. */
 async function latestAsset(repo: string, flavor: string): Promise<number | null> {
-  const release = (await getJson(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${RELEASE_TAG}`, true)) as { assets?: { id: number; name: string }[] } | null;
-  return release?.assets?.find((a) => a.name === assetName(flavor))?.id ?? null;
+  for (let attempt = 1; ; attempt++) {
+    const release = (await getJson(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${RELEASE_TAG}`, true)) as { assets?: { id: number; name: string }[] } | null;
+    if (!release) return null;
+    const id = release.assets?.find((a) => a.name === assetName(flavor))?.id;
+    if (id !== undefined) return id;
+    // A release without the asset is most likely mid-replacement (upload --clobber deletes first).
+    if (attempt >= 4) return null;
+    await Bun.sleep(5000);
+  }
 }
 
 function tar(args: string[]) {
