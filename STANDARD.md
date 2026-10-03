@@ -28,9 +28,12 @@ user of it (dogfooding), never a special case. So:
 
 ## Shape
 
-- **One repo per app**. Its own CI, its own deploys.
-- **One Firebase project per family of apps** that share users and data. Each app gets its own
-  Hosting site (`<family>-<app>.web.app`) and its own Firebase web app registration.
+- **One repo per app**. Its own CI, tests, staging runs and releases.
+- **One Firebase project per family of apps** that share users and data, and **one site**: the
+  portal at `/` of `<family>.web.app`, each app under its own path (`/pet/`), so the installed
+  portal opens every app in one window and one sign-in covers all of them (see One site). Each app
+  still has its own Firebase web app registration and its own Hosting site, which serves the
+  redirect from its old address and, on staging, the app's pull requests.
   Unrelated or shareable projects get their own Firebase project.
 - **Stack**: Vite + TypeScript, `vite-plugin-pwa` (Workbox), bun. React where the app has state;
   plain TS is fine for static pages like the portal.
@@ -39,15 +42,42 @@ user of it (dogfooding), never a special case. So:
 
 ## PWA
 
-- Manifest: `display: standalone`, `start_url` and `scope` `/`, icons at 192 and 512 plus a
-  512 maskable icon. Generate PNGs from one SVG (`bunx pwa-icons`).
-- Use `pwaApp()` from `@huishouden/pwa-kit/vite`. It sets `registerType: 'autoUpdate'` (installed
-  copies update on the next launch) and **`navigateFallbackDenylist: [/^\/__\//]`**. Firebase serves its sign-in popup at
+- Manifest: `display: standalone`; `id`, `start_url` and `scope` the app's path (`/pet/`; the
+  portal's `/`), icons at 192 and 512 plus a 512 maskable icon under it. Generate PNGs from one SVG
+  (`bunx pwa-icons`).
+- Use `pwaApp({ base: '/pet/' })` from `@huishouden/pwa-kit/vite`; `base` sets all of the above and
+  Vite's `base`. It sets `registerType: 'autoUpdate'` (installed copies update on the next launch)
+  and **`navigateFallbackDenylist`** with `/^\/__\//`. Firebase serves its sign-in popup at
   `/__/auth/handler`; without this the service worker answers it with the cached app and
-  "Sign in with Google" opens the app instead of Google.
-- Hosting headers: `sw.js`, `registerSW.js`, `index.html` and the manifest `no-cache`;
-  `/assets/**` immutable for a year (`templates/firebase.json`).
+  "Sign in with Google" opens the app instead of Google. The portal also passes `otherApps` (the
+  paths in `apps.json`), so its worker never answers a navigation into an app with the portal.
+- Hosting headers: each path's `sw.js`, `registerSW.js`, `index.html` and the manifest `no-cache`;
+  `assets/` immutable for a year (the combined `firebase.json`, generated; see One site).
 - Tablet first: test at 1280×800 landscape; tap targets at least 44 px.
+
+## One site
+
+All apps share one origin ([docs/one-site.md](docs/one-site.md) has the design and the reasons).
+
+- **Paths**: `/` is the portal, `/<repo>/` each app. `apps.json` in the portal repo lists every app
+  with its `path`; the portal's tiles, the site's routing and its headers come from it.
+- **Links**: between apps, same-origin paths (`/`, `/pet/`, the portal's `/privacy`), never an
+  absolute address, so staging links stay on staging. Anything stored or sent (agenda `url`,
+  reminder `url`, invitations) uses `appUrl(import.meta.env.BASE_URL, …)` from `./site`: the
+  page's origin plus the app's path. Inside an app, build paths from `import.meta.env.BASE_URL`;
+  `location.pathname` includes the app's path.
+- **Tests**: `BASE_URL` is the app's path (`https://<site>/pet/`), so specs navigate with relative
+  paths (`./`, `?tab=care`); a leading `/` lands on the portal.
+- **Storage**: every app shares `localStorage`, IndexedDB and Cache Storage. Prefix a new
+  `localStorage` key with the app's short name (`pet-…`) unless sharing it is the point, and say
+  so where it is defined. Shared on purpose: the Firebase Auth session (one sign-in), Firestore's
+  cache (multi-tab, any app), the write outbox (`hh-outbox:`, replayed by whichever app opens
+  next), Google API tokens (`hh-google-tokens`).
+- **Deploys**: no repo deploys alone. `pwa.yml` with `base` publishes each build of `main` as the
+  repo's `hosting` release asset and deploys the whole site from every app's latest asset; the
+  portal reconciles every 30 minutes. A failed build never replaces an app's last good one.
+- **Old addresses**: `<family>-<app>.web.app` 301s every path to the app's path, query kept, and
+  serves a `/sw.js` that retires the old installed copy (`"redirect": true` in `apps.json`).
 
 ## Security headers
 
@@ -306,8 +336,9 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 |---|---|---|
 | `leak-scan` | every PR and push | gitleaks on the added commits (`actions/leak-scan`) |
 | `build` | every PR and push | `bun install --frozen-lockfile`, lint (`tsc --noEmit`), `pwa-design-check`, `pwa-write-check`, `pwa-headers-check`, unit tests, build |
-| `deploy` | push to `main` | Keyless via Workload Identity Federation; `firebase deploy --only hosting:<target>` |
-| `smoke` | after `deploy` | Playwright against the live site |
+| `publish` | push to `main`, with `base` | The build (and a staging build) as `site.tar.gz` / `site-staging.tar.gz` on the repo's `hosting` pre-release |
+| `deploy` | push to `main`; the portal's schedule with `reconcile` | Keyless via Workload Identity Federation; with `base`, `pwa-site assemble` (every app's latest asset under its path, the combined `firebase.json`) and `firebase deploy`, rechecked for builds published meanwhile; without, `firebase deploy --only hosting:<target>` |
+| `smoke` | after `deploy` | Playwright against the live app path |
 | `staging` | same-repo PRs that change more than docs; manual runs with `staging-ref` | Build against the staging project, deploy to the app's staging site, seed, `e2e` and `e2e:signed-in` there (see Staging) |
 
 - Repo variables (not secrets; the Firebase web config is public by design): `GCP_WIF_PROVIDER`,
@@ -327,15 +358,18 @@ Firebase project, `huishouden-staging` (Spark, free), with its own Firestore, ru
 nothing deployed or tested there can read or write real household data.
 
 - **Sites**: each app has `huishouden-staging-<app>.web.app`; the portal is
-  `huishouden-staging.web.app`. One site per app: a PR deploy replaces the previous one, and the
-  PR comment says which commit is there.
+  `huishouden-staging.web.app`. A PR deploys the whole suite there, as production is laid out: its
+  own build under its path, every other app's latest staging build (`site-staging.tar.gz`) under
+  theirs, so `https://huishouden-staging-pet.web.app/pet/` is the PR and `/` its portal. One site
+  per app, so two repos' PRs never overwrite each other; a PR deploy replaces the app's previous
+  one, and the PR comment says which commit is there.
 - **When it deploys**: every pull request from a branch of the same repo (never a fork's) that
   changes more than `docs/`, `*.md` or `LICENSE`. The PR gets a comment with the URL and the result,
   and the `staging` environment links the deployment. A manual run of the app's `ci` workflow with
   `staging-ref` (a branch, tag or SHA) deploys that ref to staging instead of production. Main still
   deploys to production only.
 - **What runs there**: the build with the `STAGING_VITE_FIREBASE_*` variables, the deploy, the seed
-  (`pwa-staging seed`), then `e2e` and `e2e:signed-in` against the staging site. A failure fails the
+  (`pwa-staging seed`), then `e2e` and `e2e:signed-in` against the app's path on the staging site. A failure fails the
   PR's checks.
 - **Test users**: `test-a@example.com` (admin), `test-b@example.com` (member) and
   `test-helper@example.com` (helper) (uids `test-a`, `test-b`, `test-helper`, emails verified), all

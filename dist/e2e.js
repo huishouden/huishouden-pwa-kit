@@ -1,8 +1,11 @@
 import { expect } from '@playwright/test';
 import { CONTENT_SECURITY_POLICY, permissionsPolicy } from './security-headers.js';
 import { mintCustomToken, stagingCredentialsFromEnv, stagingWebConfig, testUser } from './staging.js';
+// Paths: every helper's default is `./`, which is BASE_URL itself. On the suite's one site BASE_URL
+// is the app's path (`https://<site>/pet/`), so pass relative paths (`?tab=care`, `settings`): a
+// leading `/` goes to the site root, which is the portal (docs/one-site.md).
 /** Loads `path` and fails on any uncaught page error. Returns the errors seen for further checks. */
-export async function expectCleanLoad(page, path = '/') {
+export async function expectCleanLoad(page, path = './') {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(path, { waitUntil: 'networkidle' });
@@ -13,7 +16,7 @@ export async function expectCleanLoad(page, path = '/') {
  * Installability as browsers judge it: a standalone manifest with a 512px icon, every icon URL
  * loading, and a service worker controlling the page after one reload.
  */
-export async function expectInstallable(page, request, path = '/') {
+export async function expectInstallable(page, request, path = './') {
     await page.goto(path, { waitUntil: 'networkidle' });
     const href = await page.locator('link[rel="manifest"]').first().getAttribute('href');
     expect(href, 'manifest link').toBeTruthy();
@@ -54,7 +57,7 @@ export async function shareContactCard(page, card, { name = 'contact.vcf', path 
  * /__/auth/handler redirect that Google accepts. Runs on a second load so the service worker is in
  * control, which is when a cached-app fallback would hijack the popup. Needs no credentials.
  */
-export async function expectGoogleSignInPopup(page, context, openPopup, path = '/') {
+export async function expectGoogleSignInPopup(page, context, openPopup, path = './') {
     await page.goto(path, { waitUntil: 'networkidle' });
     await page.reload({ waitUntil: 'networkidle' });
     const [popup] = await Promise.all([context.waitForEvent('page'), openPopup(page)]);
@@ -65,11 +68,11 @@ export async function expectGoogleSignInPopup(page, context, openPopup, path = '
     await expect(popup.locator('body')).toContainText(/Sign in|Choose an account/);
 }
 /**
- * The site's security headers as served (STANDARD.md "Security headers"): `url` (default `/`) is
+ * The site's security headers as served (STANDARD.md "Security headers"): `url` (default `./`, the app's own path) is
  * frame-denied, sniff-proof and sends only the device permissions in `features`, while the same
  * origin's `/__/auth/handler` is not frame-denied, so Google sign-in keeps working.
  */
-export async function expectSecurityHeaders(request, url = '/', features = {}) {
+export async function expectSecurityHeaders(request, url = './', features = {}) {
     const res = await request.get(url);
     expect(res.ok(), `${url} loads`).toBe(true);
     const h = res.headers();
@@ -115,7 +118,7 @@ export async function expectCompactSampleBanner(page, path) {
  */
 export async function captureScreenshot(page, name, options = {}) {
     // SCREENSHOT_DIR lets CI shoot the same scenes into before/ and after/ folders for PR evidence.
-    const { path = '/', fixedTime, dir = process.env.SCREENSHOT_DIR || 'docs/screenshots', prepare } = options;
+    const { path = './', fixedTime, dir = process.env.SCREENSHOT_DIR || 'docs/screenshots', prepare } = options;
     if (fixedTime)
         await page.clock.setFixedTime(fixedTime);
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -201,7 +204,7 @@ export const FIREBASE_WEB_SDK = '12.19.0';
  * app's own Firebase finds it on load, exactly as after a real sign-in. Needs the staging CI job's
  * HH_STAGING_ACCESS_TOKEN and HH_STAGING_SA; call `test.skip(!process.env.HH_STAGING_SA)` around it.
  */
-export async function signInTestUser(page, { email, path = '/', sdkVersion = FIREBASE_WEB_SDK, env = process.env }) {
+export async function signInTestUser(page, { email, path = './', sdkVersion = FIREBASE_WEB_SDK, env = process.env }) {
     const { accessToken, serviceAccount } = stagingCredentialsFromEnv(env);
     testUser(email);
     const res = await page.goto('/__/firebase/init.json');

@@ -4,17 +4,29 @@ import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
 import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource } from './share-sw.js';
 
 export interface PwaAppOptions {
+  /**
+   * The path the app is served under on the suite's one site (docs/one-site.md): `/pet/` for an
+   * app, `/` for the portal. Sets Vite's `base`, and the manifest's `id`, `start_url`, `scope`,
+   * icons and share target, the service worker's scope and its navigation fallback. Default `/`.
+   */
+  base?: string;
+  /**
+   * The portal only: paths of the other apps on the same site (`['pet', 'baby']`). The portal's
+   * worker (scope `/`) then leaves navigations to them to the network instead of answering with
+   * the portal, until the app's own worker takes over its path.
+   */
+  otherApps?: string[];
   name: string;
   shortName?: string;
   description: string;
   themeColor: string;
   backgroundColor: string;
-  /** Manifest icons; defaults to /pwa-192.png, /pwa-512.png, /pwa-maskable-512.png (what pwa-icons writes). */
+  /** Manifest icons; defaults to <base>pwa-192.png, pwa-512.png, pwa-maskable-512.png (what pwa-icons writes). */
   icons?: { src: string; sizes: string; type: string; purpose: string }[];
   /** Files in public/ to precache besides the build output (icons, favicons). */
   includeAssets?: string[];
   /**
-   * The app's public address (https://<site>.web.app). Link previews need absolute URLs for the
+   * The app's public address, with its path (`https://<site>.web.app/pet/`). Link previews need absolute URLs for the
    * page and image; without it they fall back to relative ones, which some messengers ignore.
    */
   url?: string;
@@ -33,7 +45,7 @@ export interface PwaAppOptions {
   /**
    * Show the installed app in the phone's Share menu (Android and desktop Chrome; iOS has no share
    * targets), so Google Maps → Share → the app opens it with the place. Adds a manifest
-   * `share_target` that launches `/?share_title=…&share_text=…&share_url=…`; read it with
+   * `share_target` that launches `<base>?share_title=…&share_text=…&share_url=…`; read it with
    * `readSharedPlace(location)` from `@huishouden/pwa-kit/places`.
    *
    * `{ contacts: true }` also takes contact cards (Contacts → Share → the app): the share target
@@ -52,13 +64,40 @@ export interface PwaAppOptions {
  */
 export function pwaApp(options: PwaAppOptions) {
   const { overrides = {} } = options;
-  return [buildStamp(), telemetryChunks(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
+  const base = normalizeBase(options.base);
+  return [sitePath(base), buildStamp(), telemetryChunks(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
     registerType: 'autoUpdate',
     includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
+    base,
+    scope: base,
     ...overrides,
     manifest: { ...webManifest(options), ...(overrides.manifest || {}) },
     workbox: pwaWorkbox(options),
   })];
+}
+
+/** `pet`, `/pet` or `/pet/` as `/pet/`; empty or missing as `/`. */
+export function normalizeBase(base?: string): string {
+  const trimmed = (base ?? '').replace(/^\/+|\/+$/g, '');
+  return trimmed ? `/${trimmed}/` : '/';
+}
+
+/** Sets Vite's `base` from `pwaApp({ base })`, so the app states its path once. */
+export function sitePath(base: string) {
+  return {
+    name: 'huishouden-site-path',
+    config: () => ({ base }),
+  };
+}
+
+/**
+ * Navigations the worker at `base` must leave to the network: Firebase's `/__/` pages and, for the
+ * portal, every other app's path on the same site.
+ */
+export function navigationDenylist(options: Pick<PwaAppOptions, 'base' | 'otherApps'>): RegExp[] {
+  const paths = (options.otherApps ?? []).map((p) => p.replace(/^\/+|\/+$/g, '')).filter(Boolean);
+  const escaped = paths.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return [...FIREBASE_RESERVED_PATHS, ...(escaped.length ? [new RegExp(`^/(?:${escaped.join('|')})(?:/|$)`)] : [])];
 }
 
 /**
@@ -70,8 +109,8 @@ export function pwaWorkbox(options: PwaAppOptions) {
   const { importScripts = [], runtimeCaching = [], globIgnores = [], ...workboxOverrides } = options.overrides?.workbox ?? {};
   return {
     globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
-    navigateFallback: '/index.html',
-    navigateFallbackDenylist: FIREBASE_RESERVED_PATHS,
+    navigateFallback: `${normalizeBase(options.base)}index.html`,
+    navigateFallbackDenylist: navigationDenylist(options),
     ...workboxOverrides,
     importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...(sharesContacts(options) ? [SHARE_SW_FILE] : []), ...importScripts],
     runtimeCaching: [...(options.ocr ? [OCR_CACHE] : []), ...runtimeCaching],
@@ -81,8 +120,9 @@ export function pwaWorkbox(options: PwaAppOptions) {
 
 /** The web app manifest `pwaApp` writes (before `overrides.manifest`). */
 export function webManifest(options: PwaAppOptions) {
+  const base = normalizeBase(options.base);
   return {
-    id: '/',
+    id: base,
     name: options.name,
     short_name: options.shortName ?? options.name,
     description: options.description,
@@ -90,13 +130,13 @@ export function webManifest(options: PwaAppOptions) {
     background_color: options.backgroundColor,
     display: 'standalone' as const,
     orientation: 'any' as const,
-    start_url: '/',
-    scope: '/',
-    ...(options.shareTarget ? { share_target: sharesContacts(options) ? SHARE_TARGET_FILES : SHARE_TARGET } : {}),
+    start_url: base,
+    scope: base,
+    ...(options.shareTarget ? { share_target: sharesContacts(options) ? SHARE_TARGET_FILES : { ...SHARE_TARGET, action: base } } : {}),
     icons: options.icons ?? [
-      { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: '/pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      { src: `${base}pwa-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: `${base}pwa-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: `${base}pwa-maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
   };
 }
@@ -108,8 +148,8 @@ const escapeAttr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;
  * Twitter tags, written from the same name and description as the manifest so there is one source.
  * Any description or og:/twitter: tags already in index.html are replaced.
  */
-export function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' | 'url'>) {
-  const base = options.url?.replace(/\/$/, '') ?? '';
+export function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' | 'url' | 'base'>) {
+  const base = options.url?.replace(/\/$/, '') ?? normalizeBase(options.base).replace(/\/$/, '');
   const tags: [string, string, string][] = [
     ['name', 'description', options.description],
     ['property', 'og:type', 'website'],
@@ -124,7 +164,7 @@ export function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' 
     ['name', 'twitter:description', options.description],
     ['name', 'twitter:image', `${base}/og.png`],
   ];
-  if (base) tags.push(['property', 'og:url', `${base}/`]);
+  if (options.url) tags.push(['property', 'og:url', `${base}/`]);
   return {
     name: 'huishouden-link-preview',
     transformIndexHtml(html: string) {

@@ -24,7 +24,7 @@ export declare function shareContactCard(page: Page, card: string, { name, path 
  */
 export declare function expectGoogleSignInPopup(page: Page, context: BrowserContext, openPopup: (page: Page) => Promise<void>, path?: string): Promise<void>;
 /**
- * The site's security headers as served (STANDARD.md "Security headers"): `url` (default `/`) is
+ * The site's security headers as served (STANDARD.md "Security headers"): `url` (default `./`, the app's own path) is
  * frame-denied, sniff-proof and sends only the device permissions in `features`, while the same
  * origin's `/__/auth/handler` is not frame-denied, so Google sign-in keeps working.
  */
@@ -93,7 +93,7 @@ export declare function stubCalendar(page: Page | BrowserContext, { events, cach
 export interface SignInTestUserOptions {
     /** One of the seeded test users (`TEST_USERS` in `@huishouden/pwa-kit/staging`). */
     email: string;
-    /** Page to open once signed in (default `/`). */
+    /** Page to open once signed in, relative to BASE_URL (default `./`, the app's own path). */
     path?: string;
     /** Firebase JS SDK version loaded from gstatic for the sign-in (default `FIREBASE_WEB_SDK`). */
     sdkVersion?: string;
