@@ -130,6 +130,15 @@ async function fetchBuild(repo: string, flavor: string, dest: string): Promise<n
   fail(`could not download ${repo}'s ${assetName(flavor)}`);
 }
 
+/** The `Permissions-Policy` the repo's own firebase.json sends on its pages. */
+function ownPermissionsPolicy(): string | undefined {
+  const firebaseJson = opt('firebase') ?? 'firebase.json';
+  if (!existsSync(firebaseJson)) return undefined;
+  const hosting = JSON.parse(readFileSync(firebaseJson, 'utf8')).hosting;
+  const site = Array.isArray(hosting) ? hosting[0] : hosting;
+  return headersFor(site?.headers ?? [], '/').get('permissions-policy');
+}
+
 function readStamp(dir: string): Partial<BuildStamp> {
   try {
     return JSON.parse(readFileSync(join(dir, BUILD_STAMP), 'utf8'));
@@ -143,13 +152,7 @@ async function pack() {
   const path = opt('path');
   if (!dist || !out || !path) fail('usage: pwa-site pack <dist> <out.tar.gz> --path /pet/');
   if (!existsSync(join(dist, 'index.html'))) fail(`${dist} has no index.html; build first`);
-  let permissionsPolicy: string | undefined;
-  const firebaseJson = opt('firebase') ?? 'firebase.json';
-  if (existsSync(firebaseJson)) {
-    const hosting = JSON.parse(readFileSync(firebaseJson, 'utf8')).hosting;
-    const site = Array.isArray(hosting) ? hosting[0] : hosting;
-    permissionsPolicy = headersFor(site?.headers ?? [], '/').get('permissions-policy');
-  }
+  const permissionsPolicy = ownPermissionsPolicy();
   let version = '0.0.0';
   try {
     version = JSON.parse(readFileSync('package.json', 'utf8')).version ?? version;
@@ -199,7 +202,8 @@ async function assemble() {
       }
     }
     const stamp = readStamp(dest);
-    policies.push(stamp.permissionsPolicy);
+    // This run's own build has no stamp (it isn't packed): its policy is in the repo's firebase.json.
+    policies.push(asset === null ? (stamp.permissionsPolicy ?? ownPermissionsPolicy()) : stamp.permissionsPolicy);
     manifest.apps[app.path] = { repo: app.repo, asset, ...(stamp.sha ? { sha: stamp.sha } : {}), ...(stamp.version ? { version: stamp.version } : {}) };
     included.push(app.path);
     console.log(`${app.path} (${app.repo}): ${asset === null ? 'this build' : `asset ${asset}`}${stamp.sha ? `, ${stamp.sha.slice(0, 7)}` : ''}`);
