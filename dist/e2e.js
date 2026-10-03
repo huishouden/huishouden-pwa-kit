@@ -34,7 +34,7 @@ export async function expectInstallable(page, request, path = './') {
  * worker receives, then opens the page it sends the app to (`?share=contact`). Loads `path` and
  * waits for the service worker to be in control first.
  */
-export async function shareContactCard(page, card, { name = 'contact.vcf', path = '/' } = {}) {
+export async function shareContactCard(page, card, { name = 'contact.vcf', path = './' } = {}) {
     await page.goto(path, { waitUntil: 'networkidle' });
     await page.evaluate(() => navigator.serviceWorker.ready);
     if (!(await page.evaluate(() => !!navigator.serviceWorker.controller)))
