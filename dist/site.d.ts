@@ -1,0 +1,113 @@
+/**
+ * The suite's one site (docs/one-site.md): every app under its own path on one Firebase Hosting
+ * site, assembled from each app's latest build. This module is the pure part: the registry, the
+ * combined `firebase.json`, the redirects that replace the old per-app sites and the manifest of
+ * what a deploy holds. `pwa-site` (scripts/site.ts) does the downloading, packing and deploying.
+ *
+ * In an app, only `appUrl` is for the browser.
+ */
+import { type DeviceFeatures } from './security-headers.js';
+/** One entry of the portal's `apps.json`, the suite's list of apps. */
+export interface RegistryEntry {
+    name?: string;
+    repo: string;
+    /** The app's own Firebase Hosting site: the old address, and its staging site's name. The portal's is the shared site. */
+    site: string;
+    /** Where it is served on the shared site: `/` for the portal, `/<app>/` for an app. Missing: not on it yet. */
+    path?: string;
+    /** The old `<site>.web.app` redirects to the app's path on the shared site. */
+    redirect?: boolean;
+    [key: string]: unknown;
+}
+/** `pet`, `/pet` or `/pet/` as `/pet/`; empty as `/`. */
+export declare function normalizePath(path: string): string;
+/**
+ * An absolute link into this app, for anything that leaves the page (agenda items, reminders,
+ * invitations): `appUrl(import.meta.env.BASE_URL, '?tab=care')`. The origin is the page's, so a
+ * staging build links to staging. `origin` is for code that runs without a page (tests, scripts).
+ */
+export declare function appUrl(base: string, path?: string, origin?: string): string;
+/** Checks the registry and returns the apps on the shared site, the portal (`/`) first. */
+export declare function siteApps(registry: unknown): (RegistryEntry & {
+    path: string;
+})[];
+/** The shared site's Firebase Hosting name: the portal's site. */
+export declare function sharedSite(registry: unknown): string;
+/** Which device features a `Permissions-Policy` value turns on. */
+export declare function featuresOf(policy: string | undefined): DeviceFeatures;
+/** A feature is on for the site when any app turns it on (a header can't differ by path cheaply). */
+export declare function unionFeatures(all: DeviceFeatures[]): DeviceFeatures;
+/** Files that must be fetched fresh for an update to reach a device. */
+export declare const FRESH_FILES: string[];
+export interface HostingSite {
+    site: string;
+    public: string;
+    ignore?: string[];
+    redirects?: {
+        source?: string;
+        regex?: string;
+        destination: string;
+        type: number;
+    }[];
+    rewrites?: {
+        source: string;
+        destination: string;
+    }[];
+    headers?: {
+        source?: string;
+        regex?: string;
+        headers: {
+            key: string;
+            value: string;
+        }[];
+    }[];
+}
+/**
+ * The shared site's hosting config: `/<app>` → `/<app>/`, each app's routes to its own
+ * `index.html`, everything else to the portal's; Firebase's `/__/` untouched. `paths` are the apps
+ * this deploy holds (others fall to the portal until they publish a build).
+ */
+export declare function siteConfig(site: string, paths: string[], features?: DeviceFeatures, publicDir?: string): HostingSite;
+/**
+ * Every path but `/sw.js`, with the rest of the path captured as `rest`. Firebase checks redirects
+ * before files, and RE2 has no lookahead, so the exception is spelled out.
+ */
+export declare const REDIRECT_ALL_BUT_WORKER = "^/(?P<rest>(?:[^s]|s[^w]|sw[^.]|sw\\.[^j]|sw\\.j[^s]|sw\\.js.).*|s|sw|sw\\.|sw\\.j)?$";
+/** The hosting config of an old per-app site: everything 301s to `target` (`https://<shared>/pet/`), query kept by Hosting. */
+export declare function redirectConfig(site: string, target: string, publicDir: string): HostingSite;
+/** Marks the retiring worker, so a check can tell it is the one being served. */
+export declare const RETIRED_WORKER_MARK = "huishouden: this address moved";
+/**
+ * Served as `/sw.js` on an old site. A device that installed the app there runs the old worker,
+ * which answers every launch from its precache and so never sees the redirect. Its next update
+ * check fetches this instead: it clears the caches, unregisters itself and reloads the open
+ * windows, which then reach the redirect.
+ */
+export declare function retiredWorkerSource(): string;
+/** Written at the site's root: which build of each app a deploy holds. */
+export declare const SITE_MANIFEST = "hh-site.json";
+/** Written into each packed build. */
+export declare const BUILD_STAMP = "hh-build.json";
+export interface BuildStamp {
+    repo: string;
+    path: string;
+    sha: string;
+    version: string;
+    builtAt: string;
+    /** The app's own `Permissions-Policy` (from its firebase.json), for the site's union. */
+    permissionsPolicy?: string;
+}
+export interface SiteManifest {
+    site: string;
+    flavor: 'production' | 'staging';
+    deployedAt: string;
+    /** By path: the release asset each app's files came from (`null`: this run's own build). */
+    apps: Record<string, {
+        repo: string;
+        asset: number | null;
+        sha?: string;
+        version?: string;
+    }>;
+}
+/** Paths whose published build differs from what `manifest` holds (a newer one, or one it lacks). */
+export declare function staleApps(manifest: SiteManifest | null, latest: Record<string, number | null>): string[];

@@ -58,7 +58,7 @@ describe('subscriptions', () => {
 });
 
 /** A fake service-worker global: records listeners, notifications, focus and opened windows. */
-function fakeServiceWorker(windows: { url: string }[] = []) {
+function fakeServiceWorker(windows: { url: string }[] = [], scope = 'https://pet.example.com/') {
   const listeners: Record<string, (e: unknown) => void> = {};
   const shown: { title: string; options: Record<string, unknown> }[] = [];
   const log: string[] = [];
@@ -68,9 +68,9 @@ function fakeServiceWorker(windows: { url: string }[] = []) {
     navigate: async (u: string) => void log.push(`navigate ${u}`),
   }));
   const sw = {
-    location: { origin: 'https://pet.example.com' },
+    location: { origin: new URL(scope).origin },
     addEventListener: (type: string, fn: (e: unknown) => void) => (listeners[type] = fn),
-    registration: { showNotification: async (title: string, options: Record<string, unknown>) => void shown.push({ title, options }) },
+    registration: { scope, showNotification: async (title: string, options: Record<string, unknown>) => void shown.push({ title, options }) },
     clients: { matchAll: async () => clients, openWindow: async (u: string) => void log.push(`open ${u}`) },
   };
   const dispatch = async (type: string, event: Record<string, unknown>) => {
@@ -87,7 +87,31 @@ describe('service worker handlers', () => {
     installPushHandlers(f.sw);
     const payload = { title: 'Biscuit: Carprofen 75 mg', body: '1 tablet at 20:00', url: 'https://pet.example.com/pets/p1', tag: 'r1', app: 'pet' };
     await f.dispatch('push', { data: { json: () => payload, text: () => JSON.stringify(payload) } });
-    expect(f.shown).toEqual([{ title: payload.title, options: { body: payload.body, tag: 'r1', icon: '/pwa-192.png', badge: '/pwa-192.png', data: { url: payload.url } } }]);
+    expect(f.shown).toEqual([{ title: payload.title, options: { body: payload.body, tag: 'r1', icon: 'https://pet.example.com/pwa-192.png', badge: 'https://pet.example.com/pwa-192.png', data: { url: payload.url } } }]);
+  });
+
+  test("on the shared site, icons and the default link are the app's path", async () => {
+    const f = fakeServiceWorker([], 'https://family.example.com/pet/');
+    installPushHandlers(f.sw);
+    await f.dispatch('push', { data: { json: () => ({ title: 'Hi' }), text: () => '' } });
+    expect(f.shown[0].options).toMatchObject({ icon: 'https://family.example.com/pet/pwa-192.png', data: { url: 'https://family.example.com/pet/' } });
+  });
+
+  test("on the shared site, tapping reuses the app's own window, not another app's", async () => {
+    const f = fakeServiceWorker(
+      [{ url: 'https://family.example.com/' }, { url: 'https://family.example.com/baby/' }, { url: 'https://family.example.com/pet/?tab=care' }],
+      'https://family.example.com/pet/',
+    );
+    installPushHandlers(f.sw);
+    await f.dispatch('notificationclick', { notification: { data: { url: 'https://family.example.com/pet/meds/c1' }, close: () => {} } });
+    expect(f.log).toEqual(['focus https://family.example.com/pet/?tab=care', 'navigate https://family.example.com/pet/meds/c1']);
+  });
+
+  test('on the shared site, a link into an app with no open window opens one', async () => {
+    const f = fakeServiceWorker([{ url: 'https://family.example.com/' }], 'https://family.example.com/pet/');
+    installPushHandlers(f.sw);
+    await f.dispatch('notificationclick', { notification: { data: { url: 'https://family.example.com/home/#upkeep' }, close: () => {} } });
+    expect(f.log).toEqual(['open https://family.example.com/home/#upkeep']);
   });
 
   test('a push that is not JSON still shows, as text', async () => {

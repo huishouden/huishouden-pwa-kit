@@ -7,7 +7,8 @@
  *
  *   NEW_RELIC_API_KEY=… NEW_RELIC_ACCOUNT_ID=… ALERT_EMAIL=… bun infra/newrelic.ts apps.json
  *
- * apps.json is the portal's list: [{ "repo": "baby", "site": "huishouden-baby" }, …].
+ * apps.json is the portal's list: [{ "repo": "baby", "site": "huishouden-baby", "path": "/baby/" }, …]. An app
+ * with a `path` is checked at that path on the shared site (the portal's, path `/`; docs/one-site.md).
  * Optional: GITHUB_OWNER (default huishouden), FAMILY (default Huishouden), DRY_RUN=1.
  * Needs a New Relic user key (NRAK-…, never committed) and `gh` signed in with admin on the repos.
  */
@@ -29,11 +30,13 @@ if (!KEY || !ACCOUNT || !EMAIL || !file) {
 interface AppEntry {
   repo: string;
   site: string;
+  path?: string;
 }
 const apps = (JSON.parse(readFileSync(file, 'utf8')) as AppEntry[]).filter((a) => a.repo && a.site);
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const browserName = (a: AppEntry) => `${FAMILY} ${title(a.repo)}`;
-const siteUrl = (a: AppEntry) => `https://${a.site}.web.app/`;
+const shared = apps.find((a) => a.path === '/')?.site;
+const siteUrl = (a: AppEntry) => (a.path && shared ? `https://${shared}.web.app${a.path}` : `https://${a.site}.web.app/`);
 
 async function gql<T = any>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
   const res = await fetch('https://api.newrelic.com/graphql', {

@@ -16,7 +16,7 @@ export declare function initialOf(user: AppBarUser): string;
 export declare function isSuite(app: string): boolean;
 /** "Huishouden Baby 1.2.0 (abc1234)"; the portal's is "Huishouden 1.2.0 (abc1234)". */
 export declare function versionLabel(app: string, version: string): string;
-/** Whether `url` points at the page's own site, where an "All apps" link would go nowhere new. */
+/** Whether `url` points at the page's own origin. */
 export declare function sameSite(url: string, base: string): boolean;
 /** The portal's page saying what the apps collect, linked from every app's account menu. */
 export declare const PRIVACY_PATH = "/privacy";

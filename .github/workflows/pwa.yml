@@ -1,12 +1,19 @@
-# Reusable CI/CD for a PWA on Firebase Hosting. Callers:
+# Reusable CI/CD for a PWA on Firebase Hosting. Callers on the suite's one site (docs/one-site.md):
 #
 #   jobs:
 #     pwa:
 #       uses: huishouden/pwa-kit/.github/workflows/pwa.yml@v0
 #       permissions: { contents: write, id-token: write, pull-requests: write }
 #       with:
-#         hosting-target: spending
-#         site-url: https://example-spending.web.app
+#         base: /spending/          # the portal: /
+#         site-url: https://example-family.web.app/spending/
+#
+# With `base`, main publishes the build as a release asset (the repo's `hosting` pre-release) and
+# deploys the whole site: every app's latest published build under its path (`pwa-site assemble`,
+# apps.json from the portal repo). Without `base` (the old per-app sites), `hosting-target` names the
+# caller's own site and only it is deployed. `reconcile: true` (the portal's schedule) skips the
+# build and redeploys the site only when an app has published a build it lacks, and fixes the old
+# sites' redirects when one is wrong.
 #
 # Caller repo variables: GCP_WIF_PROVIDER, GCP_DEPLOY_SA (deploy is skipped until both are set),
 # VITE_FIREBASE_*, VITE_GOOGLE_CLIENT_ID, VITE_VAPID_PUBLIC_KEY and VITE_NEWRELIC_* (passed to the
@@ -26,14 +33,22 @@ name: pwa
 on:
   workflow_call:
     inputs:
+      base:
+        description: The app's path on the suite's one site (/pet/; the portal /). Empty for an app on its own site
+        type: string
+        default: ''
       hosting-target:
-        description: Firebase Hosting target from the caller's .firebaserc
+        description: Without base only. Firebase Hosting target from the caller's .firebaserc
         type: string
-        required: true
+        default: ''
       site-url:
-        description: Live URL the smoke tests run against
+        description: Live URL the smoke tests run against (with base, the app's path on the site)
         type: string
         required: true
+      reconcile:
+        description: With base / (the portal's schedule). Redeploy the site if an app published a newer build; no build, no tests
+        type: boolean
+        default: false
       staging-ref:
         description: Manual runs only. A branch, tag or SHA to deploy to staging instead of deploying production
         type: string
@@ -44,6 +59,7 @@ permissions:
 
 jobs:
   leak-scan:
+    if: ${{ !inputs.reconcile }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -53,6 +69,7 @@ jobs:
       - uses: huishouden/pwa-kit/actions/leak-scan@v0
 
   build:
+    if: ${{ !inputs.reconcile }}
     runs-on: ubuntu-latest
     env:
       VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
@@ -96,6 +113,61 @@ jobs:
           name: dist
           path: dist
           retention-days: 1
+      # On main, the builds other repos assemble the site from (docs/one-site.md): this one, and one
+      # against the staging project for their pull requests' staging sites.
+      - name: Pack the build for the site
+        if: inputs.base != '' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.staging-ref == ''
+        env:
+          BASE: ${{ inputs.base }}
+        run: mkdir -p site-assets && bunx pwa-site pack dist site-assets/site.tar.gz --path "$BASE"
+      - name: Staging build for the site
+        if: inputs.base != '' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.staging-ref == '' && vars.STAGING_VITE_FIREBASE_PROJECT_ID != ''
+        env:
+          BASE: ${{ inputs.base }}
+          VITE_FIREBASE_API_KEY: ${{ vars.STAGING_VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.STAGING_VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.STAGING_VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.STAGING_VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.STAGING_VITE_GOOGLE_CLIENT_ID }}
+          VITE_VAPID_PUBLIC_KEY: ''
+          VITE_NEWRELIC_ACCOUNT_ID: ''
+          VITE_NEWRELIC_APP_ID: ''
+          VITE_NEWRELIC_BROWSER_KEY: ''
+        run: |
+          if [ "$VITE_FIREBASE_PROJECT_ID" != huishouden-staging ]; then echo "::error::STAGING_VITE_FIREBASE_PROJECT_ID is not huishouden-staging"; exit 1; fi
+          rm -rf dist && bun run build && bunx pwa-site pack dist site-assets/site-staging.tar.gz --path "$BASE"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: inputs.base != '' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.staging-ref == ''
+        with:
+          name: site-assets
+          path: site-assets
+          retention-days: 1
+
+  publish:
+    # The only job that writes to the repo's releases. It installs and runs nothing from the repo:
+    # it uploads the tarballs the build job packed, replacing the previous ones.
+    needs: [build, leak-scan]
+    if: inputs.base != '' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.staging-ref == '' && !inputs.reconcile
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: site-assets
+          path: site-assets
+      - name: Publish to the hosting pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view hosting -R "$REPO" >/dev/null 2>&1; then
+            gh release create hosting -R "$REPO" --prerelease --target "$GITHUB_SHA" --title "Hosting build" \
+              --notes "The latest build of main, for the suite's one site (pwa-kit docs/one-site.md). Replaced on every deploy; not a release." \
+              || gh release view hosting -R "$REPO" >/dev/null
+          fi
+          gh release upload hosting -R "$REPO" --clobber site-assets/*.tar.gz
 
   pr-screenshots:
     # Before/after evidence for every same-repo PR: the PR's build next to the live site, same scenes
@@ -133,11 +205,12 @@ jobs:
         if: steps.has.outputs.present == 'true'
         env:
           LIVE_URL: ${{ inputs.site-url }}
+          BASE: ${{ inputs.base || '/' }}
         run: |
           (bunx vite preview --port 4173 --strictPort >/tmp/preview.log 2>&1 &)
-          for i in $(seq 1 30); do curl -sf http://localhost:4173 >/dev/null && break; sleep 1; done
+          for i in $(seq 1 30); do curl -sf "http://localhost:4173$BASE" >/dev/null && break; sleep 1; done
           SCREENSHOT_DIR=evidence/before BASE_URL="$LIVE_URL" bun run screenshots || echo "::warning::before screenshots incomplete (new screens are expected to be missing)"
-          SCREENSHOT_DIR=evidence/after BASE_URL=http://localhost:4173 bun run screenshots
+          SCREENSHOT_DIR=evidence/after BASE_URL="http://localhost:4173$BASE" bun run screenshots
           echo "taken=true" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: steps.shots.outputs.taken == 'true'
@@ -230,7 +303,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: staging
-      url: https://${{ vars.STAGING_SITE }}.web.app
+      url: https://${{ vars.STAGING_SITE }}.web.app${{ inputs.base || '/' }}
     concurrency:
       group: staging-${{ github.repository }}
       cancel-in-progress: false
@@ -244,7 +317,7 @@ jobs:
       VITE_FIREBASE_APP_ID: ${{ vars.STAGING_VITE_FIREBASE_APP_ID }}
       VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID }}
       VITE_GOOGLE_CLIENT_ID: ${{ vars.STAGING_VITE_GOOGLE_CLIENT_ID }}
-      BASE_URL: https://${{ vars.STAGING_SITE }}.web.app
+      BASE_URL: https://${{ vars.STAGING_SITE }}.web.app${{ inputs.base || '/' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -269,6 +342,7 @@ jobs:
           service_account: ${{ vars.STAGING_GCP_DEPLOY_SA }}
           token_format: access_token
       - name: Deploy to ${{ vars.STAGING_SITE }}
+        if: inputs.base == ''
         env:
           TARGET: ${{ inputs.hosting-target }}
           SITE: ${{ vars.STAGING_SITE }}
@@ -276,6 +350,18 @@ jobs:
         run: |
           npx --yes firebase-tools@14.27.0 target:apply hosting "$TARGET" "$SITE" --project huishouden-staging
           npx --yes firebase-tools@14.27.0 deploy --only "hosting:$TARGET" --project huishouden-staging --non-interactive --message "staging $REF"
+      # The whole suite on this app's own staging site: this build under its path, every other app's
+      # latest staging build under theirs (docs/one-site.md "Staging").
+      - name: Deploy the suite with this build to ${{ vars.STAGING_SITE }}
+        if: inputs.base != ''
+        env:
+          BASE: ${{ inputs.base }}
+          SITE: ${{ vars.STAGING_SITE }}
+          REF: ${{ inputs.staging-ref || github.event.pull_request.head.sha || github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bunx pwa-site assemble --flavor staging --site "$SITE" --own "$BASE=dist" --out site-out
+          cd site-out && npx --yes firebase-tools@14.27.0 deploy --only "hosting:$SITE" --project huishouden-staging --non-interactive --message "staging $REF"
       - name: Seed the test household
         env:
           HH_STAGING_ACCESS_TOKEN: ${{ steps.gcp.outputs.access_token }}
@@ -318,7 +404,7 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
           RESULT: ${{ needs.staging.result }}
-          URL: https://${{ vars.STAGING_SITE }}.web.app
+          URL: https://${{ vars.STAGING_SITE }}.web.app${{ inputs.base || '/' }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           case "$RESULT" in
@@ -340,31 +426,101 @@ jobs:
           if [ -n "$id" ]; then gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@body.md >/dev/null; else gh api "repos/$REPO/issues/$PR/comments" -F body=@body.md >/dev/null; fi
 
   deploy:
-    needs: [build, leak-scan]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.GCP_WIF_PROVIDER != '' && inputs.staging-ref == ''
+    # Without base: the caller's own site. With base: the whole site, assembled from every app's
+    # latest published build (this run's own was published just before), then checked again in case
+    # another app published meanwhile. Runs nothing from the repo with these credentials: the
+    # assembler comes from the kit at the version the repo pins, firebase-tools at an exact version.
+    needs: [build, leak-scan, publish]
+    if: >-
+      !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.GCP_WIF_PROVIDER != '' && inputs.staging-ref == ''
+      && (inputs.reconcile && inputs.base != ''
+          || !inputs.reconcile && needs.build.result == 'success' && needs.leak-scan.result == 'success' && (inputs.base == '' || needs.publish.result == 'success'))
     runs-on: ubuntu-latest
     environment: production
+    concurrency:
+      # One deploy of the site per repo at a time; other repos' deploys are reconciled by the recheck.
+      group: deploy-${{ github.repository }}
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write # keyless auth to Google Cloud via Workload Identity Federation
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: inputs.base == ''
         with:
           name: dist
           path: dist
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        if: inputs.base != ''
+      - name: The kit's site assembler, at the version this repo pins
+        if: inputs.base != ''
+        run: |
+          spec=$(jq -r '(.devDependencies // {})["@huishouden/pwa-kit"] // (.dependencies // {})["@huishouden/pwa-kit"] // empty' package.json)
+          ref=${spec##*#}
+          if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a tag (github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
+          git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
+          echo "SITE_TOOL=$RUNNER_TEMP/pwa-kit/scripts/site.ts" >> "$GITHUB_ENV"
+      - name: Is the live site behind? Do the old sites redirect?
+        id: live
+        if: inputs.base != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECONCILE: ${{ inputs.reconcile }}
+        run: |
+          if [ "$RECONCILE" = true ]; then
+            site=$(jq -r '.[] | select(.path == "/") | .site' apps.json)
+            bun "$SITE_TOOL" stale --flavor production --manifest "https://$site.web.app/hh-site.json"
+          fi
+          bun "$SITE_TOOL" redirects-check
+      - name: Assemble the site
+        id: site
+        if: inputs.base != '' && (!inputs.reconcile || steps.live.outputs.stale == 'true' || steps.live.outputs.wrong == 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REDIRECTS: ${{ steps.live.outputs.wrong }}
+        run: |
+          if [ "$REDIRECTS" = true ]; then bun "$SITE_TOOL" assemble --flavor production --out site-out --redirects
+          else bun "$SITE_TOOL" assemble --flavor production --out site-out; fi
       - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        if: inputs.base == '' || steps.site.outcome == 'success'
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SA }}
       # An exact version: this step holds production credentials, so it never picks up a release
       # published since the last change here (Renovate proposes updates to it).
-      - run: npx --yes firebase-tools@14.27.0 deploy --only "hosting:${{ inputs.hosting-target }}" --non-interactive --message "${{ github.sha }}"
+      - name: Deploy the app's own site
+        if: inputs.base == ''
+        run: npx --yes firebase-tools@14.27.0 deploy --only "hosting:${{ inputs.hosting-target }}" --non-interactive --message "${{ github.sha }}"
+      - name: Deploy the site
+        if: steps.site.outcome == 'success'
+        env:
+          ONLY: ${{ steps.site.outputs.only }}
+          GH_TOKEN: ${{ github.token }}
+          WHY: ${{ inputs.reconcile && 'reconcile' || github.repository }}
+        run: |
+          deploy() { (cd site-out && npx --yes firebase-tools@14.27.0 deploy --only "$1" --project "${{ vars.VITE_FIREBASE_PROJECT_ID }}" --non-interactive --message "$WHY ${GITHUB_SHA::7}"); }
+          deploy "$ONLY"
+          # Another repo may have published between this run's download and its deploy; if so, its
+          # build is missing here and this deploy may have replaced one that had it. Up to three rounds.
+          for round in 1 2 3; do
+            sleep 20
+            bun "$SITE_TOOL" stale --flavor production --manifest site-out/public/hh-site.json > "$RUNNER_TEMP/stale.txt"
+            cat "$RUNNER_TEMP/stale.txt"
+            grep -q '^stale=true' "$RUNNER_TEMP/stale.txt" || exit 0
+            echo "::notice::round $round: another app published meanwhile; assembling again"
+            bun "$SITE_TOOL" assemble --flavor production --out site-out > "$RUNNER_TEMP/assemble.txt"
+            cat "$RUNNER_TEMP/assemble.txt"
+            deploy "hosting:$(sed -n 's/^site=//p' "$RUNNER_TEMP/assemble.txt")"
+          done
 
   smoke:
     # Real-browser checks against the live site, right after it changes. Read-only: it runs installed
     # packages and test code, so it gets no push rights; screenshots leave as an artifact.
     needs: deploy
+    if: ${{ !inputs.reconcile }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

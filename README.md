@@ -6,7 +6,7 @@ apps that each live in their own repo. Every piece exists because an app hit the
 | Piece | Path | What it does |
 |---|---|---|
 | App bar | `@huishouden/pwa-kit/app-bar`, `@huishouden/pwa-kit/react/app-bar` | `<hh-app-bar app glyph portal-url version>`: the Huishouden frame (family logo to the portal, "Huishouden" over the app name, `nav` and `actions` slots, Sign in with Google or the avatar with an account menu: name, email, All apps, Privacy (the portal's `/privacy`, `privacyUrl`), Sign out, version). Raises `hh-sign-in` / `hh-sign-out`; the app sets `bar.user`. `AppBar` is the React 19 wrapper (`onSignIn`, `onSignOut`, `user`); `react` is an optional peer |
-| Vite preset | `@huishouden/pwa-kit/vite` | `pwaApp({...})`: link-preview tags (description, Open Graph, `og.png` from `pwa-icons`; pass `url`), manifest, auto-updating service worker, and a navigation fallback that leaves Firebase's `/__/` paths alone (otherwise "Sign in with Google" opens the app in the popup); `push: true` adds the notification handlers to the service worker, `ocr: true` keeps the label and screenshot reader working offline, `shareTarget: true` puts the installed app in the Share menu (Android and desktop Chrome; iOS has no share targets), `shareTarget: { contacts: true }` also takes contact cards there (a POST target the service worker receives, see below) |
+| Vite preset | `@huishouden/pwa-kit/vite` | `pwaApp({...})`: `base` is the app's path on the suite's one site (`/pet/`; sets Vite's `base` and the manifest's id, start, scope and icons; the portal keeps `/` and lists `otherApps`, whose paths its worker leaves alone; docs/one-site.md), link-preview tags (description, Open Graph, `og.png` from `pwa-icons`; pass `url`), manifest, auto-updating service worker, and a navigation fallback that leaves Firebase's `/__/` paths alone (otherwise "Sign in with Google" opens the app in the popup); `push: true` adds the notification handlers to the service worker, `ocr: true` keeps the label and screenshot reader working offline, `shareTarget: true` puts the installed app in the Share menu (Android and desktop Chrome; iOS has no share targets), `shareTarget: { contacts: true }` also takes contact cards there (a POST target the service worker receives, see below) |
 | Firebase config | `@huishouden/pwa-kit/firebase` | `firebaseConfigFromEnv(import.meta.env, fallback?)` from `VITE_FIREBASE_*`; auth domain defaults to `<project>.firebaseapp.com`, the only redirect the auto-created OAuth client allows |
 | App start-up | `@huishouden/pwa-kit/app` | `initApp({ app: 'car', env: import.meta.env })`: the Firebase app from `VITE_FIREBASE_*`, Auth (kept in IndexedDB), observability, Google API tokens with `VITE_GOOGLE_CLIENT_ID`, and `db` (Firestore through `initFirestore`, opened on first use: keep the returned object to keep it lazy); `signInWithGoogle()` (popup with the account chooser, no API scopes) and `signOutEverywhere()` (forgets silent sign-in and Google tokens, then signs out). An app's `src/data/firebase.ts` is one line. |
 | Firestore | `@huishouden/pwa-kit/firestore` | `initFirestore(app, { auth })`: the persistent multi-tab cache every app uses. `setDoc`, `updateDoc`, `deleteDoc`, `addDoc`, `writeBatch`, `deleteField`, `serverTimestamp`, `arrayUnion`, `arrayRemove`, `increment` with Firestore's arguments (`updateDoc` and `batch.update` take an object, not field-path/value pairs): each write is also noted in localStorage before the call returns and forgotten once it is in Firestore's local cache, so a write made just before the app closes or reloads is written again when the same person next opens it, unless the cache shows it landed or a newer edit (`updatedAt`) overtook it; notes older than a week are dropped. Without `initFirestore` they are Firestore's own. CI's `pwa-write-check` fails an app that imports a write function from `firebase/firestore`. |
@@ -14,6 +14,7 @@ apps that each live in their own repo. Every piece exists because an app hit the
 | Silent sign-in | `@huishouden/pwa-kit/auth` | `signInSilently(auth, clientId)`: Google One Tap with auto-select into Firebase, so each app signs in without a click once the browser is signed in to Google; reports Google's reason when it can't |
 | Household | `@huishouden/pwa-kit/household` | `watchHousehold`, `findHousehold`, `saveMyProfile`, `watchProfiles` (members' own names and photos), `inviteMember(db, household, email, role)`, `removeMember(db, household, email)`, `markJoined`, `createHousehold`: one `households/{id}` document (members by lowercase email, `roles` by email) shared by every app; each app keeps its data in subcollections, so one invite opens every app |
 | Roles | `@huishouden/pwa-kit/roles`, `@huishouden/pwa-kit/react/roles` | Admin, member, helper and kid, as the rules enforce them (STANDARD.md "Roles"): `householdRole(household, email)`, `can(role, action)`, `refusal(action)` ("Only admins and members can …"), `isRestricted(role)` for the `restricted` option of the private-capable reads and syncs, `setRole`, `mayGive(course, role, email)` and `giversFields` for medicine approvals, `markUnflaggedOpen` (in `/contacts`) for records saved before the private flag; `ROLE_LABELS`, `ROLE_DESCRIPTIONS`. React: `useRole(household, email)`, `RoleNote`, `RoleSelect`, `RoleList`, `GiversField` ("Who can give it"). |
+| One site | `@huishouden/pwa-kit/site`, bin `pwa-site` | Every app under its own path on one Hosting site ([docs/one-site.md](docs/one-site.md)): `appUrl(import.meta.env.BASE_URL, '?tab=x')` for absolute links on the page's origin; `siteApps(apps.json)`, `siteConfig` (the combined `firebase.json`), `redirectConfig` and `retiredWorkerSource` (old per-app sites), `staleApps`. `pwa-site pack`, `assemble`, `stale`, `redirects-check` run in `pwa.yml` |
 | Security headers | `@huishouden/pwa-kit/security-headers`, `bunx pwa-headers-check` | The headers every site sends on its own pages and never on Firebase's `/__/` (STANDARD.md "Security headers"); the check fails CI on a `firebase.json` that misses one or would frame-deny sign-in |
 | Design language | `DESIGN.md`, `bunx pwa-design-check` | The Huishouden look and behaviour every app follows; the check fails CI on off-palette colours, gradients, glass blur, other typefaces and emoji in UI |
 | Reuse check | `bunx pwa-reuse-check [--strict] [paths]` | Lists app functions, hooks and components that are near copies of one the kit exports (by declaration, token runs compared with the kit's sources: a pasted `formatDuration`, a local chart), naming the kit's and its import path; `// reuse-check:allow <reason>` above a declaration keeps it. `pwa.yml` runs it as warnings; `--strict` fails. |
@@ -51,7 +52,7 @@ apps that each live in their own repo. Every piece exists because an app hit the
 | Theme | `@huishouden/pwa-kit/theme.css` | Shared colours, radius, font, `.hh-button` and `.hh-avatar` (signed-in profile photo) as CSS variables (works with or without Tailwind) |
 | Smoke checks | `@huishouden/pwa-kit/e2e` | Playwright helpers: `expectCleanLoad`, `expectInstallable`, `expectGoogleSignInPopup` (no credentials needed), `expectSecurityHeaders(request, url, { camera, geolocation })` (the security headers on the app, none on `/__/auth/handler`), `expectCompactSampleBanner(page)` (the sample banner is one line at 390px), `expectHuishoudenFrame(page, { app, portalUrl })` (the app bar, its portal link and the app name), `captureScreenshot` (deterministic README screenshots, refreshed by CI after each deploy), `stubGoogleTokens(page, { token, fail })` (a stand-in for Google Identity Services so `googleAccessToken` flows run without a Google account), `stubCalendar(page, { events, cachedToken })` (Google Calendar and an already-granted calendar token, signed out), `signInTestUser(page, { email })` (staging only: signs a seeded test user in with a custom token), `shareContactCard(page, vcf)` (shares a contact card into the app as Android does: a POST to the share target, then the page it opens) |
 | Staging | `@huishouden/pwa-kit/staging`, bin `pwa-staging seed` | The staging project's invented test users and household (`TEST_USERS`, `TEST_HOUSEHOLD`), the idempotent seed, and keyless custom tokens for them; refuses any project but `huishouden-staging` (STANDARD.md "Staging") |
-| Reusable CI/CD | `.github/workflows/pwa.yml` | leak scan, design check, build and unit tests, before/after screenshots commented on every PR, keyless deploy to Firebase Hosting, smoke tests against the live site, README screenshots |
+| Reusable CI/CD | `.github/workflows/pwa.yml` | leak scan, design check, build and unit tests, before/after screenshots commented on every PR, the build published as a release asset and the whole suite's site assembled and deployed keyless to Firebase Hosting (`base`; `reconcile` for the portal's schedule), smoke tests against the live app path, README screenshots |
 | Releases | `.github/workflows/release.yml` | release-please: version bumps, `CHANGELOG.md` and tagged releases from Conventional Commit PR titles |
 | Observability | `@huishouden/pwa-kit/observability`, `infra/newrelic.ts` | `startObservability({ app, env: import.meta.env })`: New Relic Browser (free tier) for errors, Core Web Vitals and page loads, always on when the `VITE_NEWRELIC_*` variables are set (never on localhost, previews, staging or automated browsers); session tracking off, so no cookie or stored id. `reportError(e, { where })` for handled failures (`readError` and `googleFetch` already call it); `track(action, attrs)` and `trackView(tab)` count usage per visit, skipped under Global Privacy Control or Do Not Track; `observeHousehold` (called by `saveMyProfile`) tags the visit with `householdTag`, a hash; `redact`. `infra/newrelic.ts` creates the Browser apps, repo variables, uptime checks, alerts and dashboard ([docs/observability.md](docs/observability.md)) |
 | Build stamp | `pwaApp()` | `import.meta.env.VITE_APP_VERSION` and `VITE_BUILD_SHA` in every build, for showing what's running |
@@ -66,7 +67,7 @@ The conventions behind these are in [STANDARD.md](STANDARD.md).
 ## Install
 
 ```sh
-bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.33.0
+bun add -d @huishouden/pwa-kit@github:huishouden/pwa-kit#v0.46.0
 ```
 
 Spell out the package name: `bun add github:huishouden/pwa-kit#…` alone fails with `DependencyLoop`.
@@ -78,7 +79,7 @@ The package is installed from git, so `dist/` is committed; CI fails if it is st
 // vite.config.ts
 import { pwaApp } from '@huishouden/pwa-kit/vite';
 export default defineConfig({
-  plugins: [pwaApp({ name: 'Groceries', description: '…', themeColor: '#1f3a2e', backgroundColor: '#f6f1e7' })],
+  plugins: [pwaApp({ base: '/groceries/', name: 'Groceries', description: '…', themeColor: '#1f3a2e', backgroundColor: '#f6f1e7' })],
 });
 ```
 
@@ -86,6 +87,7 @@ export default defineConfig({
 // e2e/smoke.spec.ts
 import { test } from '@playwright/test';
 import { expectCleanLoad, expectInstallable } from '@huishouden/pwa-kit/e2e';
+// BASE_URL is the app's path (https://example-family.web.app/groceries/): helpers default to `./`.
 test('loads', ({ page }) => expectCleanLoad(page));
 test('installable', ({ page, request }) => expectInstallable(page, request));
 ```
@@ -93,7 +95,7 @@ test('installable', ({ page, request }) => expectInstallable(page, request));
 ```ts
 // Vanilla: the bar renders itself; the app owns sign-in.
 import '@huishouden/pwa-kit/app-bar';
-const bar = document.querySelector('hh-app-bar')!; // <hh-app-bar app="Groceries" glyph="cart" portal-url="https://example-portal.web.app">
+const bar = document.querySelector('hh-app-bar')!; // <hh-app-bar app="Groceries" glyph="cart" portal-url="/">
 onAuthStateChanged(auth, (user) => (bar.user = user));
 bar.addEventListener('hh-sign-in', () => signInWithPopup(auth, new GoogleAuthProvider()));
 bar.addEventListener('hh-sign-out', () => signOut(auth));
@@ -117,7 +119,7 @@ import { enablePush, pushSupport } from '@huishouden/pwa-kit/push';
 const parsed = parseDirections(await readLabel(photo)); // show parsed.unparsed and parsed.assumptions for checking
 const course = { id, ...toMedCourse(parsed, { startDate: '2026-03-14' }) };
 await replaceReminders(db, householdId, `pet:course:${id}`,
-  remindersForCourse(course, { app: 'pet', url: `https://example-pet.web.app/meds/${id}` }), user.email);
+  remindersForCourse(course, { app: 'pet', url: appUrl(import.meta.env.BASE_URL, `meds/${id}`) }), user.email); // appUrl from ./site
 // Settings: a "Notify me" button (pwaApp({ push: true }) in vite.config.ts)
 const support = pushSupport(); // { supported: false, message } explains iPhone Home Screen etc.
 await enablePush(db, householdId, user, import.meta.env.VITE_VAPID_PUBLIC_KEY, { app: 'pet' });
@@ -129,7 +131,7 @@ jobs:
   pwa:
     uses: huishouden/pwa-kit/.github/workflows/pwa.yml@v0
     permissions: { contents: write, id-token: write }
-    with: { hosting-target: groceries, site-url: https://example-groceries.web.app }
+    with: { base: /groceries/, site-url: https://example-family.web.app/groceries/ }
 ```
 
 ## Versioning
