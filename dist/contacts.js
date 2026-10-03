@@ -100,6 +100,32 @@ export async function restoreContact(db, householdId, contact) {
         by,
     });
 }
+/**
+ * The contact writes for an app's signed-out sample, on a list in memory: a save is cleaned and
+ * stamped like `addContact` / `updateContact`, a removal drops it from the list, a restore puts it
+ * back under its id. A list sorted by name stays sorted.
+ */
+export function sampleContacts(read, write, { by, now, newId }) {
+    const put = (contact) => write([...read().filter((c) => c.id !== contact.id), contact].sort((a, b) => a.name.localeCompare(b.name)));
+    return {
+        save: (id, input) => {
+            const existing = id ? read().find((c) => c.id === id) : undefined;
+            const t = now();
+            put({ id: id ?? newId(), ...cleanContact(input), createdAt: existing?.createdAt ?? t, ...(existing ? { updatedAt: t } : {}), by });
+        },
+        remove: (contact) => write(read().filter((c) => c.id !== contact.id)),
+        restore: put,
+    };
+}
+/** The contact writes for a signed-in household, each failure passed to `report` (an error toast). */
+export function householdContacts(db, householdId, app, by, report) {
+    return {
+        save: (id, input) => report(id ? updateContact(db, householdId, id, input, by) : addContact(db, householdId, input, by)),
+        // A contact other apps also show stays for them; this app only stops showing it.
+        remove: (contact) => report(removeContactFromApp(db, householdId, contact, app, by)),
+        restore: (contact) => report(restoreContact(db, householdId, contact)),
+    };
+}
 // ---- Helpers for an app's contacts screen and dialog ----
 /** Field lengths the household rules allow for contacts. */
 export const CONTACT_LIMITS = { name: 120, role: 60, phone: 40, email: 120, website: 300, address: 300, notes: 1000 };

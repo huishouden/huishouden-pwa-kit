@@ -66,6 +66,26 @@ export declare function markUnflaggedOpen(db: Firestore, householdId: string, co
 }[]): Promise<number>;
 /** Puts a deleted contact back under its old id (Undo), so appointments that point at it still do. */
 export declare function restoreContact(db: Firestore, householdId: string, contact: Contact): Promise<void>;
+/** The three contact writes an app's actions make, over Firestore or the sample's memory. */
+export interface ContactWrites {
+    save(id: string | null, input: ContactInput): void;
+    /** Stops showing it in this app (`removeContactFromApp`). */
+    remove(contact: Contact): void;
+    /** Puts it back as it was (Undo). */
+    restore(contact: Contact): void;
+}
+/**
+ * The contact writes for an app's signed-out sample, on a list in memory: a save is cleaned and
+ * stamped like `addContact` / `updateContact`, a removal drops it from the list, a restore puts it
+ * back under its id. A list sorted by name stays sorted.
+ */
+export declare function sampleContacts(read: () => Contact[], write: (contacts: Contact[]) => void, { by, now, newId }: {
+    by: string;
+    now: () => number;
+    newId: () => string;
+}): ContactWrites;
+/** The contact writes for a signed-in household, each failure passed to `report` (an error toast). */
+export declare function householdContacts(db: Firestore, householdId: string, app: string, by: string, report: (write: Promise<unknown>) => void): ContactWrites;
 /** Field lengths the household rules allow for contacts. */
 export declare const CONTACT_LIMITS: {
     readonly name: 120;

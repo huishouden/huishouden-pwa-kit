@@ -156,6 +156,14 @@ gives medicine.
   `/react/calendar`), contacts (`/contacts`, `/react/contacts`) and the React UI primitives
   (`/react/ui`, `/react/clock`) already have. Copies drift: before extraction four apps worded the
   same 60 days three ways.
+- **Data actions are written once.** An app's actions build `Op` lists (`./store`) and run through
+  one backend: `commitOps` to Firestore for a household, `useSampleStore` in memory for the
+  signed-out sample, so the sample behaves exactly like the real app and a change can't be made in
+  one and forgotten in the other. Each action that changes or removes something returns the `Undo`
+  from `changes`, which the app's toast offers. Start-up is `initApp` (`./app`), logs read through
+  `./log`, small charts are `QuantityChart` (`./react/chart`).
+- **CI lists copies.** `pwa-reuse-check` (warnings in `pwa.yml`) names any app declaration that is a
+  near copy of a kit export; import the kit's, or keep it with `// reuse-check:allow <reason>`.
 - **The kit holds mechanism, the app holds policy.** Generic arithmetic, wording and components go
   in the kit; an app's own roles, search words, limits and labels are passed in as arguments.
 - **Suggestions from Google services** (new calendar events, new Google Tasks) use `useSuggestions`
