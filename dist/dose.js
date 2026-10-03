@@ -8,6 +8,7 @@
  * back in `assumptions`, so the app can show them next to the fields it filled in.
  */
 import { readImageText } from './ocr';
+import { fitsRule } from './schedule';
 export { OCR_LANG_PATH, releaseOcr } from './ocr';
 /**
  * The text on a label photo, read on the device with tesseract.js (English; see `./ocr`). The
@@ -511,11 +512,11 @@ export function toMedCourse(parsed, options) {
 }
 /**
  * Every dose of a course between `from` and `to` (ms, inclusive), in order. Ongoing courses (no
- * `days`) run until `to`.
+ * `days` or `until`) run until `to`.
  */
 export function doseSlots(course, from, to) {
     const start = parseYmd(course.startDate);
-    const every = Math.max(1, course.everyDays ?? 1);
+    const every = course.rule ? 1 : Math.max(1, course.everyDays ?? 1);
     const lastDay = course.days !== undefined ? course.days : Math.ceil((to - start.getTime()) / 86_400_000) + 1;
     const out = [];
     const firstIndex = Math.max(0, Math.floor((from - start.getTime()) / 86_400_000) - 1);
@@ -524,6 +525,10 @@ export function doseSlots(course, from, to) {
         if (day.getTime() > to)
             break;
         const date = ymd(day);
+        if (course.until && date > course.until)
+            break;
+        if (course.rule && !fitsRule(course.rule, date))
+            continue;
         for (const time of course.times) {
             const [h, m] = time.split(':').map(Number);
             const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m).getTime();
@@ -567,4 +572,81 @@ export function doseSummary(course, given, now, options = {}) {
 /** Days between dosing days for a parsed interval (48 h → 2), for `ScheduleCourse.everyDays`. */
 export function everyDaysOf(course) {
     return course.intervalHours && course.intervalHours >= 24 ? Math.round(course.intervalHours / 24) : 1;
+}
+/** The slot keys that have been answered, given or skipped: nothing more is due for them. */
+export function handledKeys(logs) {
+    return new Set(logs.flatMap((l) => (l.slot ? [l.slot] : [])));
+}
+/** Each slot of a course between `from` and `to` with what happened to it, in order. */
+export function slotStatuses(course, logs, from, to, now, window = {}) {
+    const bySlot = new Map();
+    for (const l of logs) {
+        if (!l.slot)
+            continue;
+        const had = bySlot.get(l.slot);
+        if (!had || (had.status === 'skipped' && l.status === 'given') || (had.status === l.status && l.at > had.at))
+            bySlot.set(l.slot, l);
+    }
+    return doseSlots(course, from, to).map((slot) => {
+        const log = bySlot.get(slot.key);
+        if (log)
+            return { slot, state: log.status, log };
+        const state = doseState(slot, [], now, window);
+        return { slot, state: state === 'given' ? 'due' : state };
+    });
+}
+/** How a scheduled course went between `from` and `to` (capped at now): given, skipped and missed doses. */
+export function adherence(course, logs, from, to, now, window = {}) {
+    const out = { given: 0, skipped: 0, missed: 0, due: 0, rate: null };
+    for (const s of slotStatuses(course, logs, from, Math.min(to, now), now, window)) {
+        if (s.state === 'given')
+            out.given++;
+        else if (s.state === 'skipped')
+            out.skipped++;
+        else if (s.state === 'missed')
+            out.missed++;
+        else if (s.state === 'due')
+            out.due++;
+    }
+    out.rate = out.given + out.missed > 0 ? out.given / (out.given + out.missed) : null;
+    return out;
+}
+/**
+ * How close two doses of a scheduled medicine may be before a second one looks like a double dose:
+ * half the shortest gap between its dose times (across midnight too), at least an hour and at most
+ * 12 hours. Once a day: 12 hours.
+ */
+export function doubleDoseWindowMs(times) {
+    const minutes = [...new Set(times)].map(toMinutes).sort((a, b) => a - b);
+    if (minutes.length < 2)
+        return 12 * 3_600_000;
+    const gaps = minutes.map((m, i) => (i === minutes.length - 1 ? minutes[0] + 1440 - m : minutes[i + 1] - m));
+    const half = (Math.min(...gaps) / 2) * 60_000;
+    return Math.min(12 * 3_600_000, Math.max(3_600_000, half));
+}
+/** The latest dose given within `withinMs` before `now` (or after it, for a time typed ahead), if any. */
+export function recentlyGiven(logs, now, withinMs) {
+    return logs.filter((l) => l.status === 'given' && Math.abs(now - l.at) < withinMs).sort((a, b) => b.at - a.at)[0];
+}
+/**
+ * Whether an as-needed medicine ("every 4 to 6 hours as needed, no more than 4 in 24 hours") may be
+ * given at `now`, from the doses given. Advice for the person giving it, never a block: the app
+ * says why and lets them go ahead.
+ */
+export function asNeededCheck(logs, now, { minHours, maxPerDay }) {
+    const given = logs.filter((l) => l.status === 'given' && l.at <= now).map((l) => l.at).sort((a, b) => b - a);
+    const last = given[0];
+    const window = given.filter((at) => at > now - 86_400_000);
+    let nextAt = now;
+    let reason;
+    if (maxPerDay && window.length >= maxPerDay) {
+        // The dose that has to fall out of the 24 hours before another fits.
+        nextAt = Math.max(nextAt, window[maxPerDay - 1] + 86_400_000);
+        reason = 'max-reached';
+    }
+    if (minHours && last !== undefined && now - last < minHours * 3_600_000) {
+        nextAt = Math.max(nextAt, last + minHours * 3_600_000);
+        reason ??= 'too-soon';
+    }
+    return { ok: !reason, ...(reason ? { reason } : {}), ...(last !== undefined ? { last } : {}), inLastDay: window.length, nextAt };
 }

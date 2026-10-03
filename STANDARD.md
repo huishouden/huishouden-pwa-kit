@@ -306,6 +306,35 @@ reads them and runs the actions the app wrote down.
   outside the app's collections (`todoOpsAllowed`), and every op is checked by the target
   collection's own rules as the member who taps it.
 
+## For named people only
+
+Some records are about one person's care, and nobody else in the household reads them: a medicine
+is for that person, their carers and the household's admins. Their dated things and open actions
+still belong on the portal's Today, Calendar and To-do, and their reminders still go out, but only to
+those people. They go to the personal collections instead of the shared ones (`./audience`):
+
+| Shared | For named people | Publish with |
+|---|---|---|
+| `agenda` | `personalAgenda` | `syncPersonalAgenda(db, id, app, items, { by })` |
+| `todos` | `personalTodos` | `syncPersonalTodos(db, id, app, items, { by })` |
+| `reminders` | `personalReminders` | `syncPersonalReminders(db, id, app, reminders, by)` |
+
+- **Audience**: each item names `audience`, the lowercase emails of the members who may read it
+  (`cleanAudience`). The rules let only those members read, write or delete it, and the writer must
+  be one of them. Kids are never in it. A reminder's `recipients` are some of its audience.
+- **Each device keeps its own share current**: a sync reads and writes only the items naming the
+  signed-in member, so every allowed member's device repairs the same items and nobody else's
+  touches them.
+- **Readers**: the portal follows a member's personal items next to the shared ones
+  (`watchAgenda(..., { me })`, `watchTodos(..., { me })`); the sender reads `personalReminders` too.
+- **What they say**: a person's name and the kind of thing ("Medicine for Nan"), never what the
+  record holds (a medicine's name): the portal may be on a wall tablet. Notifications go to the
+  recipients' own devices and may name it.
+- **Never to analytics**: the app passes the names it holds to `setSensitiveWords` (`./observability`),
+  which takes them out of everything sent to New Relic.
+- **Rules**: the `personalAgenda`, `personalTodos` and `personalReminders` blocks; fields match
+  `PERSONAL_AGENDA_FIELDS`, `PERSONAL_TODO_FIELDS` and `PERSONAL_REMINDER_FIELDS`.
+
 ## Food preferences
 
 Meal suggestions in any app (Groceries' meal ideas, and whatever comes next) plan for the same people.
@@ -348,6 +377,8 @@ errors, speed and anonymous usage counts to one New Relic account on its free ti
   hash are skipped silently; errors and performance still go. There is no opt-out screen.
 - **No personal data leaves the device.** No names, emails, household ids, entries, free text or
   query strings: messages, stacks and URLs pass through `redact` and the agent's obfuscation rules.
+  An app holding names that could end up in an error (Health's medicines and people) registers them
+  with `setSensitiveWords(app, words)`, and every report has them replaced with `[redacted]`.
   Geography is the country and region New Relic derives from the request; the city it also derives
   is dropped at ingest. No session replay, traces, AJAX URLs or click tracking.
 - **Say so.** The portal's `/privacy` page (linked from every app's account menu as "Privacy" and

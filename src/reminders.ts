@@ -2,6 +2,7 @@ import { collection, doc, getDocs, onSnapshot, query, where, type Firestore, typ
 import { deleteDoc, setDoc, writeBatch } from './firestore.js';
 import { doseSlots, type MedCourse } from './dose.js';
 import { MONEY_APPS } from './roles.js';
+import { cleanAudience, inAudience } from './audience.js';
 
 /**
  * Reminders any app writes and the shared sender (huishouden/notify) delivers as push
@@ -30,6 +31,11 @@ export interface Reminder {
    * nor get it on their devices. Always written; one without it counts as private to them.
    */
   private?: boolean;
+  /**
+   * Only these members read it (lowercase emails): a reminder in `personalReminders` (`./audience`),
+   * about one person's care; `recipients` are some of them. Absent on shared reminders.
+   */
+  audience?: string[];
   sent: boolean;
   sentAt?: number;
   createdAt: number;
@@ -37,6 +43,12 @@ export interface Reminder {
 }
 
 export const REMINDER_FIELDS = ['app', 'title', 'body', 'at', 'url', 'recipients', 'ref', 'private', 'sent', 'sentAt', 'createdAt', 'by'] as const;
+
+/** The collection of reminders for named members only (`./audience`); the sender reads it too. */
+export const PERSONAL_REMINDERS = 'personalReminders';
+
+/** Fields of a `personalReminders` document: a reminder's plus `audience`. */
+export const PERSONAL_REMINDER_FIELDS = [...REMINDER_FIELDS, 'audience'] as const;
 
 export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Partial<Pick<Reminder, 'id' | 'body' | 'recipients' | 'ref' | 'private'>>;
 
@@ -50,6 +62,10 @@ export interface ReminderWriteOptions {
 }
 
 const remindersOf = (db: Firestore, householdId: string) => collection(db, 'households', householdId, 'reminders');
+const personalOf = (db: Firestore, householdId: string) => collection(db, 'households', householdId, PERSONAL_REMINDERS);
+
+/** A reminder for named members only: who may read it (`./audience`); `recipients` must be a list of some of them. */
+export type PersonalReminderInput = ReminderInput & { audience: readonly string[]; recipients: string[] };
 
 /** Reminders matching `filters`, or for a helper or kid only the open ones (what the rules let them read). */
 const visible = (db: Firestore, householdId: string, restricted: boolean | undefined, ...filters: ReturnType<typeof where>[]) =>
@@ -213,6 +229,63 @@ export async function syncReminders(
   return { written: ops.length - deleted, deleted, unchanged };
 }
 
+/**
+ * A `personalReminders` document: as `reminderDoc`, private, with the audience cleaned and the
+ * recipients narrowed to it. Throws when the audience leaves out the writer or no recipient is in it.
+ */
+export function personalReminderDoc(input: PersonalReminderInput, by: string, now = Date.now()): Omit<Reminder, 'id'> {
+  const audience = cleanAudience(input.audience);
+  if (!inAudience(audience, by)) throw new Error('A personal reminder must name its writer in its audience.');
+  const recipients = cleanAudience(input.recipients).filter((e) => audience.includes(e));
+  const { audience: _a, ...rest } = input;
+  return { ...reminderDoc({ ...rest, recipients, private: true }, by, now), audience };
+}
+
+/**
+ * Makes this app's reminders for named members exactly `inputs` from now on, as `syncReminders`
+ * does for shared ones: the reminders whose audience includes `by`. Past and sent ones are never
+ * touched; inputs whose audience leaves `by` out, or with no recipient in it, are skipped.
+ */
+export async function syncPersonalReminders(
+  db: Firestore,
+  householdId: string,
+  app: string,
+  inputs: PersonalReminderInput[],
+  by: string,
+  now = Date.now(),
+): Promise<SyncRemindersResult> {
+  const me = by.trim().toLowerCase();
+  const wanted = new Map<string, Omit<Reminder, 'id'>>();
+  for (const r of inputs) {
+    if (r.at <= now || !inAudience(cleanAudience(r.audience), me)) continue;
+    let data: Omit<Reminder, 'id'>;
+    try {
+      data = personalReminderDoc({ ...r, app }, me, now);
+    } catch {
+      continue;
+    }
+    wanted.set(r.id ?? reminderId(r.ref ?? app, data.at), data);
+  }
+  const col = personalOf(db, householdId);
+  const existing = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
+  const ops: Op[] = [];
+  for (const d of existing.docs) {
+    const data = d.data() as Record<string, unknown>;
+    if (typeof data.at === 'number' && data.at > now && data.sent !== true && !wanted.has(d.id)) ops.push((b) => b.delete(d.ref));
+  }
+  const deleted = ops.length;
+  const have = new Map(existing.docs.map((d) => [d.id, d.data() as Record<string, unknown>]));
+  let unchanged = 0;
+  for (const [id, data] of wanted) {
+    const old = have.get(id);
+    if (old && sameReminder(old, data) && JSON.stringify(old.audience) === JSON.stringify(data.audience)) unchanged++;
+    else if (old?.sent === true) unchanged++;
+    else ops.push((b) => b.set(doc(col, id), data));
+  }
+  await commit(db, ops);
+  return { written: ops.length - deleted, deleted, unchanged };
+}
+
 export function toReminder(id: string, data: Record<string, unknown>): Reminder {
   return {
     id,
@@ -224,6 +297,7 @@ export function toReminder(id: string, data: Record<string, unknown>): Reminder 
     recipients: Array.isArray(data.recipients) ? data.recipients.map(String) : 'all',
     ref: typeof data.ref === 'string' ? data.ref : undefined,
     ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
+    ...(Array.isArray(data.audience) ? { audience: data.audience.filter((e): e is string => typeof e === 'string') } : {}),
     sent: data.sent === true,
     sentAt: typeof data.sentAt === 'number' ? data.sentAt : undefined,
     createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,

@@ -27,12 +27,21 @@ export interface Reminder {
      * nor get it on their devices. Always written; one without it counts as private to them.
      */
     private?: boolean;
+    /**
+     * Only these members read it (lowercase emails): a reminder in `personalReminders` (`./audience`),
+     * about one person's care; `recipients` are some of them. Absent on shared reminders.
+     */
+    audience?: string[];
     sent: boolean;
     sentAt?: number;
     createdAt: number;
     by: string;
 }
 export declare const REMINDER_FIELDS: readonly ["app", "title", "body", "at", "url", "recipients", "ref", "private", "sent", "sentAt", "createdAt", "by"];
+/** The collection of reminders for named members only (`./audience`); the sender reads it too. */
+export declare const PERSONAL_REMINDERS = "personalReminders";
+/** Fields of a `personalReminders` document: a reminder's plus `audience`. */
+export declare const PERSONAL_REMINDER_FIELDS: readonly ["app", "title", "body", "at", "url", "recipients", "ref", "private", "sent", "sentAt", "createdAt", "by", "audience"];
 export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Partial<Pick<Reminder, 'id' | 'body' | 'recipients' | 'ref' | 'private'>>;
 /**
  * For writes from a helper's or kid's device (`isRestricted(role)`): only reminders not marked
@@ -42,6 +51,11 @@ export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Par
 export interface ReminderWriteOptions {
     restricted?: boolean;
 }
+/** A reminder for named members only: who may read it (`./audience`); `recipients` must be a list of some of them. */
+export type PersonalReminderInput = ReminderInput & {
+    audience: readonly string[];
+    recipients: string[];
+};
 /**
  * The same id for the same reminder however often it is written, so re-saving a course
  * overwrites its reminders instead of doubling them: `<ref or app>-<at>`, Firestore-safe.
@@ -76,6 +90,17 @@ export interface SyncRemindersResult {
  * touched, so nothing is sent twice.
  */
 export declare function syncReminders(db: Firestore, householdId: string, app: string, inputs: ReminderInput[], by: string, now?: number, { restricted }?: ReminderWriteOptions): Promise<SyncRemindersResult>;
+/**
+ * A `personalReminders` document: as `reminderDoc`, private, with the audience cleaned and the
+ * recipients narrowed to it. Throws when the audience leaves out the writer or no recipient is in it.
+ */
+export declare function personalReminderDoc(input: PersonalReminderInput, by: string, now?: number): Omit<Reminder, 'id'>;
+/**
+ * Makes this app's reminders for named members exactly `inputs` from now on, as `syncReminders`
+ * does for shared ones: the reminders whose audience includes `by`. Past and sent ones are never
+ * touched; inputs whose audience leaves `by` out, or with no recipient in it, are skipped.
+ */
+export declare function syncPersonalReminders(db: Firestore, householdId: string, app: string, inputs: PersonalReminderInput[], by: string, now?: number): Promise<SyncRemindersResult>;
 export declare function toReminder(id: string, data: Record<string, unknown>): Reminder;
 /** Follows the household's reminders, optionally one app's, soonest first. */
 export declare function watchReminders(db: Firestore, householdId: string, onChange: (reminders: Reminder[]) => void, { app, restricted, onError }?: {
