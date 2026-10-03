@@ -48,7 +48,7 @@ export declare const ADDED_HIDE_MS = 10000;
  * when its record arrives (if none arrives within ten seconds, the save failed and it comes back).
  * After either button, focus stays on the card.
  */
-export declare function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead, label, moreLabel, icon, onAdd, onDismiss }: {
+export declare function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead, label, moreLabel, icon, onAdd, onDismiss, addAs }: {
     suggestions: T[];
     idOf: (item: T) => string;
     titleOf: (item: T) => string;
@@ -63,4 +63,9 @@ export declare function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailO
     icon: ReactNode;
     onAdd: (item: T) => void;
     onDismiss: (item: T) => void;
+    /** An item whose add button does something else ("Use as prep"): its words and accessible name. Add otherwise. */
+    addAs?: (item: T) => {
+        label: string;
+        ariaLabel: string;
+    } | null;
 }): import("react").JSX.Element | null;

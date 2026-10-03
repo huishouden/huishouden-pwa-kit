@@ -402,6 +402,26 @@ export function ruleOccurrences(rule: EventRule, from: Ymd, to: Ymd): Ymd[] {
 /** Whether the rule happens on `day`. */
 export const happensOn = (rule: EventRule, day: Ymd): boolean => isYmd(day) && ruleOccurrences(rule, day, day).length === 1;
 
+/**
+ * Whether `day` falls on the rule's pattern, with the schedule carried on before `start` and after
+ * `until`: the same weekdays and every-N-weeks rhythm, the same day (or nth weekday) of the month.
+ * For comparing a schedule with dates from elsewhere, such as a calendar series that began before
+ * the event was entered.
+ */
+export function fitsRule(rule: EventRule, day: Ymd): boolean {
+  if (!isYmd(day) || !isYmd(rule.start)) return false;
+  const mod = (a: number, n: number) => ((a % n) + n) % n;
+  if (rule.freq === 'week') {
+    const days = rule.days?.length ? rule.days : [weekday(rule.start)];
+    if (!days.includes(weekday(day))) return false;
+    const weeks = Math.round(daysBetween(addDays(rule.start, -weekday(rule.start)), addDays(day, -weekday(day))) / 7);
+    return mod(weeks, rule.every) === 0;
+  }
+  const step = rule.freq === 'year' ? 12 * rule.every : rule.every;
+  const index = monthIndex(day);
+  return mod(index - monthIndex(rule.start), step) === 0 && dayInMonth(rule, index) === day;
+}
+
 const ORDINAL_WORDS: Record<Nth, string> = { 1: 'first', 2: 'second', 3: 'third', 4: 'fourth', [-1]: 'last' } as Record<Nth, string>;
 
 function dayList(days: number[]): string {
