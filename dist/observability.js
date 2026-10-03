@@ -46,14 +46,62 @@ const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const QUERY = /(https?:\/\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi;
 const ID_PATH = /(households|profiles)\/[^/\s"'<>]+/g;
 const LONG_NUMBER = /\b\d(?:[ -]?\d){9,}\b/g;
+// Words an app has said must never leave the device (Health's medicine and people's names), by the
+// key the app set them under.
+const sensitive = new Map();
+let sensitivePattern = null;
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * A RegExp whose matching follows the current `setSensitiveWords` lists, so the agent's own
+ * obfuscation (which reads its rules on every send) takes out words set after it started.
+ */
+class SensitiveWords extends RegExp {
+    constructor() {
+        super('(?!)', 'g');
+    }
+    [Symbol.replace](text, replacement) {
+        if (!sensitivePattern)
+            return text;
+        sensitivePattern.lastIndex = 0;
+        return typeof replacement === 'string' ? text.replace(sensitivePattern, replacement) : text.replace(sensitivePattern, replacement);
+    }
+    test(text) {
+        if (!sensitivePattern)
+            return false;
+        sensitivePattern.lastIndex = 0;
+        return sensitivePattern.test(text);
+    }
+}
+const SENSITIVE = new SensitiveWords();
+/**
+ * Words that must never be sent, whatever carries them (an error message, a stack, an attribute):
+ * Health passes its medicine names and the names of the people it looks after, and calls it again
+ * when they change. Each app's list is kept under its own `key`; an empty list clears it. Matching
+ * ignores case; words shorter than three characters are left alone (they would blank out ordinary
+ * text). Replaced with `[redacted]`.
+ */
+export function setSensitiveWords(key, words) {
+    const clean = [...new Set(words.map((w) => w.trim()).filter((w) => w.length >= 3))];
+    if (clean.length)
+        sensitive.set(key, clean);
+    else
+        sensitive.delete(key);
+    const all = [...new Set([...sensitive.values()].flat())].sort((a, b) => b.length - a.length);
+    sensitivePattern = all.length ? new RegExp(all.map(escapeRegExp).join('|'), 'gi') : null;
+}
+/** Whether `text` holds one of the words set with `setSensitiveWords`. */
+export function hasSensitiveWords(text) {
+    return SENSITIVE.test(text);
+}
 /** Rules the agent applies to everything it sends (messages, stack traces, page URLs, attributes). */
 export const OBFUSCATION_RULES = [
     { regex: EMAIL, replacement: '[email]' },
     { regex: QUERY, replacement: '$1' },
     { regex: ID_PATH, replacement: '$1/[id]' },
     { regex: LONG_NUMBER, replacement: '[number]' },
+    { regex: SENSITIVE, replacement: '[redacted]' },
 ];
-/** A message or URL with emails, query strings, household paths and long numbers taken out. */
+/** A message or URL with emails, query strings, household paths, long numbers and sensitive words taken out. */
 export function redact(text, max = 300) {
     return OBFUSCATION_RULES.reduce((s, r) => s.replace(r.regex, r.replacement), text).slice(0, max);
 }
@@ -112,7 +160,7 @@ function deliver(item) {
         return;
     }
     if (item.kind === 'error')
-        state.agent.noticeError(item.error, item.attrs);
+        state.agent.noticeError(redactedError(item.error), item.attrs);
     else
         state.agent.addPageAction(item.name, item.attrs);
 }
@@ -148,7 +196,18 @@ export function startObservability(options) {
         agent.setCustomAttribute('app', options.app);
         if (sha)
             agent.setCustomAttribute('buildSha', sha);
-        agent.setErrorHandler((e) => IGNORED_ERRORS.some((r) => r.test(typeof e === 'string' ? e : `${e?.message ?? ''} ${e?.stack ?? ''}`)));
+        agent.setErrorHandler((e) => {
+            const text = typeof e === 'string' ? e : `${e?.message ?? ''} ${e?.stack ?? ''}`;
+            if (IGNORED_ERRORS.some((r) => r.test(text)))
+                return true;
+            // An uncaught error naming a sensitive word is dropped and sent again with the words taken
+            // out, whatever the agent's own obfuscation does with it.
+            if (hasSensitiveWords(text)) {
+                agent.noticeError(redactedError(e), { source: 'redacted' });
+                return true;
+            }
+            return false;
+        });
         if (state.household)
             agent.setCustomAttribute('household', state.household);
         state.agent = agent;
@@ -183,6 +242,12 @@ function toError(e) {
     const m = e?.message;
     return typeof m === 'string' ? m : 'Unknown error';
 }
+/** A copy of an error with its message and stack passed through `redact`. */
+function redactedError(e) {
+    if (typeof e === 'string')
+        return redact(e);
+    return Object.assign(new Error(redact(e.message ?? '')), { name: e.name, stack: e.stack ? redact(e.stack, 4000) : undefined });
+}
 function cleanAttrs(attrs) {
     const out = {};
     for (const [k, v] of Object.entries(attrs).slice(0, 20)) {
@@ -211,7 +276,7 @@ export function reportError(e, context = {}) {
     state.recent.set(key, now);
     state.errorsSent++;
     const attrs = cleanAttrs({ ...context, handled: true, ...(typeof code === 'string' ? { code } : {}), ...(typeof status === 'number' ? { status } : {}) });
-    const sent = typeof error === 'string' ? message : Object.assign(new Error(message), { name: error.name, stack: error.stack });
+    const sent = typeof error === 'string' ? message : Object.assign(new Error(message), { name: error.name, stack: error.stack ? redact(error.stack, 4000) : undefined });
     deliver({ kind: 'error', error: sent, attrs });
 }
 /**
@@ -221,13 +286,13 @@ export function reportError(e, context = {}) {
 export function track(action, attrs = {}) {
     if (!state?.usage)
         return;
-    deliver({ kind: 'action', name: action.slice(0, 60), attrs: cleanAttrs(attrs) });
+    deliver({ kind: 'action', name: redact(action, 60), attrs: cleanAttrs(attrs) });
 }
 /** Counts a screen or tab being shown, and labels later errors with it. */
 export function trackView(view) {
     if (!state)
         return;
-    state.agent?.setCustomAttribute('view', view.slice(0, 40));
+    state.agent?.setCustomAttribute('view', redact(view, 40));
     track('view', { view });
 }
 /** For tests: forget everything started. */

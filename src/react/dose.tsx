@@ -1,0 +1,153 @@
+/**
+ * "Scan the label": a medicine label photo read on the device (`../dose` `readLabel`, nothing
+ * uploaded or kept) and parsed (`parseDirections`); the app fills its own form from the result and
+ * says what it filled. The card then shows, in this order, what was filled in (field by field),
+ * what it should check (`assumptions`), the label lines it read but did not use (`unparsed`, never
+ * hidden: a person must see what the form does not hold, such as a warning), the pharmacy lines it
+ * left out on purpose, and the whole text it read, folded.
+ *
+ * ```tsx
+ * <LabelScan onRead={(parsed) => {
+ *   const draft = toMedCourse(parsed, { startDate: today });
+ *   if (draft.name) setName(draft.name);
+ *   return [draft.name && { label: 'Medicine', value: draft.name }].filter(Boolean);
+ * }} />
+ * ```
+ */
+import { useRef, useState } from 'react';
+import { ScanText } from 'lucide-react';
+import { parseDirections, readLabel, type ParsedCourse } from '../dose';
+import { secondaryButton } from './ui';
+
+declare global {
+  interface Window {
+    /** Browser tests set this to stand in for the label photo's text (OCR needs a real photo). */
+    __mockLabelText?: string;
+  }
+}
+
+/** One field the app filled from the label: "Medicine", "Lisinopril 10 mg". */
+export interface LabelFill {
+  label: string;
+  value: string;
+}
+
+type Scan =
+  | { status: 'idle' }
+  | { status: 'reading'; progress: number }
+  | { status: 'done'; text: string; filled: LabelFill[]; parsed: ParsedCourse }
+  | { status: 'error' };
+
+export interface LabelScanProps {
+  /** Fills the app's form from what was read; returns what it filled, in the form's order. */
+  onRead: (parsed: ParsedCourse, text: string) => LabelFill[];
+  /** The line under the button before a photo is taken. */
+  intro?: string;
+  /** Reads the photo's text (tests); default `readLabel`, or `window.__mockLabelText` when set. */
+  read?: (photo: Blob, onProgress: (progress: number) => void) => Promise<string>;
+}
+
+const defaultRead = (photo: Blob, onProgress: (progress: number) => void) =>
+  window.__mockLabelText !== undefined ? Promise.resolve(window.__mockLabelText) : readLabel(photo, { onProgress });
+
+export function LabelScan({ onRead, intro = 'Take a photo of the pharmacy label. It is read on this device and not kept.', read = defaultRead }: LabelScanProps) {
+  const photo = useRef<HTMLInputElement>(null);
+  const [scan, setScan] = useState<Scan>({ status: 'idle' });
+
+  const readPhoto = async (file: File) => {
+    setScan({ status: 'reading', progress: 0 });
+    try {
+      const text = await read(file, (progress) => setScan({ status: 'reading', progress }));
+      const parsed = parseDirections(text);
+      const filled = onRead(parsed, text).filter((f) => f.value.trim());
+      setScan({ status: 'done', text, filled, parsed });
+    } catch {
+      setScan({ status: 'error' });
+    } finally {
+      if (photo.current) photo.current.value = '';
+    }
+  };
+
+  const lines = (scan.status === 'done' ? scan.text : '').split(/\n+/).map((l) => l.trim()).filter(Boolean);
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-stone-200 p-4 dark:border-forest-600">
+      <input
+        ref={photo}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        aria-label="Label photo"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void readPhoto(file);
+        }}
+      />
+      <button type="button" className={secondaryButton} disabled={scan.status === 'reading'} onClick={() => photo.current?.click()}>
+        <ScanText size={18} /> {scan.status === 'reading' ? `Reading the label ${Math.round(scan.progress * 100)}%` : scan.status === 'done' ? 'Scan again' : 'Scan the label'}
+      </button>
+      {scan.status === 'idle' && <p className="text-sm text-stone-600 dark:text-stone-300">{intro}</p>}
+      {scan.status === 'error' && (
+        <p role="alert" className="text-base text-red-700 dark:text-red-300">
+          Couldn't read that photo. Try again in good light with the label flat, or fill it in below.
+        </p>
+      )}
+      {scan.status === 'done' && (
+        <div role="status" className="space-y-3 text-base text-stone-700 dark:text-stone-200">
+          {scan.filled.length === 0 ? (
+            <p>Nothing on that photo could be filled in. Try again closer, or fill it in below.</p>
+          ) : (
+            <section aria-label="Filled in from the label">
+              <p className="font-medium text-forest-700 dark:text-forest-300">Filled in from the label. Check each field before saving.</p>
+              <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
+                {scan.filled.map((f) => (
+                  <div key={f.label} className="contents">
+                    <dt className="text-stone-600 dark:text-stone-300">{f.label}</dt>
+                    <dd className="text-stone-800 dark:text-stone-100">{f.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
+          {scan.parsed.assumptions.length > 0 && (
+            <section aria-label="Check these">
+              <p className="text-sm font-medium text-stone-800 dark:text-stone-100">Check these</p>
+              <ul className="list-disc pl-5 text-sm">
+                {scan.parsed.assumptions.map((a) => (
+                  <li key={a}>{a}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {scan.parsed.unparsed.length > 0 && (
+            <section aria-label="Read but not used">
+              <p className="text-sm font-medium text-stone-800 dark:text-stone-100">Read but not used</p>
+              <p className="text-sm text-stone-600 dark:text-stone-300">Nothing above holds these lines. Add anything that matters to the notes yourself.</p>
+              <ul aria-label="Not used" className="mt-1 list-disc pl-5 text-sm">
+                {scan.parsed.unparsed.map((u) => (
+                  <li key={u}>{u}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {scan.parsed.ignored.length > 0 && (
+            <p className="text-sm text-stone-600 dark:text-stone-300">
+              Left out: {scan.parsed.ignored.length === 1 ? 'one pharmacy line' : `${scan.parsed.ignored.length} pharmacy lines`} (prescription number, quantity, address and the like).
+            </p>
+          )}
+          {lines.length > 0 && (
+            <details className="text-sm text-stone-600 dark:text-stone-300">
+              <summary className="cursor-pointer select-none py-1">Everything read from the photo</summary>
+              <ul aria-label="Read from the photo" className="mt-1 space-y-0.5 pl-1">
+                {lines.map((l, i) => (
+                  <li key={i}>{l}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

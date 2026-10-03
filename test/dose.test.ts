@@ -13,6 +13,12 @@ import {
   parseDirections,
   parseNumber,
   toMedCourse,
+  slotStatuses,
+  handledKeys,
+  adherence,
+  doubleDoseWindowMs,
+  recentlyGiven,
+  asNeededCheck,
 } from '../src/dose';
 
 const fixtures = join(import.meta.dir, 'fixtures');
@@ -159,5 +165,64 @@ describe('due and missed doses', () => {
     const summary = doseSummary(course, [], at(20, 12));
     expect(summary.next).toBeUndefined();
     expect(summary.missed).toHaveLength(4);
+  });
+});
+
+describe('dosing days on a calendar pattern, and a last day', () => {
+  const at = (d: number, h = 0, m = 0) => new Date(2031, 0, d, h, m).getTime();
+  test('a rule picks the days; until ends it', () => {
+    // 2031-01-06 is a Monday.
+    const course = { startDate: '2031-01-06', times: ['08:00'], rule: { freq: 'week' as const, every: 1, start: '2031-01-06', days: [1, 4] } };
+    expect(doseSlots(course, at(1), at(20, 23)).map((s) => s.date)).toEqual(['2031-01-06', '2031-01-09', '2031-01-13', '2031-01-16', '2031-01-20']);
+    expect(doseSlots({ ...course, until: '2031-01-13' }, at(1), at(20, 23)).map((s) => s.date)).toEqual(['2031-01-06', '2031-01-09', '2031-01-13']);
+    expect(doseSlots({ startDate: '2031-01-06', times: ['09:00'], until: '2031-01-07' }, at(1), at(20)).map((s) => s.key)).toEqual(['2031-01-06T09:00', '2031-01-07T09:00']);
+  });
+});
+
+describe('recorded doses', () => {
+  const at = (d: number, h = 0, m = 0) => new Date(2031, 0, d, h, m).getTime();
+  const course = { startDate: '2031-01-05', times: ['08:00', '20:00'] };
+  const logs = [
+    { at: at(5, 8, 5), slot: '2031-01-05T08:00', status: 'given' as const, by: 'a@example.com' },
+    { at: at(5, 20, 0), slot: '2031-01-05T20:00', status: 'skipped' as const },
+    { at: at(6, 21, 0), slot: '2031-01-06T20:00', status: 'given' as const },
+  ];
+
+  test('each slot with what happened to it', () => {
+    const now = at(7, 9, 0);
+    const states = slotStatuses(course, logs, at(5), at(7, 23, 59), now).map((s) => `${s.slot.key} ${s.state}`);
+    expect(states).toEqual([
+      '2031-01-05T08:00 given',
+      '2031-01-05T20:00 skipped',
+      '2031-01-06T08:00 missed',
+      '2031-01-06T20:00 given',
+      '2031-01-07T08:00 due',
+      '2031-01-07T20:00 upcoming',
+    ]);
+    expect([...handledKeys(logs)]).toEqual(['2031-01-05T08:00', '2031-01-05T20:00', '2031-01-06T20:00']);
+  });
+
+  test('adherence counts given against missed; skipped on purpose is apart', () => {
+    expect(adherence(course, logs, at(5), at(7, 23, 59), at(7, 9, 0))).toEqual({ given: 2, skipped: 1, missed: 1, due: 1, rate: 2 / 3 });
+    expect(adherence(course, [], at(5), at(5, 7), at(5, 7)).rate).toBeNull();
+  });
+
+  test('a double dose is two within half the shortest gap between times', () => {
+    expect(doubleDoseWindowMs(['08:00', '20:00'])).toBe(6 * 3_600_000);
+    expect(doubleDoseWindowMs(['08:00', '12:00', '16:00', '20:00'])).toBe(2 * 3_600_000);
+    expect(doubleDoseWindowMs(['08:00'])).toBe(12 * 3_600_000);
+    expect(doubleDoseWindowMs(['08:00', '08:30'])).toBe(3_600_000);
+    expect(recentlyGiven(logs, at(6, 23, 0), 6 * 3_600_000)?.slot).toBe('2031-01-06T20:00');
+    expect(recentlyGiven(logs, at(7, 8, 0), 6 * 3_600_000)).toBeUndefined();
+  });
+
+  test('as needed: the wait between doses and the most in 24 hours', () => {
+    const given = (h: number) => ({ at: at(10, h), status: 'given' as const });
+    const limits = { minHours: 4, maxPerDay: 3 };
+    expect(asNeededCheck([], at(10, 8), limits)).toEqual({ ok: true, inLastDay: 0, nextAt: at(10, 8) });
+    expect(asNeededCheck([given(6)], at(10, 8), limits)).toEqual({ ok: false, reason: 'too-soon', last: at(10, 6), inLastDay: 1, nextAt: at(10, 10) });
+    expect(asNeededCheck([given(1), given(6), given(11)], at(10, 16), limits)).toEqual({ ok: false, reason: 'max-reached', last: at(10, 11), inLastDay: 3, nextAt: at(11, 1) });
+    expect(asNeededCheck([given(1), given(6), given(11)], at(11, 2), limits).ok).toBe(true);
+    expect(asNeededCheck([given(6), { at: at(10, 7), status: 'skipped' }], at(10, 11), limits).ok).toBe(true);
   });
 });

@@ -5,7 +5,7 @@ Every Huishouden app is served from one Firebase Hosting site, under its own pat
 | Path | App | Repo |
 |---|---|---|
 | `/` | Portal | `portal` |
-| `/<app>/` (`/spending/`, `/baby/`, `/pet/`, `/home/`, `/car/`, `/bills/`, `/tasks/`, `/groceries/`) | that app | `<app>` |
+| `/<app>/` (`/spending/`, `/baby/`, `/pet/`, `/home/`, `/car/`, `/bills/`, `/tasks/`, `/groceries/`, `/health/`) | that app | `<app>` |
 
 Production is `https://huishouden-piekstra.web.app/`, staging mirrors it on the staging sites.
 Repos, tests, staging runs and releases stay separate: only hosting is shared.

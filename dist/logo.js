@@ -26,6 +26,8 @@ export const GLYPHS = {
     list: `<path d="M184 290 h144 M184 334 h144 M184 378 h96" stroke="${FOREST_600}" stroke-width="26" stroke-linecap="round"/>`,
     /** Shopping: a cart. */
     cart: `<path d="M168 280 h28 l26 92 h104 l22 -68 h-136" fill="none" stroke="${FOREST_600}" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/><circle cx="234" cy="404" r="14" fill="${FOREST_600}"/><circle cx="316" cy="404" r="14" fill="${FOREST_600}"/>`,
+    /** Health: a capsule. */
+    pill: `<g transform="rotate(-45 256 344)"><rect x="219" y="266" width="74" height="156" rx="37" fill="none" stroke="${FOREST_600}" stroke-width="22"/><path d="M219 344 v41 a37 37 0 0 0 74 0 v-41 z" fill="${FOREST_600}"/></g>`,
 };
 /** Full-bleed square for maskable icons (the launcher crops it); rounded tile otherwise. */
 export function logoSvg(glyph, { maskable = false } = {}) {
