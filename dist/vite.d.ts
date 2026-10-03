@@ -36,8 +36,15 @@ export interface PwaAppOptions {
      * targets), so Google Maps → Share → the app opens it with the place. Adds a manifest
      * `share_target` that launches `/?share_title=…&share_text=…&share_url=…`; read it with
      * `readSharedPlace(location)` from `@huishouden/pwa-kit/places`.
+     *
+     * `{ contacts: true }` also takes contact cards (Contacts → Share → the app): the share target
+     * becomes a POST that the service worker receives (`hh-share-sw.js`), keeping the card for
+     * `readSharedContact()` in `@huishouden/pwa-kit/contacts` (`?share=contact`) and sending shared
+     * places on to the same `?share_title=…` address as before.
      */
-    shareTarget?: boolean;
+    shareTarget?: boolean | {
+        contacts?: boolean;
+    };
     /** Overrides merged last, for anything app-specific. */
     overrides?: Partial<VitePWAOptions>;
 }
@@ -158,6 +165,19 @@ export declare function webManifest(options: PwaAppOptions): {
             text: string;
             url: string;
         };
+    } | {
+        action: string;
+        method: "POST";
+        enctype: string;
+        params: {
+            files: {
+                name: string;
+                accept: string[];
+            }[];
+            title: string;
+            text: string;
+            url: string;
+        };
     } | undefined;
     id: string;
     name: string;
@@ -225,6 +245,25 @@ export declare const SHARE_TARGET: {
     method: "GET";
     enctype: string;
     params: {
+        title: string;
+        text: string;
+        url: string;
+    };
+};
+/**
+ * The share target with contact cards (`shareTarget: { contacts: true }`): files need a POST,
+ * received by the service worker (`hh-share-sw.js`). The action is relative, so it resolves
+ * against the manifest and stays inside the app's scope wherever the app is served.
+ */
+export declare const SHARE_TARGET_FILES: {
+    action: string;
+    method: "POST";
+    enctype: string;
+    params: {
+        files: {
+            name: string;
+            accept: string[];
+        }[];
         title: string;
         text: string;
         url: string;

@@ -1,0 +1,28 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:Riley Sample
+N:Sample;Riley;;;
+EMAIL;TYPE=INTERNET;TYPE=HOME:riley.sample@example.com
+TEL;TYPE=CELL:555-010-0161
+TEL;TYPE=CELL:+1 555-010-0161
+ADR;TYPE=HOME:;;400 Demo Avenue;Springfield;OR;97477;US
+item1.ORG:Example Realty
+item1.TITLE:Leasing agent
+CATEGORIES:myContacts
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+FN:Avery Placeholder
+N:Placeholder;Avery;;;
+item1.EMAIL;TYPE=INTERNET:avery@example.com
+item1.X-ABLabel:Babysitting
+item2.TEL:555-010-0162
+item2.X-ABLabel:Other
+CATEGORIES:myContacts
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+FN:
+N:;;;;
+CATEGORIES:myContacts
+END:VCARD

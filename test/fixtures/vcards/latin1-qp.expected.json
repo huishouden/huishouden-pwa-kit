@@ -1,0 +1,18 @@
+[
+  {
+    "card": {
+      "name": "Jörg Müller",
+      "phones": [
+        {
+          "value": "555-010-0181",
+          "label": "Work"
+        }
+      ],
+      "emails": []
+    },
+    "fill": {
+      "name": "Jörg Müller",
+      "phone": "555-010-0181"
+    }
+  }
+]

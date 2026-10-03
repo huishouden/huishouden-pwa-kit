@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { VitePWA, type VitePWAOptions } from 'vite-plugin-pwa';
 import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
+import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource } from './share-sw.js';
 
 export interface PwaAppOptions {
   name: string;
@@ -34,8 +35,13 @@ export interface PwaAppOptions {
    * targets), so Google Maps → Share → the app opens it with the place. Adds a manifest
    * `share_target` that launches `/?share_title=…&share_text=…&share_url=…`; read it with
    * `readSharedPlace(location)` from `@huishouden/pwa-kit/places`.
+   *
+   * `{ contacts: true }` also takes contact cards (Contacts → Share → the app): the share target
+   * becomes a POST that the service worker receives (`hh-share-sw.js`), keeping the card for
+   * `readSharedContact()` in `@huishouden/pwa-kit/contacts` (`?share=contact`) and sending shared
+   * places on to the same `?share_title=…` address as before.
    */
-  shareTarget?: boolean;
+  shareTarget?: boolean | { contacts?: boolean };
   /** Overrides merged last, for anything app-specific. */
   overrides?: Partial<VitePWAOptions>;
 }
@@ -46,7 +52,7 @@ export interface PwaAppOptions {
  */
 export function pwaApp(options: PwaAppOptions) {
   const { overrides = {} } = options;
-  return [buildStamp(), telemetryChunks(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...VitePWA({
+  return [buildStamp(), telemetryChunks(), linkPreview(options), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
     registerType: 'autoUpdate',
     includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
     ...overrides,
@@ -67,7 +73,7 @@ export function pwaWorkbox(options: PwaAppOptions) {
     navigateFallback: '/index.html',
     navigateFallbackDenylist: FIREBASE_RESERVED_PATHS,
     ...workboxOverrides,
-    importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...importScripts],
+    importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...(sharesContacts(options) ? [SHARE_SW_FILE] : []), ...importScripts],
     runtimeCaching: [...(options.ocr ? [OCR_CACHE] : []), ...runtimeCaching],
     globIgnores: [TELEMETRY_CHUNKS, ...globIgnores],
   };
@@ -86,7 +92,7 @@ export function webManifest(options: PwaAppOptions) {
     orientation: 'any' as const,
     start_url: '/',
     scope: '/',
-    ...(options.shareTarget ? { share_target: SHARE_TARGET } : {}),
+    ...(options.shareTarget ? { share_target: sharesContacts(options) ? SHARE_TARGET_FILES : SHARE_TARGET } : {}),
     icons: options.icons ?? [
       { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -171,6 +177,19 @@ export function telemetryChunks() {
   };
 }
 
+/** Emits the share target's handler next to the service worker (see share-sw.ts). */
+function shareServiceWorkerFile() {
+  return {
+    name: 'huishouden-share-sw',
+    apply: 'build' as const,
+    generateBundle(this: { emitFile(file: { type: 'asset'; fileName: string; source: string }): string }) {
+      this.emitFile({ type: 'asset', fileName: SHARE_SW_FILE, source: shareServiceWorkerSource() });
+    },
+  };
+}
+
+const sharesContacts = (options: Pick<PwaAppOptions, 'shareTarget'>) => typeof options.shareTarget === 'object' && options.shareTarget.contacts === true;
+
 /** Emits the push handlers next to the service worker (see push-sw.ts). */
 function pushServiceWorkerFile() {
   return {
@@ -191,6 +210,21 @@ export const SHARE_TARGET = {
   method: 'GET' as const,
   enctype: 'application/x-www-form-urlencoded',
   params: { title: 'share_title', text: 'share_text', url: 'share_url' },
+};
+
+/**
+ * The share target with contact cards (`shareTarget: { contacts: true }`): files need a POST,
+ * received by the service worker (`hh-share-sw.js`). The action is relative, so it resolves
+ * against the manifest and stays inside the app's scope wherever the app is served.
+ */
+export const SHARE_TARGET_FILES = {
+  action: SHARE_ACTION,
+  method: 'POST' as const,
+  enctype: 'multipart/form-data',
+  params: {
+    ...SHARE_TARGET.params,
+    files: [{ name: SHARE_FILE_FIELD, accept: ['text/vcard', 'text/x-vcard', 'text/directory', '.vcf', '.vcard'] }],
+  },
 };
 
 /** The OCR engine's files; their URLs carry exact versions, so a cached copy never goes stale. */

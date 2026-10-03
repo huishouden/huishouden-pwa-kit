@@ -213,7 +213,7 @@ describe('contacts', () => {
     });
     render(<ContactDialog contact={null} app="pet" roles={[]} readScreenshot={readScreenshot} onSave={() => {}} onClose={() => {}} />);
     expect(document.body.textContent).toContain('Take a screenshot of the business in Google Maps, then choose it here.');
-    const input = document.querySelector('input[type=file]') as HTMLInputElement;
+    const input = document.querySelector('input[aria-label="Screenshot of the business"]') as HTMLInputElement;
     const file = new File(['x'], 'shot.png', { type: 'image/png' });
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     await act(async () => void input.dispatchEvent(new Event('change', { bubbles: true })));
@@ -228,7 +228,7 @@ describe('contacts', () => {
 
   test('a screenshot with nothing recognisable says so', async () => {
     render(<ContactDialog contact={null} app="pet" roles={[]} readScreenshot={async () => ({ confidence: 0, unparsed: ['lorem'], ignored: [] })} onSave={() => {}} onClose={() => {}} />);
-    const input = document.querySelector('input[type=file]') as HTMLInputElement;
+    const input = document.querySelector('input[aria-label="Screenshot of the business"]') as HTMLInputElement;
     Object.defineProperty(input, 'files', { value: [new File(['x'], 's.png')], configurable: true });
     await act(async () => void input.dispatchEvent(new Event('change', { bubbles: true })));
     expect(document.body.textContent).toContain("Couldn't find a business's details in the screenshot.");
