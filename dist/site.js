@@ -81,7 +81,8 @@ export function siteConfig(site, entries, publicDir = 'public') {
         site,
         public: publicDir,
         ignore: ['firebase.json', '**/.*'],
-        redirects: apps.map((p) => ({ source: p.slice(0, -1), destination: p, type: 301 })),
+        // An exact regex: Hosting's glob `/pet` also matches `/pet/`, which would redirect to itself.
+        redirects: apps.map((p) => ({ regex: `^${p.slice(0, -1)}$`, destination: p, type: 301 })),
         rewrites: [...apps.map((p) => ({ source: `${p}**`, destination: `${p}index.html` })), { source: '**', destination: '/index.html' }],
         headers: [
             { regex: APP_PATHS_REGEX, headers: securityHeaders(byPath.get('/') ?? {}) },
