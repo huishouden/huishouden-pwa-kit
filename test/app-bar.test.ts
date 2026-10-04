@@ -113,7 +113,11 @@ describe('<hh-app-bar>', () => {
     expect(menu.querySelector('a.item')!.getAttribute('href')).toBe('https://portal.example.com/');
     expect(menu.querySelector('a.item')!.textContent).toBe('All apps');
     const links = Array.from(menu.querySelectorAll('a.item')).map((a) => [a.textContent, a.getAttribute('href')]);
-    expect(links).toEqual([['All apps', 'https://portal.example.com/'], ['Privacy', 'https://portal.example.com/privacy']]);
+    expect(links).toEqual([
+      ['All apps', 'https://portal.example.com/'],
+      ['Use with your AI assistant', 'https://portal.example.com/assistant'],
+      ['Privacy', 'https://portal.example.com/privacy'],
+    ]);
     expect(menu.querySelector('.version')!.textContent).toBe('Huishouden Baby 1.2.0 (abc1234)');
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
@@ -218,15 +222,19 @@ describe('<hh-app-bar>', () => {
     const { bar, $ } = mount({ 'portal-url': '/' });
     bar.user = { email: 'sam@example.com' };
     const links = Array.from($('.menu')!.querySelectorAll('a.item')).map((a) => [a.textContent, a.getAttribute('href')]);
-    expect(links).toEqual([['All apps', '/'], ['Privacy', new URL('/privacy', location.href).href]]);
+    expect(links).toEqual([
+      ['All apps', '/'],
+      ['Use with your AI assistant', new URL('/assistant', location.href).href],
+      ['Privacy', new URL('/privacy', location.href).href],
+    ]);
   });
 
-  test('no "All apps" on the portal itself; Privacy stays', () => {
+  test('no "All apps" on the portal itself; the assistant page and Privacy stay', () => {
     const { bar, $ } = mount({ 'portal-url': '/', app: 'Huishouden' });
     bar.user = { email: 'sam@example.com' };
     const links = Array.from($('.menu')!.querySelectorAll('a.item')).map((a) => a.textContent);
-    expect(links).toEqual(['Privacy']);
-    expect($('.menu a.item')!.getAttribute('href')).toBe(new URL('/privacy', location.href).href);
+    expect(links).toEqual(['Use with your AI assistant', 'Privacy']);
+    expect($('.menu a.item')!.getAttribute('href')).toBe(new URL('/assistant', location.href).href);
   });
 
   test('section tabs that move to the bottom bar on phones mark the bar', async () => {

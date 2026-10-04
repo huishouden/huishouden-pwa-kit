@@ -51,6 +51,8 @@ export function sameSite(url, base) {
 }
 /** The portal's page saying what the apps collect, linked from every app's account menu. */
 export const PRIVACY_PATH = '/privacy';
+/** The portal's page for using Huishouden from an AI assistant (the connector), linked from every app's account menu. */
+export const ASSISTANT_PATH = '/assistant';
 /** The privacy page on the portal `portalUrl` points at ("https://example-portal.web.app/privacy"). */
 export function privacyUrl(portalUrl, base) {
     try {
@@ -58,6 +60,15 @@ export function privacyUrl(portalUrl, base) {
     }
     catch {
         return PRIVACY_PATH;
+    }
+}
+/** The AI-assistant page on the portal `portalUrl` points at ("https://example-portal.web.app/assistant"). */
+export function assistantUrl(portalUrl, base) {
+    try {
+        return new URL(ASSISTANT_PATH, new URL(portalUrl, base)).href;
+    }
+    catch {
+        return ASSISTANT_PATH;
     }
 }
 function isGlyph(value) {
@@ -495,6 +506,11 @@ export class HhAppBar extends Base {
             all.textContent = kt('appBar.allApps');
             items.append(all);
         }
+        const assistant = document.createElement('a');
+        assistant.className = 'item';
+        assistant.href = assistantUrl(this.portalUrl, location.href);
+        assistant.textContent = kt('appBar.assistant');
+        items.append(assistant);
         items.append(this.#privacyLink());
         const out = document.createElement('button');
         out.type = 'button';
