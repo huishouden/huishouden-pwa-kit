@@ -191,8 +191,10 @@ describe('<hh-app-bar>', () => {
     expect(langs()[2].lang).toBe('es');
     expect(langs()[0].getAttribute('aria-pressed')).toBe('true');
     try {
+      langs()[2].focus();
       langs()[2].click();
       await setLangChoice('es');
+      expect((bar.shadowRoot!.activeElement as HTMLElement | null)?.dataset.lang).toBe('es');
       expect(localStorage.getItem('hh-lang')).toBe('es');
       expect($('button.item')!.textContent).toBe('Cerrar sesión');
       expect(langs().map((b) => b.textContent)).toEqual(['Automático', 'English', 'Español', 'Nederlands']);

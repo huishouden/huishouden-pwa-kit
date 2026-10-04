@@ -138,6 +138,16 @@ describe('the language', () => {
     expect(seen).toEqual(['nl:nl', 'es:es']);
   });
 
+  test('startI18n starts once: later calls (each useLang mount) change nothing', async () => {
+    await startI18n();
+    const seen: string[] = [];
+    const off = onLangChange((s) => seen.push(s.lang));
+    await startI18n();
+    await startI18n();
+    off();
+    expect(seen).toEqual([]);
+  });
+
   test('another tab changing the choice switches this one', async () => {
     await startI18n();
     localStorage.setItem(LANG_KEY, 'es');

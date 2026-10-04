@@ -339,6 +339,7 @@ let choice: LangChoice | null = null;
 let lang: Lang = 'en';
 let locale = 'en-US';
 let started = false;
+let starting: Promise<void> | null = null;
 let version = 0;
 
 /**
@@ -453,6 +454,8 @@ async function switchTo(next: LangChoice): Promise<void> {
  * Safe to call many times; it starts once per page.
  */
 export function startI18n(): Promise<void> {
+  // Once started, the listeners keep it in step: later calls (every useLang mount) only wait.
+  if (started && starting) return starting;
   if (typeof window !== 'undefined' && !started) {
     window.addEventListener('storage', (e: StorageEvent) => {
       if (e.key !== null && e.key !== LANG_KEY) return;
@@ -463,7 +466,7 @@ export function startI18n(): Promise<void> {
     });
   }
   started = true;
-  return switchTo(choice ?? readLangChoice());
+  return (starting = switchTo(choice ?? readLangChoice()));
 }
 
 /** Stores the choice for the whole suite and switches this page once its catalogues are in; other tabs follow by the `storage` event. */
@@ -589,6 +592,7 @@ export function resetI18nForTests(): void {
   lang = 'en';
   locale = 'en-US';
   started = false;
+  starting = null;
   version++;
 }
 
