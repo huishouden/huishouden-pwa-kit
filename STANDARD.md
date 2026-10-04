@@ -426,7 +426,9 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 | `publish` | push to `main`, with `base` | The build (and a staging build) as `site.tar.gz` / `site-staging.tar.gz` on the repo's `hosting` pre-release |
 | `deploy` | push to `main`; the portal's schedule with `reconcile` | Keyless via Workload Identity Federation; with `base`, `pwa-site assemble` (every app's latest asset under its path, the combined `firebase.json`) and `firebase deploy`, rechecked for builds published meanwhile; without, `firebase deploy --only hosting:<target>` |
 | `smoke` | after `deploy` | Playwright against the live app path |
-| `staging` | same-repo PRs that change more than docs; manual runs with `staging-ref` | Build against the staging project, deploy to the app's staging site, seed, `e2e` and `e2e:signed-in` there (see Staging) |
+| `app-tests` | apps with an `e2e:emulator` script, PRs and main | Build for the Auth and Firestore emulators with the household's rules and run `e2e:emulator` (see Staging) |
+| `staging` | same-repo PRs that change more than docs; manual runs with `staging-ref` | Build against the staging project, deploy to the app's staging site, `e2e` and `e2e:signed-in` there in households of the run's own, then remove them (see Staging) |
+| `staging-sweep` | the portal's nightly schedule | Remove staging test households and users over a day old |
 
 - Repo variables (not secrets; the Firebase web config is public by design): `GCP_WIF_PROVIDER`,
   `GCP_DEPLOY_SA`, `VITE_FIREBASE_*` (the bootstrap sets them). Apps on the suite's site need no
@@ -455,19 +457,40 @@ nothing deployed or tested there can read or write real household data.
   and the `staging` environment links the deployment. A manual run of the app's `ci` workflow with
   `staging-ref` (a branch, tag or SHA) deploys that ref to staging instead of production. Main still
   deploys to production only.
-- **What runs there**: the build with the `STAGING_VITE_FIREBASE_*` variables, the deploy, the seed
-  (`pwa-staging seed`), then `e2e` and `e2e:signed-in` against the app's path on the staging site. A failure fails the
-  PR's checks.
-- **Test users**: `test-a@example.com` (admin), `test-b@example.com` (member) and
-  `test-helper@example.com` (helper) (uids `test-a`, `test-b`, `test-helper`, emails verified), all
-  in `households/test-household`. The seed rewrites the users and the
-  household document on every run and leaves app data alone, so a test writes values unique to its
-  run (a timestamp in a note, a budget from the run number) and looks for exactly those.
-- **Signing in**: `signInTestUser(page, { email })` from `@huishouden/pwa-kit/e2e` mints a custom
-  token with the staging deploy account (IAM `signJwt`, keyless), runs `signInWithCustomToken` on the
-  site's own origin and opens the app signed in. It throws if the build's or the site's Firebase
-  config names any project but `huishouden-staging` (or neither names one), and only the staging
-  account can sign the token, so it cannot sign anyone in to production. Guard specs with `test.skip(!process.env.HH_STAGING_SA, ...)`.
+- **What runs there**: one read to check the day's quota is not used up, the build with the
+  `STAGING_VITE_FIREBASE_*` variables, the deploy, then `e2e` and `e2e:signed-in` against the app's
+  path on the staging site, then the removal of the run's test data (`pwa-staging cleanup`). A
+  failure fails the PR's checks. One staging run per app at a time (it tests the build on the app's
+  one site): a newer PR's run cancels a running one, and the PR comment says to rerun it.
+- **Quota**: staging is on Firebase's free plan: 50,000 document reads, 20,000 writes and 20,000
+  deletes a day for every app's runs together, reset at midnight Pacific (07:00 UTC in summer,
+  08:00 in winter). When they are used up the job fails at its first step with "staging quota
+  exceeded — rerun after 07:00 UTC", and says so again after failing tests. A run reads what its
+  pages load, so: only what it seeded and wrote (its own households); seed in one commit (`docs`);
+  check a write with one document (`hh.get(path)`), never by listing a collection; reuse one
+  signed-in context per person per spec file (`hh.open`), whose pages close after each test.
+- **Test households**: every run has its own, never shared: `useTestHousehold(test)` from
+  `@huishouden/pwa-kit/e2e` gives the spec file `e2e-<repo>-<run id>-<attempt>-<spec>` with an
+  admin, a member, a helper and a kid (`hh.users.helper.email`, `<household>-helper@example.com`,
+  emails verified, invented), seeded in the file's `beforeAll` with any app data it needs (`docs`, one
+  commit), and removed after the run with every household its people belong to. A Health carer is
+  set in Health by the spec (the helper, say), like any app data. A nightly run of the portal
+  (`staging-sweep`) removes what a cancelled run left once it is a day old. Nothing outlives its run,
+  so a test may count on an empty household.
+- **Signing in**: `hh.signIn(page, 'helper')` (or `signInTestUser(page, { as, household })`) mints a
+  custom token with the staging deploy account (IAM `signJwt`, keyless), runs `signInWithCustomToken`
+  on the site's own origin and opens the app signed in. It throws if the build's or the site's
+  Firebase config names any project but `huishouden-staging` (or neither names one), and only the
+  staging account can sign the token, so it cannot sign anyone in to production. `useTestHousehold`
+  skips the file where neither staging credentials nor the emulators are there.
+- **Emulators first**: the same specs run on the Auth and Firestore emulators with the household's
+  real rules in the `app-tests` job (`HH_E2E_TARGET=emulator`; `initApp` connects to them in a
+  build with `VITE_USE_EMULATORS=true`), free and without a quota. An app with an `e2e:emulator`
+  script (`playwright test e2e/signed-in.spec.ts --grep-invert @staging`) runs there everything
+  but the tests tagged `@staging`, and staging runs only those: flows through another app on the
+  site (the portal's To-do list, `runPortalTodo`), the Workers (calendar feed, connector), and the
+  one-site sign-in. Tag one key flow `@smoke` too: a PR that only moves the kit's version runs just
+  the `@smoke` tests on staging.
 - **Credentials**: Workload Identity Federation to the staging project only (`STAGING_GCP_*`); its
   provider accepts any branch of the owner's repos, but only jobs of the kit's `pwa.yml` at a
   release tag or of the rules repo's workflows. Its deploy account may deploy Hosting and rules,
@@ -504,10 +527,12 @@ nothing deployed or tested there can read or write real household data.
   5. Signed out, the "Sample data" banner is one line on a 390px phone (`expectCompactSampleBanner`).
   6. An app with section tabs shows them as the bottom bar on a 390px phone and in the app bar on a
      tablet (`expectBottomNav`).
-- **Signed-in tests** (`bun run e2e:signed-in`, `e2e/signed-in.spec.ts`) run only on staging, as
-  invented test users signed in with Firebase custom tokens (`signInTestUser`), never a Google
-  account: Google blocks scripted sign-in to real accounts, and staging keeps tests away from real
-  households. Cover the app's key flows end to end against real Firestore and the real rules.
+- **Signed-in tests** (`e2e/signed-in.spec.ts`; `bun run e2e:emulator` on the emulators,
+  `bun run e2e:signed-in` on staging) run as the invented people of a household of the run's own
+  (`useTestHousehold`), signed in with Firebase custom tokens, never a Google account: Google blocks
+  scripted sign-in to real accounts, and neither target is near a real household. Cover the app's
+  key flows end to end against the real rules; tag `@staging` only what needs the real site or a
+  Worker (see Staging).
 
 ## Leaks
 

@@ -1,6 +1,22 @@
-import { expect, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test';
+import { expect, type APIRequestContext, type Browser, type BrowserContext, type Page, type TestType } from '@playwright/test';
 import { CONTENT_SECURITY_POLICY, permissionsPolicy, type DeviceFeatures } from './security-headers.js';
-import { mintCustomToken, stagingCredentialsFromEnv, stagingWebConfig, testUser } from './staging.js';
+import {
+  e2eTarget,
+  emulatorWebConfig,
+  getTestDoc,
+  mintCustomToken,
+  seedTestHousehold,
+  signedInTestsAvailable,
+  stagingCredentialsFromEnv,
+  stagingWebConfig,
+  testHousehold,
+  testUserByEmail,
+  writeTestDocs,
+  type StagingWebConfig,
+  type TestHousehold,
+  type TestRole,
+  type TestUser,
+} from './staging.js';
 
 // Paths: every helper's default is `./`, which is BASE_URL itself. On the suite's one site BASE_URL
 // is the app's path (`https://<site>/pet/`), so pass relative paths (`?tab=care`, `settings`): a
@@ -502,49 +518,164 @@ export async function stubCalendar(page: Page | BrowserContext, { events, cached
 }
 
 export interface SignInTestUserOptions {
-  /** One of the seeded test users (`TEST_USERS` in `@huishouden/pwa-kit/staging`). */
-  email: string;
+  /** Which of the household's people signs in: `admin`, `member`, `helper` or `kid`. */
+  as?: TestRole;
+  /** Or one of the household's people by email (`household.users.helper.email`). */
+  email?: string;
+  /** The household (default the run's own, `testHousehold()`; `useTestHousehold` passes the spec's). */
+  household?: TestHousehold;
   /** Page to open once signed in, relative to BASE_URL (default `./`, the app's own path). */
   path?: string;
   /** Firebase JS SDK version loaded from gstatic for the sign-in (default `FIREBASE_WEB_SDK`). */
   sdkVersion?: string;
-  /** Where HH_STAGING_* and VITE_FIREBASE_* are read from (default `process.env`). */
+  /** Where HH_* and VITE_FIREBASE_* are read from (default `process.env`). */
   env?: Record<string, string | undefined>;
 }
 
 /** The Firebase web SDK the test sign-in loads; its saved session is read by any v9+ app build. */
 export const FIREBASE_WEB_SDK = '12.19.0';
 
+const tokens = new Map<string, { token: string; until: number }>();
+
 /**
- * Signs a seeded test user in on a staging site, then opens `path` signed in. Staging only: it
- * throws if the build's VITE_FIREBASE_PROJECT_ID or the site's /__/firebase/init.json names any
- * project but huishouden-staging, or neither names one (`stagingWebConfig`). The custom token it
- * mints is signed by the staging service account, so Firebase would refuse it anywhere else too.
+ * Signs one of a test household's people in, then opens `path` signed in. On staging (the kit's
+ * staging job) it throws if the build's VITE_FIREBASE_PROJECT_ID or the site's /__/firebase/init.json
+ * names any project but huishouden-staging, or neither names one (`stagingWebConfig`), and the
+ * custom token is signed by the staging service account, so Firebase would refuse it anywhere else.
+ * On the emulators (`HH_E2E_TARGET=emulator`, the kit's app-tests job) the token is unsigned and
+ * the sign-in goes to the Auth emulator.
  *
  * How: on the site's /__/firebase/init.json (same origin, no app code running) it loads the Firebase
  * SDK from gstatic, runs `signInWithCustomToken`, and leaves the session in IndexedDB where the
- * app's own Firebase finds it on load, exactly as after a real sign-in. Needs the staging CI job's
- * HH_STAGING_ACCESS_TOKEN and HH_STAGING_SA; call `test.skip(!process.env.HH_STAGING_SA)` around it.
+ * app's own Firebase finds it on load, exactly as after a real sign-in. The household's people must
+ * be seeded first (`useTestHousehold`, or `seedTestHousehold` in a `beforeAll`).
  */
-export async function signInTestUser(page: Page, { email, path = './', sdkVersion = FIREBASE_WEB_SDK, env = process.env }: SignInTestUserOptions) {
-  const { accessToken, serviceAccount } = stagingCredentialsFromEnv(env);
-  testUser(email);
-  const res = await page.goto('/__/firebase/init.json');
-  const site = res?.ok() ? ((await res.json().catch(() => null)) as { apiKey?: string; projectId?: string; authDomain?: string } | null) : null;
-  const config = stagingWebConfig(env, site);
-  const token = await mintCustomToken({ email, serviceAccount, accessToken });
+export async function signInTestUser(page: Page, { as, email, household, path = './', sdkVersion = FIREBASE_WEB_SDK, env = process.env }: SignInTestUserOptions): Promise<TestUser> {
+  const hh = household ?? testHousehold('', env);
+  const user = as ? hh.users[as] : email ? testUserByEmail(hh, email) : undefined;
+  if (!user) throw new Error('signInTestUser needs `as` (a role) or `email`');
+  const emulator = e2eTarget(env) === 'emulator';
+  let config: StagingWebConfig;
+  let serviceAccount: string | undefined;
+  let accessToken: string | undefined;
+  if (emulator) {
+    config = emulatorWebConfig(env);
+    // The preview server's 404 for it: same origin, no app code. A response from the local server
+    // (not page.route's), or Chrome would hold the page public and refuse its calls to the emulator.
+    await page.goto('/__/firebase/init.json');
+  } else {
+    ({ accessToken, serviceAccount } = stagingCredentialsFromEnv(env));
+    const res = await page.goto('/__/firebase/init.json');
+    const site = res?.ok() ? ((await res.json().catch(() => null)) as { apiKey?: string; projectId?: string; authDomain?: string } | null) : null;
+    config = stagingWebConfig(env, site);
+  }
+  // A token is good for an hour: one per person per worker, not one per test.
+  let cached = tokens.get(`${config.projectId}/${user.uid}`);
+  if (!cached || cached.until < Date.now()) {
+    cached = { token: await mintCustomToken({ uid: user.uid, serviceAccount, accessToken, env }), until: Date.now() + 50 * 60_000 };
+    tokens.set(`${config.projectId}/${user.uid}`, cached);
+  }
   const signedIn = await page.evaluate(
-    async ({ config, token, base }) => {
+    async ({ config, token, base, authEmulator }) => {
       const { initializeApp } = await import(`${base}/firebase-app.js`);
-      const { getAuth, signInWithCustomToken } = await import(`${base}/firebase-auth.js`);
-      const cred = await signInWithCustomToken(getAuth(initializeApp(config)), token);
+      const { getAuth, signInWithCustomToken, connectAuthEmulator } = await import(`${base}/firebase-auth.js`);
+      const auth = getAuth(initializeApp(config));
+      if (authEmulator) connectAuthEmulator(auth, authEmulator, { disableWarnings: true });
+      const cred = await signInWithCustomToken(auth, token);
       return cred.user.email as string | null;
     },
-    { config, token, base: `https://www.gstatic.com/firebasejs/${sdkVersion}` },
+    { config, token: cached.token, base: `https://www.gstatic.com/firebasejs/${sdkVersion}`, authEmulator: emulator ? `http://${env.HH_EMULATOR_HOST || '127.0.0.1'}:9099` : '' },
   );
-  expect(signedIn, 'signed in as the test user').toBe(email.toLowerCase());
+  expect(signedIn, 'signed in as the test user').toBe(user.email);
   // Not networkidle: a signed-in app keeps Firestore's listen channel open.
   await page.goto(path);
+  return user;
+}
+
+/** A spec file's own test household: see `useTestHousehold`. */
+export interface TestHouseholdHandle {
+  /** The household (resolved inside hooks and tests: its id comes from the spec file's name). */
+  readonly household: TestHousehold;
+  /** Its people: `users.helper.email`. */
+  readonly users: Record<TestRole, TestUser>;
+  /** Signs `as` in on `page` and opens `path` (default `./`). */
+  signIn(page: Page, as: TestRole, path?: string): Promise<TestUser>;
+  /**
+   * A new page signed in as `as`, in a browser context the spec file keeps for that person: signed
+   * in once per file, not once per test. Pages close after each test, so no Firestore listener is
+   * left reading; the contexts close after the file.
+   */
+  open(browser: Browser, as: TestRole, path?: string): Promise<Page>;
+  /** Writes app data under the household in one batched commit: `{ 'agenda/e1': {...} }`. */
+  write(docs: Record<string, Record<string, unknown>>): Promise<void>;
+  /** One document under the household, with admin access (one read), or null. */
+  get(path: string): Promise<Record<string, unknown> | null>;
+}
+
+export interface UseTestHouseholdOptions {
+  /** Default the spec file's name: each spec file has a household of its own in each run. */
+  scope?: string;
+  /** App data to seed with the household, in the same commit. */
+  docs?: Record<string, Record<string, unknown>>;
+}
+
+/**
+ * A household of its own for this spec file in this run, with an admin, a member, a helper and a
+ * kid, seeded before its tests (one commit) and removed by the job after the run. Skips the file
+ * where signed-in tests can't run (no staging credentials, no emulators).
+ *
+ * ```ts
+ * const hh = useTestHousehold(test);
+ * test('a helper ...', async ({ page }) => {
+ *   await hh.signIn(page, 'helper');
+ *   await expect(page.getByLabel(`Role for ${hh.users.helper.email}`)).toHaveValue('helper');
+ * });
+ * ```
+ */
+export function useTestHousehold(t: TestType<any, any>, { scope, docs }: UseTestHouseholdOptions = {}): TestHouseholdHandle {
+  t.skip(!signedInTestsAvailable(), 'signed-in tests run in CI: the staging job, or the emulators of the app-tests job');
+  const household = () => testHousehold(scope ?? t.info().file);
+  const contexts = new Map<TestRole, Promise<BrowserContext>>();
+  const pages: Page[] = [];
+  t.beforeAll(async () => {
+    await seedTestHousehold({ household: household(), docs });
+  });
+  t.afterEach(async () => {
+    await Promise.all(pages.splice(0).map((p) => p.close().catch(() => undefined)));
+  });
+  t.afterAll(async () => {
+    const all = [...contexts.values()];
+    contexts.clear();
+    await Promise.all(all.map(async (c) => (await c).close().catch(() => undefined)));
+  });
+  return {
+    get household() {
+      return household();
+    },
+    get users() {
+      return household().users;
+    },
+    signIn: (page, as, path) => signInTestUser(page, { as, household: household(), path }),
+    async open(browser, as, path = './') {
+      let context = contexts.get(as);
+      if (!context) {
+        context = (async () => {
+          const c = await browser.newContext({ baseURL: t.info().project.use.baseURL });
+          const first = await c.newPage();
+          await signInTestUser(first, { as, household: household(), path: 'about:blank' });
+          await first.close();
+          return c;
+        })();
+        contexts.set(as, context);
+      }
+      const page = await (await context).newPage();
+      pages.push(page);
+      await page.goto(path);
+      return page;
+    },
+    write: (data) => writeTestDocs(household(), data),
+    get: (path) => getTestDoc(household(), path),
+  };
 }
 
 export interface PortalTodoOptions {
