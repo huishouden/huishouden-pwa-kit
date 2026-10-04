@@ -301,6 +301,7 @@ let choice = null;
 let lang = 'en';
 let locale = 'en-US';
 let started = false;
+let starting = null;
 let version = 0;
 /**
  * Adds an app's catalogue: its English (imported, so typed) and loaders for the others
@@ -411,6 +412,9 @@ async function switchTo(next) {
  * Safe to call many times; it starts once per page.
  */
 export function startI18n() {
+    // Once started, the listeners keep it in step: later calls (every useLang mount) only wait.
+    if (started && starting)
+        return starting;
     if (typeof window !== 'undefined' && !started) {
         window.addEventListener('storage', (e) => {
             if (e.key !== null && e.key !== LANG_KEY)
@@ -423,7 +427,7 @@ export function startI18n() {
         });
     }
     started = true;
-    return switchTo(choice ?? readLangChoice());
+    return (starting = switchTo(choice ?? readLangChoice()));
 }
 /** Stores the choice for the whole suite and switches this page once its catalogues are in; other tabs follow by the `storage` event. */
 export function setLangChoice(next, store = defaultStore()) {
@@ -547,6 +551,7 @@ export function resetI18nForTests() {
     lang = 'en';
     locale = 'en-US';
     started = false;
+    starting = null;
     version++;
 }
 // ---- Locale-aware formatting that is not about dates (dates: ./time) ----

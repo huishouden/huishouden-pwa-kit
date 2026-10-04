@@ -17,8 +17,9 @@ export declare const MAX_CENTS = 100000000;
  * two decimals, over `max`) → null. Integer arithmetic only.
  *
  * Either mark works as the decimal point: the last "." or "," followed by one or two digits is the
- * decimal ("12,50" is 12.50 anywhere); followed by three, it's the locale's call ("1.500" is 1500 in
- * Dutch, 1.5 in English). Other marks and spaces group thousands.
+ * decimal ("12,50" is 12.50 anywhere); followed by three, it's the locale's call: grouping when it
+ * isn't the locale's decimal mark ("1.500" is 1500 in Dutch, "1,500" 1500 in English), otherwise a
+ * third decimal, which is refused ("1.500" in English is null). Other marks and spaces group thousands.
  */
 export declare function parseCents(text: string, { max, locale }?: {
     max?: number;

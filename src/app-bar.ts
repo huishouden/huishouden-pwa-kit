@@ -420,7 +420,13 @@ export class HhAppBar extends Base {
 
   #renderAccount() {
     const account = this.#root.querySelector<HTMLElement>('.account')!;
-    const focused = this.#root.activeElement?.className;
+    const active = this.#root.activeElement as HTMLElement | null;
+    const focused = active?.className;
+    // A language button keeps the focus through the re-render its own click causes.
+    const focusedLang = active?.dataset?.lang;
+    const refocus = () => {
+      if (focusedLang) this.#root.querySelector<HTMLButtonElement>(`.mode[data-lang="${focusedLang}"]`)?.focus();
+    };
     account.replaceChildren();
     const user = this.#user;
     if (user === undefined) return;
@@ -463,6 +469,7 @@ export class HhAppBar extends Base {
       wrap.append(trigger, button);
       account.append(wrap, menu);
       if (focused === 'menu-button') trigger.focus();
+      refocus();
       return;
     }
 
@@ -525,6 +532,7 @@ export class HhAppBar extends Base {
 
     account.append(avatar, menu);
     if (focused === 'avatar') avatar.focus();
+    refocus();
   }
 
   #wireTrigger(trigger: HTMLButtonElement) {

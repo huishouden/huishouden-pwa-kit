@@ -393,7 +393,14 @@ export class HhAppBar extends Base {
     }
     #renderAccount() {
         const account = this.#root.querySelector('.account');
-        const focused = this.#root.activeElement?.className;
+        const active = this.#root.activeElement;
+        const focused = active?.className;
+        // A language button keeps the focus through the re-render its own click causes.
+        const focusedLang = active?.dataset?.lang;
+        const refocus = () => {
+            if (focusedLang)
+                this.#root.querySelector(`.mode[data-lang="${focusedLang}"]`)?.focus();
+        };
         account.replaceChildren();
         const user = this.#user;
         if (user === undefined)
@@ -440,6 +447,7 @@ export class HhAppBar extends Base {
             account.append(wrap, menu);
             if (focused === 'menu-button')
                 trigger.focus();
+            refocus();
             return;
         }
         const email = user.email ?? '';
@@ -504,6 +512,7 @@ export class HhAppBar extends Base {
         account.append(avatar, menu);
         if (focused === 'avatar')
             avatar.focus();
+        refocus();
     }
     #wireTrigger(trigger) {
         trigger.dataset.trigger = '';
