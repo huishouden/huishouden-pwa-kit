@@ -12,11 +12,11 @@ if (typeof document === 'undefined') GlobalRegistrator.register({ url: 'https://
 afterAll(() => GlobalRegistrator.unregister());
 const { createRoot } = await import('react-dom/client');
 
-const { Chip, Dialog, Field, SampleBanner, SectionTabs, SuggestionChip, Toast, StatusPill, splitTabs, useToast } = await import('../src/react/ui');
+const { Chip, CopyButton, Dialog, Field, SampleBanner, SectionTabs, SuggestionChip, Toast, StatusPill, splitTabs, useToast } = await import('../src/react/ui');
 const { Clock, History, Home, Phone, Shield, Wrench } = await import('lucide-react');
 const { ClockProvider, useClock } = await import('../src/react/clock');
 const { CalendarImportDialog, CalendarHint } = await import('../src/react/calendar');
-const { ContactDialog, ContactCard } = await import('../src/react/contacts');
+const { ContactDialog, ContactCard, ContactSelect } = await import('../src/react/contacts');
 const { PhotoPicker } = await import('../src/react/photo');
 const { SuggestionsCard } = await import('../src/react/suggestions');
 
@@ -632,5 +632,37 @@ describe('SuggestionChip', () => {
     click(document.querySelector('[aria-label="Don\'t suggest Milk"]'));
     expect(calls).toEqual(['remove']);
     act(() => root.unmount());
+  });
+});
+
+describe('CopyButton', () => {
+  test('copies the text and says so', async () => {
+    const written: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (t: string) => void written.push(t) } });
+    render(<CopyButton text="landlord@example.com" what="the Zelle email" />);
+    const button = document.querySelector('button')!;
+    expect(button.getAttribute('aria-label')).toBe('Copy the Zelle email');
+    await act(async () => button.click());
+    expect(written).toEqual(['landlord@example.com']);
+    expect(button.getAttribute('aria-label')).toBe('Copied');
+  });
+});
+
+describe('ContactSelect', () => {
+  const contacts = [
+    { id: 'a', name: 'Example Rentals', role: 'Landlord', apps: ['home'], createdAt: 1, by: 'x@example.com' },
+    { id: 'b', name: 'Sam', apps: ['bills'], createdAt: 1, by: 'x@example.com' },
+  ];
+  test('lists contacts with their roles, "No one" first, and keeps a removed one', () => {
+    const onChange = mock((_id: string) => {});
+    render(<ContactSelect value="gone" contacts={contacts} onChange={onChange} roleLabel={(r) => r.toUpperCase()} label="Pay to" />);
+    const select = document.querySelector('select')!;
+    expect(select.getAttribute('aria-label')).toBe('Pay to');
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['No one', 'Example Rentals (LANDLORD)', 'Sam', 'A removed contact']);
+    act(() => {
+      select.value = 'a';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith('a');
   });
 });

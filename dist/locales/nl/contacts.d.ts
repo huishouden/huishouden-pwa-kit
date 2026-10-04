@@ -82,5 +82,8 @@ declare const _default: {
     'contacts.label.video': string;
     'contacts.otherPhones': string;
     'contacts.otherEmails': string;
+    'contacts.noOne': string;
+    'contacts.withRole': string;
+    'contacts.removedContact': string;
 };
 export default _default;

@@ -13,5 +13,7 @@ declare const _default: {
     readonly 'push.turnOff': "Turn off";
     readonly 'push.turnOn': "Turn on";
     readonly 'push.asking': "Asking the browser";
+    readonly 'push.muteHint': "Only for you, on all your devices. Everyone else still gets them.";
+    readonly 'push.couldNotMute': "Couldn't change that. Try again.";
 };
 export default _default;

@@ -13,4 +13,6 @@ export default {
     'push.turnOff': 'Turn off',
     'push.turnOn': 'Turn on',
     'push.asking': 'Asking the browser',
+    'push.muteHint': 'Only for you, on all your devices. Everyone else still gets them.',
+    'push.couldNotMute': "Couldn't change that. Try again.",
 };

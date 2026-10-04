@@ -88,4 +88,7 @@ export default {
   'contacts.label.video': 'Video',
   'contacts.otherPhones': 'Otros teléfonos: {list}',
   'contacts.otherEmails': 'Otros correos: {list}',
+  'contacts.noOne': 'Nadie',
+  'contacts.withRole': '{name} ({role})',
+  'contacts.removedContact': 'Un contacto eliminado',
 } satisfies CatalogueOf<typeof en>;

@@ -77,3 +77,19 @@ export declare function ContactCard({ contact: c, role, onEdit, onDelete }: {
     onEdit?: () => void;
     onDelete?: () => void;
 }): import("react").JSX.Element;
+/**
+ * Names one of the household's contacts on a record (who a bill is paid to, who does a job): a
+ * select of `contacts` with their roles, "No one" (or `empty`) first. A contact that was removed
+ * stays chosen and shows as removed, so saving doesn't drop it unseen.
+ */
+export declare function ContactSelect({ id, value, contacts, onChange, empty, roleLabel, label, }: {
+    id?: string;
+    /** The chosen contact's id, or '' for none. */
+    value: string;
+    contacts: readonly Contact[];
+    onChange: (id: string) => void;
+    empty?: string;
+    roleLabel?: (role: string) => string;
+    /** Its accessible name, when no visible label wraps it. */
+    label?: string;
+}): import("react").JSX.Element;

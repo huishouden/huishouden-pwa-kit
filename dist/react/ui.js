@@ -3,7 +3,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
  * checkbox, section tabs (a bottom bar on phones), member badge, "Sample data" banner every app shows, and
- * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`.
+ * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`, and a copy button.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -12,7 +12,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Ellipsis, EyeOff, Plus, X } from 'lucide-react';
+import { Check, ChevronDown, Copy, Ellipsis, EyeOff, Plus, X } from 'lucide-react';
 import { personColour, personInitial, personName } from '../people';
 import { useKitT } from './i18n';
 export const inputClass = 'w-full min-h-11 rounded-xl border border-line bg-white px-3 py-2.5 text-base text-ink outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:bg-forest-900 dark:focus:ring-forest-700';
@@ -142,6 +142,24 @@ export function Dialog({ title, onClose, children, footer, wide }) {
 const touchScreen = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 export function Field({ label, children, hint }) {
     return (_jsxs("label", { className: "block", children: [_jsx("span", { className: "mb-1.5 block text-sm font-medium text-ink-soft", children: label }), children, hint && _jsx("span", { className: "mt-1 block text-sm text-muted", children: hint })] }));
+}
+/**
+ * Copies `text` to the clipboard from a tap, and says "Copied" for a moment: a Zelle email, an
+ * account number. `what` names it for screen readers and the tooltip ("Copy the Zelle email").
+ */
+export function CopyButton({ text, what, className = iconButton }) {
+    const kt = useKitT();
+    const [copied, setCopied] = useState(false);
+    useEffect(() => {
+        if (!copied)
+            return;
+        const id = setTimeout(() => setCopied(false), 2000);
+        return () => clearTimeout(id);
+    }, [copied]);
+    const label = kt('ui.copy', { what });
+    return (_jsxs("button", { type: "button", className: className, "aria-label": copied ? kt('ui.copied') : label, title: label, onClick: () => {
+            void navigator.clipboard?.writeText(text).then(() => setCopied(true), () => { });
+        }, children: [copied ? _jsx(Check, { size: 18, "aria-hidden": "true" }) : _jsx(Copy, { size: 18, "aria-hidden": "true" }), _jsx("span", { className: "sr-only", "aria-live": "polite", children: copied ? kt('ui.copied') : '' })] }));
 }
 export function Checkbox({ checked, onChange, children }) {
     return (_jsxs("label", { className: "flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-1 text-base text-ink", children: [_jsx("input", { type: "checkbox", className: "h-5 w-5 shrink-0 accent-primary", checked: checked, onChange: (e) => onChange(e.target.checked) }), _jsx("span", { className: "min-w-0", children: children })] }));

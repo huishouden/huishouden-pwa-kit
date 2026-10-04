@@ -2,7 +2,7 @@
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
  * checkbox, section tabs (a bottom bar on phones), member badge, "Sample data" banner every app shows, and
- * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`.
+ * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`, and a copy button.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Ellipsis, EyeOff, Plus, X, type LucideIcon } from 'lucide-react';
+import { Check, ChevronDown, Copy, Ellipsis, EyeOff, Plus, X, type LucideIcon } from 'lucide-react';
 import { personColour, personInitial, personName } from '../people';
 import { useKitT } from './i18n';
 
@@ -267,6 +267,40 @@ export function Field({ label, children, hint }: { label: string; children: Reac
       {children}
       {hint && <span className="mt-1 block text-sm text-muted">{hint}</span>}
     </label>
+  );
+}
+
+/**
+ * Copies `text` to the clipboard from a tap, and says "Copied" for a moment: a Zelle email, an
+ * account number. `what` names it for screen readers and the tooltip ("Copy the Zelle email").
+ */
+export function CopyButton({ text, what, className = iconButton }: { text: string; what: string; className?: string }) {
+  const kt = useKitT();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const id = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(id);
+  }, [copied]);
+  const label = kt('ui.copy', { what });
+  return (
+    <button
+      type="button"
+      className={className}
+      aria-label={copied ? kt('ui.copied') : label}
+      title={label}
+      onClick={() => {
+        void navigator.clipboard?.writeText(text).then(
+          () => setCopied(true),
+          () => {},
+        );
+      }}
+    >
+      {copied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
+      <span className="sr-only" aria-live="polite">
+        {copied ? kt('ui.copied') : ''}
+      </span>
+    </button>
   );
 }
 

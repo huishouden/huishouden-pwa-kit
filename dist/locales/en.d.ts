@@ -14,6 +14,8 @@ declare const _default: {
     readonly 'ui.loggedBy': "Logged by {name}";
     readonly 'ui.addSuggestion': "Add {label}";
     readonly 'ui.dontSuggest': "Don't suggest {label}";
+    readonly 'ui.copy': "Copy {what}";
+    readonly 'ui.copied': "Copied";
     readonly 'todos.addedToday': "Added today";
     readonly 'todos.addedYesterday': "Added yesterday";
     readonly 'todos.addedDays': "Added {n} days ago";
@@ -147,6 +149,8 @@ declare const _default: {
     readonly 'push.turnOff': "Turn off";
     readonly 'push.turnOn': "Turn on";
     readonly 'push.asking': "Asking the browser";
+    readonly 'push.muteHint': "Only for you, on all your devices. Everyone else still gets them.";
+    readonly 'push.couldNotMute': "Couldn't change that. Try again.";
     readonly 'places.unavailable': "The free map service is busy or unreachable";
     readonly 'photo.cantShrink': "This browser can't make a photo smaller.";
     readonly 'photo.tooDetailed': "That photo is too detailed to make small enough.";
@@ -329,6 +333,9 @@ declare const _default: {
     readonly 'contacts.label.video': "Video";
     readonly 'contacts.otherPhones': "Other phones: {list}";
     readonly 'contacts.otherEmails': "Other emails: {list}";
+    readonly 'contacts.noOne': "No one";
+    readonly 'contacts.withRole': "{name} ({role})";
+    readonly 'contacts.removedContact': "A removed contact";
     readonly 'common.save': "Save";
     readonly 'common.cancel': "Cancel";
     readonly 'common.close': "Close";

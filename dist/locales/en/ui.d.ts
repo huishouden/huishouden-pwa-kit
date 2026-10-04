@@ -14,5 +14,7 @@ declare const _default: {
     readonly 'ui.loggedBy': "Logged by {name}";
     readonly 'ui.addSuggestion': "Add {label}";
     readonly 'ui.dontSuggest': "Don't suggest {label}";
+    readonly 'ui.copy': "Copy {what}";
+    readonly 'ui.copied': "Copied";
 };
 export default _default;

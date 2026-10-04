@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PUSH_SUBSCRIPTION_FIELDS, applicationServerKey, iosVersion, pushSubscriptionId, pushSupport } from '../src/push';
+import { NOTIFICATION_PREFS_FIELDS, PUSH_SUBSCRIPTION_FIELDS, applicationServerKey, iosVersion, mutedApps, pushSubscriptionId, pushSupport } from '../src/push';
 import { PUSH_SW_FILE, installPushHandlers, pushServiceWorkerSource } from '../src/push-sw';
 import { OCR_CACHE, pwaApp } from '../src/vite';
 
@@ -178,4 +178,16 @@ describe('pwaApp({ push, ocr })', () => {
       rmSync(root, { recursive: true, force: true });
     }
   }, 60_000);
+});
+
+describe('notification preferences', () => {
+  test('mutedApps keeps app names only, once each', () => {
+    expect(mutedApps({ muted: ['bills', 'bills', 'pet', 3, 'Not An App', ''] })).toEqual(['bills', 'pet']);
+    expect(mutedApps(undefined)).toEqual([]);
+    expect(mutedApps({ muted: 'bills' })).toEqual([]);
+  });
+
+  test('fields match the rules', () => {
+    expect([...NOTIFICATION_PREFS_FIELDS]).toEqual(['muted', 'updatedAt']);
+  });
 });

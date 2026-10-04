@@ -82,4 +82,7 @@ export default {
     'contacts.label.video': 'Video',
     'contacts.otherPhones': 'Andere telefoonnummers: {list}',
     'contacts.otherEmails': 'Andere e-mailadressen: {list}',
+    'contacts.noOne': 'Niemand',
+    'contacts.withRole': '{name} ({role})',
+    'contacts.removedContact': 'Een verwijderd contact',
 };
