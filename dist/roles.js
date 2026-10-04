@@ -1,9 +1,19 @@
 import { doc } from 'firebase/firestore';
 import { updateDoc } from './firestore.js';
 import { normalizeEmail } from './household.js';
+import { kt } from './i18n.js';
 export const ROLES = ['admin', 'member', 'helper', 'kid'];
+/** The roles' names in English. Shown text uses `roleLabel` (the active language). */
 export const ROLE_LABELS = { admin: 'Admin', member: 'Member', helper: 'Helper', kid: 'Kid' };
-/** One line each, for a role picker. */
+/** A role's name in the active language: "Helper", "Ayudante", "Hulp". */
+export function roleLabel(role) {
+    return kt(`roles.${role}`);
+}
+/** A role's one-line description in the active language, for a role picker. */
+export function roleDescription(role) {
+    return kt(`roles.${role}Description`);
+}
+/** One line each, in English. Shown text uses `roleDescription`. */
 export const ROLE_DESCRIPTIONS = {
     admin: 'Everything, and invites people and sets their roles.',
     member: 'Everything except inviting people and setting roles.',
@@ -30,18 +40,18 @@ export function isRestricted(role) {
     return role === 'helper' || role === 'kid';
 }
 const REFUSALS = {
-    'manage-people': 'Only admins can invite or remove people and set roles.',
-    'change-settings': 'Only admins and members can change settings.',
-    'see-money': 'Only admins and members can see the household’s money.',
-    'see-private': 'Only admins and members can see this.',
-    'edit-others': 'Only admins and members can change or delete what someone else added.',
-    'give-medicine': 'Only admins, members and helpers can give medicine.',
-    add: 'Only household members can add things.',
-    tick: 'Only household members can tick things off.',
+    'manage-people': 'roles.refuseManagePeople',
+    'change-settings': 'roles.refuseChangeSettings',
+    'see-money': 'roles.refuseSeeMoney',
+    'see-private': 'roles.refuseSeePrivate',
+    'edit-others': 'roles.refuseEditOthers',
+    'give-medicine': 'roles.refuseGiveMedicine',
+    add: 'roles.refuseAdd',
+    tick: 'roles.refuseTick',
 };
-/** The sentence to show where `action` is refused: "Only admins and members can change settings." */
+/** The sentence to show where `action` is refused, in the active language: "Only admins and members can change settings." */
 export function refusal(action) {
-    return REFUSALS[action];
+    return kt(REFUSALS[action]);
 }
 const isRole = (v) => typeof v === 'string' && ROLES.includes(v);
 /** The `roles` map from a household document, keeping only valid entries. */
@@ -70,7 +80,7 @@ export function effectiveRoles(household) {
 export async function setRole(db, household, email, role) {
     const who = normalizeEmail(email);
     if (!household.members.includes(who))
-        throw new Error(`${email} is not in this household.`);
+        throw new Error(kt('roles.notInHousehold', { email }));
     if (!isRole(role))
         throw new Error(`Unknown role: ${String(role)}`);
     await updateDoc(doc(db, 'households', household.id), { roles: { ...effectiveRoles(household), [who]: role } });

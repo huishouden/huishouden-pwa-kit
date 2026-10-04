@@ -102,7 +102,7 @@ export interface ContactGroup {
 }
 /**
  * Contacts grouped by role: the app's known `roles` first in their order (matched ignoring case),
- * then typed roles A–Z, then contacts without a role as "Other". Names A–Z within each group.
+ * then typed roles A–Z, then contacts without a role as "Other" (in the active language). Names A–Z within each group.
  */
 export declare function groupContacts(contacts: Contact[], roles: readonly string[]): ContactGroup[];
 /** "example.com" → "https://example.com"; empty stays empty. */

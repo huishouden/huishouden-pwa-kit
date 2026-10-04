@@ -1,0 +1,20 @@
+import type en from '../en/ui.js';
+import type { CatalogueOf } from '../../i18n.js';
+
+export default {
+  'ui.close': 'Cerrar',
+  'ui.tryAgain': 'Intentar de nuevo',
+  'ui.undo': 'Deshacer',
+  'ui.overdue': 'Atrasado',
+  'ui.soon': 'Pronto',
+  'ui.sampleData': 'Datos de ejemplo',
+  'ui.nothingSaved': 'No se guarda nada.',
+  'ui.details': 'Detalles',
+  'ui.hideDetails': 'Ocultar detalles',
+  'ui.sections': 'Secciones',
+  'ui.more': 'Más',
+  'ui.moreShowing': 'Más, mostrando {tab}',
+  'ui.loggedBy': 'Registrado por {name}',
+  'ui.addSuggestion': 'Agregar {label}',
+  'ui.dontSuggest': 'No sugerir {label}',
+} satisfies CatalogueOf<typeof en>;

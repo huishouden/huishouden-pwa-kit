@@ -1,0 +1,18 @@
+declare const _default: {
+    readonly 'ui.close': "Close";
+    readonly 'ui.tryAgain': "Try again";
+    readonly 'ui.undo': "Undo";
+    readonly 'ui.overdue': "Overdue";
+    readonly 'ui.soon': "Soon";
+    readonly 'ui.sampleData': "Sample data";
+    readonly 'ui.nothingSaved': "Nothing is saved.";
+    readonly 'ui.details': "Details";
+    readonly 'ui.hideDetails': "Hide details";
+    readonly 'ui.sections': "Sections";
+    readonly 'ui.more': "More";
+    readonly 'ui.moreShowing': "More, showing {tab}";
+    readonly 'ui.loggedBy': "Logged by {name}";
+    readonly 'ui.addSuggestion': "Add {label}";
+    readonly 'ui.dontSuggest': "Don't suggest {label}";
+};
+export default _default;

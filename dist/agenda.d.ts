@@ -1,5 +1,6 @@
 import { type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { type Ymd } from './time.js';
+import { type LocalTexts } from './i18n.js';
 /**
  * The household's agenda: dated things from every app in one collection,
  * `households/{id}/agenda`, so the portal can show one calendar and a Today view without reading
@@ -46,15 +47,19 @@ export interface AgendaItem {
      * one person's care. Absent on the shared agenda.
      */
     audience?: string[];
+    /** The title and detail in every language (`localizeAgenda`); `title`/`detail` are the writer's and the fallback. */
+    texts?: AgendaTexts;
     updatedAt: number;
     /** Lowercase email of the member whose app wrote it. */
     by: string;
 }
-export declare const AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "updatedAt", "by"];
+/** What an agenda item says, per language. */
+export type AgendaTexts = LocalTexts<'title' | 'detail'>;
+export declare const AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "texts", "updatedAt", "by"];
 /** The collection of items for named members only (`./audience`). */
 export declare const PERSONAL_AGENDA = "personalAgenda";
 /** Fields of a `personalAgenda` item: the agenda's plus `audience`. */
-export declare const PERSONAL_AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "updatedAt", "by", "audience"];
+export declare const PERSONAL_AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "texts", "updatedAt", "by", "audience"];
 /** Maximum lengths, the same as the rules. */
 export declare const AGENDA_LIMITS: {
     readonly app: 40;
@@ -64,6 +69,27 @@ export declare const AGENDA_LIMITS: {
     readonly url: 2000;
     readonly who: 60;
     readonly by: 254;
+};
+/** Limits inside `texts`, the same as the fields they translate. */
+export declare const AGENDA_TEXT_LIMITS: {
+    readonly title: 120;
+    readonly detail: 200;
+};
+/**
+ * Runs `build` once per language and gives its items with `texts` (title and detail), so the
+ * portal shows each reader their own language:
+ *
+ * ```ts
+ * syncAgenda(db, id, 'bills', await localizeAgenda(() => billAgenda(bills)), { by: me });
+ * ```
+ */
+export declare function localizeAgenda<T extends Pick<AgendaInput, 'title' | 'detail'>>(build: () => T[]): Promise<(T & {
+    texts: AgendaTexts;
+})[]>;
+/** An item's title and detail in the reader's language. */
+export declare function agendaWords(item: Pick<AgendaItem, 'title' | 'detail' | 'texts'>): {
+    title: string;
+    detail?: string;
 };
 /** Apps publish items from this many days ago (overdue ones whatever their age)... */
 export declare const AGENDA_PAST_DAYS = 30;

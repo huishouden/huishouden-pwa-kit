@@ -9,7 +9,9 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { Auth } from 'firebase/auth';
 import { ListTodo } from 'lucide-react';
 import { cachedGoogleTasksToken, googleTasks, type GoogleTask } from '../google-tasks';
-import { formatDayShort } from '../time';
+import { formatDayShort, weekdayShort } from '../time';
+import { kt } from '../i18n';
+import { useKitT } from './i18n';
 import { SuggestionsCard, useSuggestions, type SuggestionsState } from './suggestions';
 
 export interface GoogleTasksSuggestionsOptions {
@@ -61,10 +63,9 @@ export function googleTaskDue(t: GoogleTask, now: number = Date.now()): string |
   const [y, m, d] = t.due.split('-').map(Number);
   const day = new Date(y, m - 1, d).getTime();
   const days = Math.round((day - new Date(new Date(now).toDateString()).getTime()) / 86_400_000);
-  if (days === 0) return 'Due today';
-  if (days === 1) return 'Due tomorrow';
-  if (days > 1 && days < 7) return `Due ${new Date(day).toLocaleDateString(undefined, { weekday: 'short' })}`;
-  return `Due ${formatDayShort(day)}`;
+  if (days === 0) return kt('time.dueToday');
+  if (days === 1) return kt('time.dueTomorrow');
+  return kt('googleTasks.dueOn', { day: days > 1 && days < 7 ? weekdayShort(day) : formatDayShort(day) });
 }
 
 /**
@@ -78,15 +79,16 @@ export function GoogleTasksSuggestions({ suggestions, listTitle, onAdd, onDismis
   onDismiss: (t: GoogleTask) => void;
   now?: number;
 }) {
+  const kt = useKitT();
   return (
     <SuggestionsCard
       suggestions={suggestions}
       idOf={(t) => t.id}
       titleOf={(t) => t.title}
       detailOf={(t) => [googleTaskDue(t, now), listTitle?.(t.listId)].filter(Boolean).join(' · ') || null}
-      lead="New in Google Tasks"
-      label="New in Google Tasks"
-      moreLabel="More new Google Tasks"
+      lead={kt('googleTasks.new')}
+      label={kt('googleTasks.new')}
+      moreLabel={kt('googleTasks.more')}
       icon={<ListTodo size={20} className="shrink-0 text-link" aria-hidden="true" />}
       onAdd={onAdd}
       onDismiss={onDismiss}

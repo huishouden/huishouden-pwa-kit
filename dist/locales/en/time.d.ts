@@ -1,0 +1,28 @@
+declare const _default: {
+    readonly 'time.today': "today";
+    readonly 'time.tomorrow': "tomorrow";
+    readonly 'time.yesterday': "yesterday";
+    readonly 'time.justNow': "just now";
+    readonly 'time.ago': "{span} ago";
+    readonly 'time.inSpan': "in {span}";
+    readonly 'time.ordinal': "{n, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}";
+    readonly 'time.durationD': "{d}d";
+    readonly 'time.durationDH': "{d}d {h}h";
+    readonly 'time.durationH': "{h}h";
+    readonly 'time.durationHM': "{h}h {m}m";
+    readonly 'time.durationM': "{m}m";
+    readonly 'time.hoursTotal': "{h} h";
+    readonly 'time.overdueBy': "Overdue by {span}";
+    readonly 'time.dueToday': "Due today";
+    readonly 'time.dueTomorrow': "Due tomorrow";
+    readonly 'time.dueIn': "Due in {span}";
+    readonly 'time.headlineOverdue': "Overdue: {title}";
+    readonly 'time.headlineToday': "{title} due today";
+    readonly 'time.headlineTomorrow': "{title} due tomorrow";
+    readonly 'time.atClock': "at {time}";
+    readonly 'time.atClockOne': "at {time}";
+    readonly 'time.byClock': "by {time}";
+    readonly 'time.byClockOne': "by {time}";
+    readonly 'time.headlineIn': "{title} due in {span}";
+};
+export default _default;

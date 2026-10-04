@@ -199,7 +199,7 @@ describe('daylight saving time', () => {
 
 describe('times of day', () => {
   test('clockWords and isHhmm', () => {
-    expect(['00:00', '07:00', '12:00', '12:30', '19:05', '23:59'].map(clockWords)).toEqual(['12 AM', '7 AM', '12 PM', '12:30 PM', '7:05 PM', '11:59 PM']);
+    expect(['00:00', '07:00', '12:00', '12:30', '19:05', '23:59'].map((t) => clockWords(t))).toEqual(['12 AM', '7 AM', '12 PM', '12:30 PM', '7:05 PM', '11:59 PM']);
     expect(['7:00', '24:00', '19:60', 1900, ''].some(isHhmm)).toBe(false);
   });
 });

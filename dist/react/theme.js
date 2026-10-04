@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { getThemeMode, isDark, onThemeChange, setThemeMode, startTheme } from '../theme';
-export { THEME_LABELS, THEME_MODES } from '../theme';
+export { THEME_LABELS, THEME_MODES, themeLabel } from '../theme';
 const subscribe = (notify) => onThemeChange(notify);
 const snapshot = () => `${getThemeMode()}|${isDark() ? 1 : 0}`;
 const serverSnapshot = () => 'auto|0';

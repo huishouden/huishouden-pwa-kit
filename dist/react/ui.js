@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Ellipsis, EyeOff, Plus, X } from 'lucide-react';
 import { personColour, personInitial, personName } from '../people';
+import { useKitT } from './i18n';
 export const inputClass = 'w-full min-h-11 rounded-xl border border-line bg-white px-3 py-2.5 text-base text-ink outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:bg-forest-900 dark:focus:ring-forest-700';
 /** A select styled like the inputs. */
 export const selectClass = `${inputClass} appearance-auto`;
@@ -94,10 +95,12 @@ export function useLongPress(onLongPress, ms = LONG_PRESS_MS) {
  * beside the label does the same at once, for a visible way in (an "Edit" link by the shelf's
  * heading). Every target is at least 44px. Removing is the app's (with its Undo).
  */
-export function SuggestionChip({ label, onPick, onRemove, editing, large, removeLabel = `Don't suggest ${label}`, hint, }) {
+export function SuggestionChip({ label, onPick, onRemove, editing, large, removeLabel, hint, }) {
+    const kt = useKitT();
+    removeLabel ??= kt('ui.dontSuggest', { label });
     const [menu, setMenu] = useState(false);
     const press = useLongPress(() => setMenu(true));
-    return (_jsxs("span", { className: `inline-flex min-h-11 shrink-0 items-center rounded-full border border-forest-200 bg-forest-50 font-medium text-forest-700 dark:border-forest-600 dark:bg-forest-800 dark:text-forest-100 ${large ? 'text-lg' : 'text-sm'}`, children: [_jsxs("button", { type: "button", ...press, onClick: onPick, "aria-label": `Add ${label}`, className: `inline-flex min-h-11 items-center gap-1.5 rounded-full whitespace-nowrap select-none [-webkit-touch-callout:none] hover:bg-forest-100 dark:hover:bg-forest-700 ${large ? 'px-4' : 'px-3.5'} ${editing ? 'pr-1' : ''}`, children: [_jsx(Plus, { size: large ? 18 : 14, strokeWidth: 2.5, "aria-hidden": "true" }), label] }), editing && (_jsx("button", { type: "button", onClick: onRemove, "aria-label": removeLabel, className: "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-forest-700 hover:bg-tint-strong dark:text-forest-100", children: _jsx(X, { size: large ? 18 : 16, "aria-hidden": "true" }) })), menu &&
+    return (_jsxs("span", { className: `inline-flex min-h-11 shrink-0 items-center rounded-full border border-forest-200 bg-forest-50 font-medium text-forest-700 dark:border-forest-600 dark:bg-forest-800 dark:text-forest-100 ${large ? 'text-lg' : 'text-sm'}`, children: [_jsxs("button", { type: "button", ...press, onClick: onPick, "aria-label": kt('ui.addSuggestion', { label }), className: `inline-flex min-h-11 items-center gap-1.5 rounded-full whitespace-nowrap select-none [-webkit-touch-callout:none] hover:bg-forest-100 dark:hover:bg-forest-700 ${large ? 'px-4' : 'px-3.5'} ${editing ? 'pr-1' : ''}`, children: [_jsx(Plus, { size: large ? 18 : 14, strokeWidth: 2.5, "aria-hidden": "true" }), label] }), editing && (_jsx("button", { type: "button", onClick: onRemove, "aria-label": removeLabel, className: "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-forest-700 hover:bg-tint-strong dark:text-forest-100", children: _jsx(X, { size: large ? 18 : 16, "aria-hidden": "true" }) })), menu &&
                 // Into the body, so the sheet takes none of the pill's text styles and no scroller clips it.
                 createPortal(_jsxs(Dialog, { title: label, onClose: () => setMenu(false), children: [_jsxs("button", { type: "button", onClick: () => {
                                 setMenu(false);
@@ -114,6 +117,7 @@ export function SuggestionChip({ label, onPick, onRemove, editing, large, remove
  * itself does, so the keyboard only opens when a field is tapped.
  */
 export function Dialog({ title, onClose, children, footer, wide }) {
+    const kt = useKitT();
     const panel = useRef(null);
     const close = useRef(onClose);
     close.current = onClose;
@@ -130,9 +134,9 @@ export function Dialog({ title, onClose, children, footer, wide }) {
             return el.focus({ preventScroll: true });
         if (el.contains(document.activeElement))
             return;
-        el.querySelector('input, select, textarea, button:not([aria-label="Close"])')?.focus();
+        el.querySelector('input, select, textarea, button:not([data-dialog-close])')?.focus();
     }, []);
-    return (_jsx("div", { className: "fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6", onClick: onClose, children: _jsxs("div", { ref: panel, role: "dialog", "aria-modal": "true", "aria-label": title, tabIndex: -1, className: `safe-bottom outline-none max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-surface p-6 shadow-2xl sm:rounded-3xl ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`, onClick: (e) => e.stopPropagation(), children: [_jsxs("div", { className: "mb-5 flex items-center justify-between gap-4", children: [_jsx("h2", { className: "text-xl font-semibold text-ink", children: title }), _jsx("button", { type: "button", onClick: onClose, className: iconButton, "aria-label": "Close", children: _jsx(X, { size: 20 }) })] }), children, footer && _jsx("div", { className: "mt-6 flex flex-wrap items-center justify-end gap-2", children: footer })] }) }));
+    return (_jsx("div", { className: "fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6", onClick: onClose, children: _jsxs("div", { ref: panel, role: "dialog", "aria-modal": "true", "aria-label": title, tabIndex: -1, className: `safe-bottom outline-none max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-surface p-6 shadow-2xl sm:rounded-3xl ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`, onClick: (e) => e.stopPropagation(), children: [_jsxs("div", { className: "mb-5 flex items-center justify-between gap-4", children: [_jsx("h2", { className: "text-xl font-semibold text-ink", children: title }), _jsx("button", { type: "button", onClick: onClose, className: iconButton, "aria-label": kt('ui.close'), "data-dialog-close": "", children: _jsx(X, { size: 20 }) })] }), children, footer && _jsx("div", { className: "mt-6 flex flex-wrap items-center justify-end gap-2", children: footer })] }) }));
 }
 /** A touch screen, where focusing a text field opens the on-screen keyboard. */
 const touchScreen = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -144,15 +148,17 @@ export function Checkbox({ checked, onChange, children }) {
 }
 /** "Overdue" and "Soon" labels; nothing for the rest, so the eye goes to what needs doing. */
 export function StatusPill({ state }) {
+    const kt = useKitT();
     if (state === 'overdue')
-        return _jsx("span", { className: "inline-flex shrink-0 items-center rounded-full bg-attention-tint px-2.5 py-0.5 text-sm font-semibold text-attention", children: "Overdue" });
+        return _jsx("span", { className: "inline-flex shrink-0 items-center rounded-full bg-attention-tint px-2.5 py-0.5 text-sm font-semibold text-attention", children: kt('ui.overdue') });
     if (state === 'soon')
-        return _jsx("span", { className: "inline-flex shrink-0 items-center rounded-full border border-line bg-surface px-2.5 py-0.5 text-sm font-semibold text-ink-soft", children: "Soon" });
+        return _jsx("span", { className: "inline-flex shrink-0 items-center rounded-full border border-line bg-surface px-2.5 py-0.5 text-sm font-semibold text-ink-soft", children: kt('ui.soon') });
     return null;
 }
 /** A failed action in words, with Try again. */
 export function ErrorNotice({ message, onRetry }) {
-    return (_jsxs("div", { role: "alert", className: "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-error-tint px-3 py-2 text-base text-error", children: [_jsx("span", { className: "min-w-0 flex-1", children: message }), _jsx("button", { type: "button", className: "min-h-11 rounded-xl px-3 font-semibold underline-offset-4 hover:underline", onClick: onRetry, children: "Try again" })] }));
+    const kt = useKitT();
+    return (_jsxs("div", { role: "alert", className: "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-error-tint px-3 py-2 text-base text-error", children: [_jsx("span", { className: "min-w-0 flex-1", children: message }), _jsx("button", { type: "button", className: "min-h-11 rounded-xl px-3 font-semibold underline-offset-4 hover:underline", onClick: onRetry, children: kt('ui.tryAgain') })] }));
 }
 /**
  * The note above a signed-out app's invented household. On phones it is one line, the "Sample data"
@@ -160,9 +166,11 @@ export function ErrorNotice({ message, onRetry }) {
  * `notice` (a sign-in error) takes the text's place at every width. `children` (scenario chips) follow
  * on their own row on phones, on the same row when there is room.
  */
-export function SampleBanner({ text, short = 'Nothing is saved.', notice, children, className = '', }) {
+export function SampleBanner({ text, short, notice, children, className = '', }) {
+    const kt = useKitT();
+    short ??= kt('ui.nothingSaved');
     const [open, setOpen] = useState(false);
-    return (_jsxs("div", { role: "note", "data-sample-banner": true, className: `${cardClass} flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1 sm:px-4 sm:py-1.5 ${className}`, children: [_jsxs("div", { "data-sample-line": true, className: "flex min-h-11 w-full min-w-0 items-center gap-3 sm:w-auto sm:flex-1 sm:gap-4", children: [_jsx("span", { "data-sample-chip": true, className: "shrink-0 rounded-full bg-attention-tint px-3 py-1 text-sm font-semibold whitespace-nowrap text-attention", children: "Sample data" }), notice ? (typeof notice === 'string' ? _jsx("p", { className: "min-w-0 flex-1 text-base text-muted", children: notice }) : _jsx("div", { className: "min-w-0 flex-1", children: notice })) : (_jsxs(_Fragment, { children: [_jsxs("button", { type: "button", "data-sample-short": true, "aria-expanded": open, onClick: () => setOpen((o) => !o), className: "flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-xl text-left text-sm text-muted sm:hidden", children: [_jsx("span", { className: "truncate", children: short }), _jsx(ChevronDown, { size: 16, strokeWidth: 2.2, "aria-hidden": true, className: `shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}` }), _jsx("span", { className: "sr-only", children: open ? 'Hide details' : 'Details' })] }), _jsx("p", { className: "hidden min-w-0 flex-1 text-base text-muted sm:block", children: text })] }))] }), open && !notice && _jsx("p", { className: "w-full pb-1.5 text-sm text-muted sm:hidden", children: text }), children] }));
+    return (_jsxs("div", { role: "note", "data-sample-banner": true, className: `${cardClass} flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1 sm:px-4 sm:py-1.5 ${className}`, children: [_jsxs("div", { "data-sample-line": true, className: "flex min-h-11 w-full min-w-0 items-center gap-3 sm:w-auto sm:flex-1 sm:gap-4", children: [_jsx("span", { "data-sample-chip": true, className: "shrink-0 rounded-full bg-attention-tint px-3 py-1 text-sm font-semibold whitespace-nowrap text-attention", children: kt('ui.sampleData') }), notice ? (typeof notice === 'string' ? _jsx("p", { className: "min-w-0 flex-1 text-base text-muted", children: notice }) : _jsx("div", { className: "min-w-0 flex-1", children: notice })) : (_jsxs(_Fragment, { children: [_jsxs("button", { type: "button", "data-sample-short": true, "aria-expanded": open, onClick: () => setOpen((o) => !o), className: "flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-xl text-left text-sm text-muted sm:hidden", children: [_jsx("span", { className: "truncate", children: short }), _jsx(ChevronDown, { size: 16, strokeWidth: 2.2, "aria-hidden": true, className: `shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}` }), _jsx("span", { className: "sr-only", children: open ? kt('ui.hideDetails') : kt('ui.details') })] }), _jsx("p", { className: "hidden min-w-0 flex-1 text-base text-muted sm:block", children: text })] }))] }), open && !notice && _jsx("p", { className: "w-full pb-1.5 text-sm text-muted sm:hidden", children: text }), children] }));
 }
 /** Tabs the phone's bottom bar has room for, More included. */
 export const BOTTOM_NAV_MAX = 5;
@@ -189,12 +197,14 @@ export function splitTabs(tabs) {
  * `compact` tightened the phone tabs before the bottom bar; it no longer changes anything.
  */
 export function SectionTabs({ tabs, tab, onTab }) {
+    const kt = useKitT();
     if (tabs.length === 0)
         return null;
-    return (_jsxs(_Fragment, { children: [_jsx("nav", { slot: "nav", "data-bottom-nav": "", "aria-label": "Sections", className: "hidden w-full gap-1 overflow-x-auto rounded-2xl border border-line bg-surface p-1 sm:flex sm:w-auto", children: tabs.map((t) => (_jsx("button", { type: "button", onClick: () => onTab(t.id), "aria-current": t.id === tab ? 'page' : undefined, className: `min-h-11 flex-1 rounded-xl px-2 text-sm font-medium whitespace-nowrap transition-colors duration-150 sm:flex-none sm:px-5 sm:text-base ${t.id === tab ? 'bg-primary text-on-primary' : 'text-muted hover:bg-stone-100 dark:hover:bg-forest-700'}`, children: t.label }, t.id))) }), typeof document !== 'undefined' && createPortal(_jsx(BottomNav, { tabs: tabs, tab: tab, onTab: onTab }), document.body)] }));
+    return (_jsxs(_Fragment, { children: [_jsx("nav", { slot: "nav", "data-bottom-nav": "", "aria-label": kt('ui.sections'), className: "hidden w-full gap-1 overflow-x-auto rounded-2xl border border-line bg-surface p-1 sm:flex sm:w-auto", children: tabs.map((t) => (_jsx("button", { type: "button", onClick: () => onTab(t.id), "aria-current": t.id === tab ? 'page' : undefined, className: `min-h-11 flex-1 rounded-xl px-2 text-sm font-medium whitespace-nowrap transition-colors duration-150 sm:flex-none sm:px-5 sm:text-base ${t.id === tab ? 'bg-primary text-on-primary' : 'text-muted hover:bg-stone-100 dark:hover:bg-forest-700'}`, children: t.label }, t.id))) }), typeof document !== 'undefined' && createPortal(_jsx(BottomNav, { tabs: tabs, tab: tab, onTab: onTab }), document.body)] }));
 }
 const BOTTOM_NAV_ATTR = 'data-hh-bottom-nav';
 function BottomNav({ tabs, tab, onTab }) {
+    const kt = useKitT();
     const [sheet, setSheet] = useState(false);
     const { bar, more } = splitTabs(tabs);
     const inMore = more.some((t) => t.id === tab);
@@ -204,13 +214,13 @@ function BottomNav({ tabs, tab, onTab }) {
         return () => root.removeAttribute(BOTTOM_NAV_ATTR);
     }, []);
     const item = (key, label, Icon, active, props) => (_jsx("li", { className: "flex min-w-0 flex-1", children: _jsxs("button", { type: "button", ...props, className: `flex min-h-16 w-full min-w-0 flex-col items-center justify-center gap-1 px-1 text-xs font-medium transition-colors duration-150 ${active ? 'text-link' : 'text-muted'}`, children: [_jsx("span", { "aria-hidden": true, className: `flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-150 ${active ? 'bg-forest-100 dark:bg-forest-700' : ''}`, children: Icon ? _jsx(Icon, { size: 22, strokeWidth: active ? 2.4 : 2 }) : null }), _jsx("span", { className: `max-w-full truncate ${active ? 'font-semibold' : ''}`, children: label })] }) }, key));
-    return (_jsxs(_Fragment, { children: [_jsx("nav", { [BOTTOM_NAV_ATTR]: '', "aria-label": "Sections", className: "fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] sm:hidden", children: _jsxs("ul", { className: "mx-auto flex max-w-lg", children: [bar.map((t) => item(t.id, t.short ?? t.label, t.icon, t.id === tab, { onClick: () => onTab(t.id), 'aria-current': t.id === tab ? 'page' : undefined })), more.length > 0 &&
-                            item('more', 'More', Ellipsis, inMore, {
+    return (_jsxs(_Fragment, { children: [_jsx("nav", { [BOTTOM_NAV_ATTR]: '', "aria-label": kt('ui.sections'), className: "fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] sm:hidden", children: _jsxs("ul", { className: "mx-auto flex max-w-lg", children: [bar.map((t) => item(t.id, t.short ?? t.label, t.icon, t.id === tab, { onClick: () => onTab(t.id), 'aria-current': t.id === tab ? 'page' : undefined })), more.length > 0 &&
+                            item('more', kt('ui.more'), Ellipsis, inMore, {
                                 onClick: () => setSheet(true),
                                 'aria-haspopup': 'dialog',
                                 'aria-expanded': sheet,
-                                'aria-label': inMore ? `More, showing ${more.find((t) => t.id === tab).label}` : 'More',
-                            })] }) }), sheet && (_jsx(Dialog, { title: "More", onClose: () => setSheet(false), children: _jsx("ul", { className: "grid gap-1", children: more.map((t) => {
+                                'aria-label': inMore ? kt('ui.moreShowing', { tab: more.find((t) => t.id === tab).label }) : kt('ui.more'),
+                            })] }) }), sheet && (_jsx(Dialog, { title: kt('ui.more'), onClose: () => setSheet(false), children: _jsx("ul", { className: "grid gap-1", children: more.map((t) => {
                         const Icon = t.icon;
                         const active = t.id === tab;
                         return (_jsx("li", { children: _jsxs("button", { type: "button", "aria-current": active ? 'page' : undefined, onClick: () => {
@@ -221,8 +231,9 @@ function BottomNav({ tabs, tab, onTab }) {
 }
 /** A member's initial on their colour, for "logged by" marks. */
 export function PersonBadge({ email, me, members, size = 32 }) {
+    const kt = useKitT();
     const name = personName(email, { email: me });
-    return (_jsx("span", { className: "inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white", style: { width: size, height: size, backgroundColor: personColour(email, members), fontSize: size * 0.42 }, title: `Logged by ${name}`, "aria-label": `Logged by ${name}`, role: "img", children: personInitial(email) }));
+    return (_jsx("span", { className: "inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white", style: { width: size, height: size, backgroundColor: personColour(email, members), fontSize: size * 0.42 }, title: kt('ui.loggedBy', { name }), "aria-label": kt('ui.loggedBy', { name }), role: "img", children: personInitial(email) }));
 }
 /** One toast at a time: `notify` (with an optional Undo), `fail` (an error), `clear`. Pair with `<Toast>`. */
 export function useToast() {
@@ -234,6 +245,7 @@ export function useToast() {
 }
 /** The toast at the bottom: 6 seconds for news, 9 for errors; Undo runs and dismisses it. */
 export function Toast({ toast, onDone }) {
+    const kt = useKitT();
     useEffect(() => {
         if (!toast)
             return;
@@ -243,5 +255,5 @@ export function Toast({ toast, onDone }) {
     return (_jsx("div", { "aria-live": "polite", className: "pointer-events-none fixed inset-x-0 bottom-(--hh-bottom-nav) z-[60] flex justify-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]", children: toast && (_jsxs("div", { className: `pointer-events-auto flex min-h-14 max-w-xl items-center gap-4 rounded-2xl px-5 py-2 text-base font-medium text-white shadow-lg ${toast.tone === 'error' ? 'bg-red-700' : 'bg-stone-800'}`, children: [_jsx("span", { children: toast.message }), toast.undo && (_jsx("button", { type: "button", onClick: () => {
                         toast.undo?.();
                         onDone();
-                    }, className: "min-h-11 rounded-xl px-3 font-semibold text-forest-200 underline-offset-4 hover:underline", children: "Undo" }))] })) }));
+                    }, className: "min-h-11 rounded-xl px-3 font-semibold text-forest-200 underline-offset-4 hover:underline", children: kt('ui.undo') }))] })) }));
 }

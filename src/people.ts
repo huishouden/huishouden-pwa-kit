@@ -1,3 +1,4 @@
+import { kt } from './i18n.js';
 /**
  * Household members as they appear on shared records: a short name, an initial and a colour of
  * their own, from the email address a record carries (`by`). Members' chosen names and photos come
@@ -6,7 +7,7 @@
 
 /** A short name for whoever logged something: "You", their first name, or the address's first word. */
 export function personName(email: string, me?: { email?: string | null; displayName?: string | null } | null): string {
-  if (me?.email && email.toLowerCase() === me.email.toLowerCase()) return 'You';
+  if (me?.email && email.toLowerCase() === me.email.toLowerCase()) return kt('people.you');
   const local = email.split('@')[0] ?? email;
   const word = local.split(/[^a-zA-Z]+/).find(Boolean) ?? local;
   return word ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : '?';

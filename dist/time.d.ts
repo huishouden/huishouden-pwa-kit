@@ -46,15 +46,29 @@ export declare function daysBetween(from: Ymd | number, to: Ymd | number): numbe
 export declare const daysUntil: (due: Ymd | number, now: number) => number;
 /** 0 = Sunday. */
 export declare const weekday: (s: Ymd) => number;
+/** English month names. Kit text uses `monthName` (the active locale); kept for callers that parse English. */
 export declare const MONTHS: string[];
+/** English weekday names, 0 = Sunday. Kit text uses `weekdayName`. */
 export declare const WEEKDAYS: string[];
-/** "1st", "2nd", "23rd", "31st". */
+/** A cached `Intl.DateTimeFormat` in the active locale (or `locale`). */
+export declare function dateFormat(options: Intl.DateTimeFormatOptions, locale?: string): Intl.DateTimeFormat;
+/** Month 1-12 in the active locale: "November", "noviembre", "november"; `short`: "Nov", "nov", "nov". */
+export declare function monthName(m: number, { short, locale }?: {
+    short?: boolean;
+    locale?: string;
+}): string;
+/** Weekday 0-6 (0 = Sunday) in the active locale: "Friday", "viernes", "vrijdag"; `short`: "Fri". */
+export declare function weekdayName(day: number, { short, locale }?: {
+    short?: boolean;
+    locale?: string;
+}): string;
+/** "1st", "2nd", "23rd" (English); "1.º" (Spanish); "1e" (Dutch): a day of the month as a rank. */
 export declare function ordinal(n: number): string;
-/** "35m", "1h", "2h 10m", "1d 3h". Rounds down to the minute; under a minute is "0m". */
+/** "35m", "1h", "2h 10m", "1d 3h" (Spanish "2 h 10 min", Dutch "2 u 10 min"). Rounds down to the minute; under a minute is "0m". */
 export declare function formatDuration(ms: number): string;
 /** "just now" under a minute, otherwise "2h 10m ago". */
 export declare function formatAgo(at: number, now: number): string;
-/** Hours with one decimal, for totals: "9.5 h". */
+/** Hours with one decimal, for totals: "9.5 h" ("9,5 h"). */
 export declare function formatHours(ms: number): string;
 /** "just now", "5 minutes ago", "2 hours ago", "3 days ago": the long form, to the nearest unit. */
 export declare function agoWords(at: number, now: number): string;
@@ -68,8 +82,9 @@ export interface SpanOptions {
     months?: 'down' | 'nearest';
 }
 /**
- * "5 days", "3 weeks", "4 months", "2 years". The sign is ignored: callers say "in" or "ago".
- * Days under two weeks, weeks under two months, months under two years, then whole years.
+ * "5 days", "3 weeks", "4 months", "2 years" in the active locale ("3 semanas", "3 weken"). The
+ * sign is ignored: callers say "in" or "ago". Days under two weeks, weeks under two months, months
+ * under two years, then whole years.
  */
 export declare function formatSpan(days: number, { daysUpTo, months }?: SpanOptions): string;
 /** "today", "tomorrow", "in 12 days", "in 3 weeks". */
@@ -92,21 +107,34 @@ export declare function dueText(due: Ymd, today: Ymd, options?: SpanOptions): st
 export declare function midSentence(title: string): string;
 /** The glanceable line: "Overdue: gutter cleaning", "Filter change due in 4 days", "Lawn service due today". */
 export declare function dueHeadline(title: string, due: Ymd, today: Ymd, options?: SpanOptions): string;
-/** "Nov 4", with the year when it isn't today's year (or `today` isn't given): "Dec 2, 2030". */
+/** "Nov 4" ("4 nov"), with the year when it isn't today's year (or `today` isn't given): "Dec 2, 2030". */
 export declare function shortDate(s: Ymd, today?: Ymd): string;
-/** "Tuesday, November 4", with the year when it isn't today's year: "Sunday, February 1, 2032". */
+/** "Tuesday, November 4" ("martes, 4 de noviembre"), with the year when it isn't today's year: "Sunday, February 1, 2032". */
 export declare function longDate(s: Ymd, today?: Ymd): string;
-/** "November 2033". */
+/** "November 2033" ("noviembre de 2033"). */
 export declare function monthYear(s: Ymd): string;
-/** A due day as a list shows it: "Today", "Tomorrow", "Yesterday", "Friday" (this week), "May 30", "Jan 4, 2032". */
-export declare function dueWords(due: Ymd, today: Ymd): string;
-export declare const formatTime: (t: number) => string;
-export declare const formatDayLong: (t: number) => string;
-export declare const formatDateLong: (t: number) => string;
-export declare const formatDayShort: (t: number) => string;
-export declare const monthShort: (t: number) => string;
-/** A calendar day in the device's locale: "22 Apr 2031" or "Apr 22, 2031". */
-export declare const formatYmd: (s: Ymd, options?: Intl.DateTimeFormatOptions) => string;
+/**
+ * A due day as a list shows it: "Today", "Tomorrow", "Yesterday", "Friday" (this week), "May 30",
+ * "Jan 4, 2032". `inline` for mid-sentence: "today", "tomorrow", and weekdays as the language writes
+ * them ("Friday", "viernes", "vrijdag").
+ */
+export declare function dueWords(due: Ymd, today: Ymd, { inline }?: {
+    inline?: boolean;
+}): string;
+/** "7:30 PM" ("7:30 p.m.", "19:30"): 12 or 24 hours as the locale says. */
+export declare const formatTime: (t: number, locale?: string) => string;
+/** "Tuesday, November 4". */
+export declare const formatDayLong: (t: number, locale?: string) => string;
+/** "Tuesday, November 4, 2031". */
+export declare const formatDateLong: (t: number, locale?: string) => string;
+/** "Tue, Nov 4" ("mar, 4 nov", "di 4 nov"). */
+export declare const formatDayShort: (t: number, locale?: string) => string;
+/** "Nov". */
+export declare const monthShort: (t: number, locale?: string) => string;
+/** "Tue" ("mar", "di"). */
+export declare const weekdayShort: (t: number, locale?: string) => string;
+/** A calendar day in the active locale: "Apr 22, 2031", "22 abr 2031", "22 apr 2031". */
+export declare const formatYmd: (s: Ymd, options?: Intl.DateTimeFormatOptions, locale?: string) => string;
 /** Value for <input type="datetime-local">, in local time. */
 export declare function toLocalInput(t: number): string;
 /** An <input type="datetime-local"> value back to a moment; null when empty or malformed. */
@@ -124,5 +152,12 @@ export declare function hhmmMinutes(s: Hhmm): number;
 export declare function atTime(day: Ymd, time?: Hhmm): number;
 /** The local 'HH:MM' of a moment. */
 export declare function toHhmm(t: number): Hhmm;
-/** "7 PM", "7:30 AM", "12 PM" (noon), "12 AM" (midnight): how a time is said on a household screen. */
-export declare function clockWords(time: Hhmm): string;
+/** "at 7 PM", "a las 7 p.m." / "a la 1 p.m.", "om 19:00": a time of day after a verb. */
+export declare function atClock(time: Hhmm): string;
+/** "by 7 PM", "antes de las 7 p.m." / "antes de la 1 p.m.", "vóór 19:00": a deadline. */
+export declare function byClock(time: Hhmm): string;
+/**
+ * "7 PM", "7:30 AM", "12 PM" (noon), "12 AM" (midnight) in English; "7 p.m." in Latin-American
+ * Spanish; "19:00" where the locale counts 24 hours (Dutch): how a time is said on a household screen.
+ */
+export declare function clockWords(time: Hhmm, locale?: string): string;

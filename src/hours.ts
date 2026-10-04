@@ -6,6 +6,7 @@
  * and "24/7". Anything else (public holidays, months, sunrise) makes `parseOpeningHours` return
  * null, and apps show the text as written rather than guess.
  */
+import { getLocale, kt } from './i18n.js';
 
 /** Opening periods per weekday (0 = Sunday), in minutes after midnight; empty = closed. Read-only; each day is its own array. */
 export type WeeklyHours = readonly (readonly (readonly [number, number])[])[];
@@ -91,11 +92,12 @@ export function closesAt(hours: WeeklyHours, date: Date): Date | null {
   return today ? at(today[1]) : null;
 }
 
-/** "7:00 AM – 6:00 PM", "Closed" or "Open 24 hours" for that date's day; times in `locale`. */
-export function describeDay(hours: WeeklyHours, date: Date, locale: string = navigator.language): string {
+/** "7:00 AM – 6:00 PM", "Closed" or "Open 24 hours" for that date's day; times in `locale` (the active one). */
+export function describeDay(hours: WeeklyHours, date: Date, locale: string = getLocale()): string {
   const periods = hours[date.getDay()];
-  if (periods.length === 0) return 'Closed';
-  const time = (m: number) => new Date(2000, 0, 1, Math.floor(m / 60) % 24, m % 60).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
-  if (periods.length === 1 && periods[0][0] === 0 && periods[0][1] === 24 * 60) return 'Open 24 hours';
+  if (periods.length === 0) return kt('hours.closed');
+  const time = (m: number) =>
+    new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, Math.floor(m / 60) % 24, m % 60)).replace(/[\u202f\u00a0]/g, ' ');
+  if (periods.length === 1 && periods[0][0] === 0 && periods[0][1] === 24 * 60) return kt('hours.open24');
   return periods.map(([o, c]) => `${time(o)} – ${time(c)}`).join(', ');
 }

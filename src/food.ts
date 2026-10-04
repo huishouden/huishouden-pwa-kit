@@ -1,5 +1,6 @@
 import { doc, onSnapshot, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { setDoc } from './firestore.js';
+import { kt, type KitKey } from './i18n.js';
 
 /**
  * The household's food preferences: who eats at home, their diets, allergies and dislikes, and the
@@ -28,7 +29,7 @@ export const DIETS = [
 ] as const;
 export type Diet = (typeof DIETS)[number];
 
-/** How a chip names each diet. */
+/** How a chip names each diet in English. Shown text uses `dietLabel` (the active language). */
 export const DIET_LABELS: Record<Diet, string> = {
   vegan: 'Vegan',
   vegetarian: 'Vegetarian',
@@ -44,7 +45,28 @@ export const DIET_LABELS: Record<Diet, string> = {
   kosher: 'Kosher',
 };
 
-/** "Sam is vegetarian", "Sam has GERD (reflux)": what the diet says about the person. */
+const DIET_KEYS = {
+  vegan: 'food.diet.vegan',
+  vegetarian: 'food.diet.vegetarian',
+  pescatarian: 'food.diet.pescatarian',
+  'gluten-free': 'food.diet.glutenFree',
+  'dairy-free': 'food.diet.dairyFree',
+  'nut allergy': 'food.diet.nutAllergy',
+  'shellfish allergy': 'food.diet.shellfishAllergy',
+  gerd: 'food.diet.gerd',
+  pregnant: 'food.diet.pregnant',
+  'low-sodium': 'food.diet.lowSodium',
+  halal: 'food.diet.halal',
+  kosher: 'food.diet.kosher',
+} as const satisfies Record<Diet, KitKey>;
+
+/** A diet's chip in the active language: "Vegetarian", "Vegetariano", "Vegetarisch". */
+export function dietLabel(diet: Diet): string {
+  return kt(DIET_KEYS[diet]);
+}
+
+/**
+ * "Sam is vegetarian", "Sam has GERD (reflux)": what the diet says about the person. */
 const DIET_PHRASES: Record<Diet, string> = {
   vegan: 'eats vegan',
   vegetarian: 'is vegetarian',
@@ -113,12 +135,18 @@ export const GENTLE_DIETS: readonly Diet[] = Object.freeze(DIETS.filter((d) => !
 export const SPICE_LEVELS = ['none', 'mild', 'medium', 'hot'] as const;
 export type SpiceTolerance = (typeof SPICE_LEVELS)[number];
 
+/** Heat tolerance in English. Shown text uses `spiceLabel`. */
 export const SPICE_LABELS: Record<SpiceTolerance, string> = {
   none: 'No heat',
   mild: 'A little',
   medium: 'Medium',
   hot: 'Loves heat',
 };
+
+/** A heat tolerance in the active language: "Loves heat", "Le encanta el picante", "Houdt van pittig". */
+export function spiceLabel(spice: SpiceTolerance): string {
+  return kt(spice === 'none' ? 'food.spice.none' : spice === 'mild' ? 'food.spice.mild' : spice === 'medium' ? 'food.spice.medium' : 'food.spice.hot');
+}
 
 /** The highest heat (0–3) that suits someone most of the time. */
 export const SPICE_MAX_HEAT: Record<SpiceTolerance, number> = { none: 0, mild: 1, medium: 2, hot: 3 };

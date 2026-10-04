@@ -3,6 +3,7 @@
  * it; everything else is just the action that failed, so no stack trace or code reaches the screen.
  */
 import { reportError } from './observability';
+import { kt } from './i18n.js';
 /**
  * "Couldn't save: offline. It will retry when the connection is back." Also reports the failure
  * (`./observability`), except being offline, which is not a fault.
@@ -13,10 +14,10 @@ export function readError(e, prefix) {
         reportError(e, { where: prefix });
     // In a household, a refusal is a role's (./roles): say who can.
     if (code === 'permission-denied')
-        return `${prefix}: only admins and members can do that.`;
+        return kt('feedback.refused', { action: prefix });
     if (code === 'unavailable')
-        return `${prefix}: offline. It will retry when the connection is back.`;
-    return `${prefix}.`;
+        return kt('feedback.offline', { action: prefix });
+    return kt('feedback.failed', { action: prefix });
 }
 const codeOf = (e) => e?.code ?? '';
 /**
@@ -43,15 +44,15 @@ export function accessDenied(e) {
  */
 export function googleAccessMessage(e, service = 'Google') {
     if (popupCancelled(e))
-        return `${service} access was not allowed: Google’s window was closed. Try again when you are ready.`;
+        return kt('feedback.accessClosed', { service });
     if (popupBlocked(e))
-        return 'The browser blocked Google’s window. Allow pop-ups for this site and try again.';
+        return kt('feedback.popupBlocked');
     if (accessDenied(e))
-        return `${service} access was not allowed. Try again and allow it on Google’s page.`;
+        return kt('feedback.accessDenied', { service });
     const code = codeOf(e);
     if (code === 'not_configured')
-        return `${service} access is not set up for this app yet.`;
+        return kt('feedback.notConfigured', { service });
     if (code === 'unavailable')
-        return 'Couldn’t reach Google. Check the connection and try again.';
+        return kt('feedback.unreachable');
     return null;
 }

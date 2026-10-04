@@ -16,9 +16,14 @@
  * ```
  * React: `useTheme()` from `@huishouden/pwa-kit/react/theme`.
  */
+import { kt } from './i18n.js';
 export const THEME_MODES = ['auto', 'light', 'dark'];
-/** What the choices are called wherever they are offered. */
+/** What the choices are called in English. Shown text uses `themeLabel` (the active language). */
 export const THEME_LABELS = { auto: 'Automatic', light: 'Light', dark: 'Dark' };
+/** What a choice is called in the active language: "Automatic", "Automático", "Automatisch". */
+export function themeLabel(mode) {
+    return kt(mode === 'auto' ? 'theme.auto' : mode === 'light' ? 'theme.light' : 'theme.dark');
+}
 /** The suite's one stored choice. */
 export const THEME_KEY = 'hh-theme';
 /** Where Tasks and Groceries kept their own choice (JSON, under the app's original name); read once and moved. */

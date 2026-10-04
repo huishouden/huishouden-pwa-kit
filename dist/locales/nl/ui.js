@@ -1,0 +1,17 @@
+export default {
+    'ui.close': 'Sluiten',
+    'ui.tryAgain': 'Opnieuw proberen',
+    'ui.undo': 'Ongedaan maken',
+    'ui.overdue': 'Te laat',
+    'ui.soon': 'Binnenkort',
+    'ui.sampleData': 'Voorbeeldgegevens',
+    'ui.nothingSaved': 'Er wordt niets opgeslagen.',
+    'ui.details': 'Details',
+    'ui.hideDetails': 'Details verbergen',
+    'ui.sections': 'Onderdelen',
+    'ui.more': 'Meer',
+    'ui.moreShowing': 'Meer, nu {tab}',
+    'ui.loggedBy': 'Genoteerd door {name}',
+    'ui.addSuggestion': '{label} toevoegen',
+    'ui.dontSuggest': '{label} niet meer voorstellen',
+};

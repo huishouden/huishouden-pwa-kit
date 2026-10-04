@@ -1,4 +1,5 @@
-import { addDays, addMonths, atTime, clockWords, daysBetween, daysInMonth, daysUntil, HOUR, isHhmm, isYmd, MONTHS, ordinal, shortDate, toHhmm, toYmd, WEEKDAYS, weekday, ymd, ymdParts, } from './time';
+import { addDays, addMonths, atClock, atTime, byClock, dateFormat, daysBetween, daysInMonth, daysUntil, HOUR, isHhmm, isYmd, shortDate, toHhmm, toYmd, weekday, weekdayName, ymd, ymdParts, } from './time';
+import { formatList, kt } from './i18n.js';
 export const UNITS = ['day', 'week', 'month', 'year'];
 /** The most `every` a schedule may have (the household rules check the same). */
 export const MAX_EVERY = 99;
@@ -87,22 +88,27 @@ export function nextDueAfterDone(s, due, doneOn) {
         return addInterval(doneOn, s.every, s.unit);
     return occurrenceAfter(s, daysBetween(due, doneOn) > 0 ? doneOn : due);
 }
-const unitWord = (unit, n) => (n === 1 ? unit : `${n} ${unit}s`);
+const EVERY_KEYS = { day: 'schedule.everyDay', week: 'schedule.everyWeek', month: 'schedule.everyMonth', year: 'schedule.everyYear' };
+/** A weekday as a schedule says it repeats: "Friday" (Spanish "viernes", "sábados"). */
+const recurringDay = (wd) => kt('schedule.weekdayRecurring', { wd, day: weekdayName(wd) });
+/** "November 2" ("2 de noviembre", "2 november"): a day of the year without the year. */
+const dayOfYear = (day) => {
+    const p = ymdParts(day);
+    return dateFormat({ month: 'long', day: 'numeric' }).format(new Date(2000, p.m - 1, p.d, 12));
+};
 /** "Every 3 months", "Every week", "Every month on the 1st", "Every year on November 2", "Every 2 weeks on Tuesday". */
 export function describeSchedule(s) {
-    const base = `Every ${unitWord(s.unit, s.every)}`;
-    if (s.kind === 'after-done')
-        return base;
+    const n = s.every;
+    if (s.kind === 'after-done' || s.unit === 'day')
+        return kt(EVERY_KEYS[s.unit], { n });
     const p = ymdParts(s.anchor);
     switch (s.unit) {
-        case 'day':
-            return base;
         case 'week':
-            return `${base} on ${WEEKDAYS[weekday(s.anchor)]}`;
+            return kt('schedule.everyWeekOn', { n, day: recurringDay(weekday(s.anchor)) });
         case 'month':
-            return `${base} on the ${ordinal(p.d)}`;
+            return kt('schedule.everyMonthOn', { n, on: kt('schedule.dayOfMonth', { day: p.d }) });
         case 'year':
-            return `${base} on ${MONTHS[p.m - 1]} ${p.d}`;
+            return kt('schedule.everyYearOn', { n, date: dayOfYear(s.anchor) });
     }
 }
 /** Whether a stored value is a schedule the apps (and the rules) accept. */
@@ -192,12 +198,10 @@ export function afterUsage(s, date, reading) {
 /** "Every month", "Every 6 months", "Every year", "Every 2 years"; "Once" without an interval. */
 export function describeMonths(everyMonths) {
     if (!everyMonths)
-        return 'Once';
-    if (everyMonths === 12)
-        return 'Every year';
+        return kt('schedule.once');
     if (everyMonths % 12 === 0)
-        return `Every ${everyMonths / 12} years`;
-    return everyMonths === 1 ? 'Every month' : `Every ${everyMonths} months`;
+        return kt('schedule.everyYear', { n: everyMonths / 12 });
+    return kt('schedule.everyMonth', { n: everyMonths });
 }
 /** Where a renewal stands: overdue once its day has passed, soon within `soonDays` (default 30). */
 export function renewalDue(dueDate, now, soonDays = 30) {
@@ -346,15 +350,13 @@ export function fitsRule(rule, day) {
     const index = monthIndex(day);
     return mod(index - monthIndex(rule.start), step) === 0 && dayInMonth(rule, index) === day;
 }
-const ORDINAL_WORDS = { 1: 'first', 2: 'second', 3: 'third', 4: 'fourth', [-1]: 'last' };
-function dayList(days) {
+function weeklyText(n, days) {
     const sorted = [...new Set(days)].sort((a, b) => a - b);
     if (sorted.length === 7)
-        return 'day';
+        return kt('schedule.ruleWeeklyAllDays', { n });
     if (sorted.join() === '1,2,3,4,5')
-        return 'weekday';
-    const names = sorted.map((d) => WEEKDAYS[d]);
-    return names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        return kt('schedule.ruleWeeklyWeekdays', { n });
+    return kt('schedule.ruleWeekly', { n, days: formatList(sorted.map(recurringDay)) });
 }
 /**
  * "Every Thursday", "Every other Friday", "Every 3 weeks on Monday", "Every Monday and Thursday",
@@ -363,20 +365,15 @@ function dayList(days) {
  */
 export function describeRule(rule) {
     const n = rule.every;
-    if (rule.freq === 'week') {
-        const days = dayList(rule.days?.length ? rule.days : [weekday(rule.start)]);
-        if (n === 1)
-            return `Every ${days}`;
-        if (n === 2)
-            return `Every other ${days}`;
-        return `Every ${n} weeks on ${days === 'day' ? 'every day' : days === 'weekday' ? 'weekdays' : days}`;
-    }
+    if (rule.freq === 'week')
+        return weeklyText(n, rule.days?.length ? rule.days : [weekday(rule.start)]);
     if (rule.freq === 'month') {
-        const on = rule.nth !== undefined && rule.weekday !== undefined ? `the ${ORDINAL_WORDS[rule.nth]} ${WEEKDAYS[rule.weekday]}` : `the ${ordinal(ymdParts(rule.start).d)}`;
-        return `${n === 1 ? 'Every month' : n === 2 ? 'Every other month' : `Every ${n} months`} on ${on}`;
+        const on = rule.nth !== undefined && rule.weekday !== undefined
+            ? kt('schedule.nthWeekday', { nth: rule.nth, day: weekdayName(rule.weekday) })
+            : kt('schedule.dayOfMonth', { day: ymdParts(rule.start).d });
+        return kt('schedule.ruleMonthly', { n, on });
     }
-    const p = ymdParts(rule.start);
-    return `${n === 1 ? 'Every year' : `Every ${n} years`} on ${MONTHS[p.m - 1]} ${p.d}`;
+    return kt('schedule.everyYearOn', { n, date: dayOfYear(rule.start) });
 }
 /** At most this many changes are kept per event (the rules check the same); the oldest go first. */
 export const MAX_CHANGES = 100;
@@ -460,21 +457,20 @@ export const isPrepOffset = (v) => {
     const o = v;
     return Object.keys(o).every((k) => k === 'daysBefore' || k === 'time') && Number.isInteger(o.daysBefore) && o.daysBefore >= 0 && o.daysBefore <= MAX_PREP_DAYS && isHhmm(o.time);
 };
-/** The usual ones, for a picker: the evening before, the morning of. */
+/** The usual ones, for a picker: the evening before, the morning of. `label` is in the active language. */
 export const PREP_PRESETS = [
-    { label: 'The evening before', offset: { daysBefore: 1, time: '19:00' } },
-    { label: 'The morning of', offset: { daysBefore: 0, time: '07:00' } },
-    { label: 'The day before', offset: { daysBefore: 1, time: '09:00' } },
+    { get label() { return kt('schedule.prepEveningBeforePreset'); }, offset: { daysBefore: 1, time: '19:00' } },
+    { get label() { return kt('schedule.prepMorningOfPreset'); }, offset: { daysBefore: 0, time: '07:00' } },
+    { get label() { return kt('schedule.prepDayBeforePreset'); }, offset: { daysBefore: 1, time: '09:00' } },
 ];
 /** "The evening before at 7 PM", "The morning of, by 7 AM", "2 days before at 9 AM", "The day before at 12 PM". */
 export function describePrep(offset) {
-    const at = clockWords(offset.time);
     const hour = Number(offset.time.slice(0, 2));
     if (offset.daysBefore === 0)
-        return hour < 12 ? `The morning of, by ${at}` : `The same day, by ${at}`;
+        return kt(hour < 12 ? 'schedule.prepMorningOf' : 'schedule.prepSameDay', { by: byClock(offset.time) });
     if (offset.daysBefore === 1)
-        return hour >= 17 ? `The evening before at ${at}` : `The day before at ${at}`;
-    return `${offset.daysBefore} days before at ${at}`;
+        return kt(hour >= 17 ? 'schedule.prepEveningBefore' : 'schedule.prepDayBefore', { at: atClock(offset.time) });
+    return kt('schedule.prepDaysBefore', { n: offset.daysBefore, at: atClock(offset.time) });
 }
 /**
  * The thing to do before an occurrence: due at `deadline`, and missed at `missedAt`, when the
@@ -499,15 +495,15 @@ export function prepState(window, now, done, leadHours = 24) {
 export function prepWhen(deadline, now) {
     const day = toYmd(deadline);
     const today = toYmd(now);
-    const by = `by ${clockWords(toHhmm(deadline))}`;
+    const by = byClock(toHhmm(deadline));
     const n = daysBetween(today, day);
     if (n === 0)
-        return `${new Date(deadline).getHours() >= 17 ? 'tonight' : 'today'} ${by}`;
+        return kt('schedule.prepWhen', { when: new Date(deadline).getHours() >= 17 ? 'tonight' : 'today', by, day: '' });
     if (n === 1)
-        return `tomorrow ${by}`;
+        return kt('schedule.prepWhen', { when: 'tomorrow', by, day: '' });
     if (n > 1 && n < 7)
-        return `${WEEKDAYS[weekday(day)]} ${by}`;
-    return `${shortDate(day, today)} ${by}`;
+        return kt('schedule.prepWhen', { when: 'day', by, day: weekdayName(weekday(day)) });
+    return kt('schedule.prepWhen', { when: 'day', by, day: shortDate(day, today) });
 }
 // ---- Recognising a schedule from dates (calendar imports) ----
 const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));

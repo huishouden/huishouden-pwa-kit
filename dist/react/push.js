@@ -11,9 +11,11 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
  */
 import { useEffect, useState } from 'react';
 import { Bell, BellOff } from 'lucide-react';
-import { disablePush, enablePush, pushEnabled, pushSupport } from '../push';
+import { disablePush, enablePush, pushEnabled, pushSupport, watchPushLang } from '../push';
+import { useKitT } from './i18n';
 import { cardClass, overline, primaryButton, secondaryButton } from './ui';
 export function NotificationsCard({ db, householdId, user, app, vapidKey, offText, onText, plain }) {
+    const kt = useKitT();
     const support = pushSupport();
     const [state, setState] = useState('checking');
     const [error, setError] = useState(null);
@@ -26,6 +28,8 @@ export function NotificationsCard({ db, householdId, user, app, vapidKey, offTex
             live = false;
         };
     }, [db, householdId, user]);
+    // While on, the stored subscription follows the language, so reminders arrive in it.
+    useEffect(() => (state === 'on' ? watchPushLang(db, householdId, user) : undefined), [state, db, householdId, user]);
     const turnOn = async () => {
         setError(null);
         setState('working');
@@ -34,7 +38,7 @@ export function NotificationsCard({ db, householdId, user, app, vapidKey, offTex
             setState('on');
         }
         catch (e) {
-            setError(e instanceof Error ? e.message : "Couldn't turn on notifications.");
+            setError(e instanceof Error ? e.message : kt('push.couldNotTurnOn'));
             setState('off');
         }
     };
@@ -46,9 +50,9 @@ export function NotificationsCard({ db, householdId, user, app, vapidKey, offTex
             setState('off');
         }
         catch {
-            setError("Couldn't turn off notifications. Try again.");
+            setError(kt('push.couldNotTurnOff'));
             setState('on');
         }
     };
-    return (_jsxs("section", { className: plain ? '' : `${cardClass} p-6`, "aria-label": "Notifications on this device", children: [_jsx("h3", { className: overline, children: "Notifications on this device" }), !vapidKey ? (_jsx("p", { className: "mt-2 text-base text-muted", children: "Notifications are not set up for this app yet." })) : !support.supported ? (_jsx("p", { className: "mt-2 text-base text-muted", children: support.message })) : (_jsxs("div", { className: "mt-2 flex flex-wrap items-center justify-between gap-3", children: [_jsx("p", { className: "min-w-0 flex-1 text-base text-muted", children: state === 'on' ? onText : offText }), state === 'on' ? (_jsxs("button", { type: "button", className: secondaryButton, onClick: () => void turnOff(), children: [_jsx(BellOff, { size: 18 }), " Turn off"] })) : (_jsxs("button", { type: "button", className: primaryButton, disabled: state !== 'off', onClick: () => void turnOn(), children: [_jsx(Bell, { size: 18 }), " ", state === 'working' ? 'Asking the browser' : 'Turn on'] }))] })), error && (_jsx("p", { role: "alert", className: "mt-2 text-base text-error", children: error }))] }));
+    return (_jsxs("section", { className: plain ? '' : `${cardClass} p-6`, "aria-label": kt('push.title'), children: [_jsx("h3", { className: overline, children: kt('push.title') }), !vapidKey ? (_jsx("p", { className: "mt-2 text-base text-muted", children: kt('push.notSetUp') })) : !support.supported ? (_jsx("p", { className: "mt-2 text-base text-muted", children: support.message })) : (_jsxs("div", { className: "mt-2 flex flex-wrap items-center justify-between gap-3", children: [_jsx("p", { className: "min-w-0 flex-1 text-base text-muted", children: state === 'on' ? onText : offText }), state === 'on' ? (_jsxs("button", { type: "button", className: secondaryButton, onClick: () => void turnOff(), children: [_jsx(BellOff, { size: 18 }), " ", kt('push.turnOff')] })) : (_jsxs("button", { type: "button", className: primaryButton, disabled: state !== 'off', onClick: () => void turnOn(), children: [_jsx(Bell, { size: 18 }), " ", state === 'working' ? kt('push.asking') : kt('push.turnOn')] }))] })), error && (_jsx("p", { role: "alert", className: "mt-2 text-base text-error", children: error }))] }));
 }

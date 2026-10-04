@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AppBar } from '../src/react/app-bar';
 import { displayNameOf, initialOf, isSuite, sameSite, versionLabel } from '../src/app-bar';
+import { resetI18nForTests, setLangChoice } from '../src/i18n';
 
 describe('app bar helpers', () => {
   test('the initial comes from the name, then the email', () => {
@@ -161,23 +162,46 @@ describe('<hh-app-bar>', () => {
     localStorage.removeItem('hh-theme');
   });
 
-  test('signed out: a "Theme and privacy" button opens the theme choice and Privacy', () => {
+  test('signed out: a "Theme, language and privacy" button opens the theme choice and Privacy', () => {
     const { bar, $ } = mount();
     bar.user = null;
     const trigger = $('.menu-button') as HTMLButtonElement;
-    expect(trigger.getAttribute('aria-label')).toBe('Theme and privacy');
+    expect(trigger.getAttribute('aria-label')).toBe('Theme, language and privacy');
     expect(trigger.getAttribute('aria-controls')).toBe($('.menu')!.id);
     expect($('.menu')!.hidden).toBe(true);
     trigger.click();
     const menu = $('.menu')!;
     expect(menu.hidden).toBe(false);
-    expect(menu.getAttribute('aria-label')).toBe('Theme and privacy');
-    expect(Array.from(menu.querySelectorAll('.mode')).map((b) => b.textContent)).toEqual(['Automatic', 'Light', 'Dark']);
+    expect(menu.getAttribute('aria-label')).toBe('Theme, language and privacy');
+    expect(Array.from(menu.querySelectorAll('.mode[data-mode]')).map((b) => b.textContent)).toEqual(['Automatic', 'Light', 'Dark']);
+    expect(Array.from(menu.querySelectorAll('.mode[data-lang]')).map((b) => b.textContent)).toEqual(['Automatic', 'English', 'Español', 'Nederlands']);
     expect(Array.from(menu.querySelectorAll('a.item')).map((a) => a.textContent)).toEqual(['Privacy']);
     expect(menu.querySelector('button.item')).toBeNull();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(menu.hidden).toBe(true);
     expect($('.signin')).not.toBeNull();
+  });
+
+  test('offers the language, each named in itself, and re-renders in the chosen one', async () => {
+    resetI18nForTests();
+    const { bar, $ } = mount();
+    bar.user = { email: 'sam@example.com', name: 'Sam' };
+    const langs = () => Array.from(bar.shadowRoot!.querySelectorAll<HTMLButtonElement>('.mode[data-lang]'));
+    expect(langs().map((b) => b.textContent)).toEqual(['Automatic', 'English', 'Español', 'Nederlands']);
+    expect(langs()[2].lang).toBe('es');
+    expect(langs()[0].getAttribute('aria-pressed')).toBe('true');
+    try {
+      langs()[2].click();
+      await setLangChoice('es');
+      expect(localStorage.getItem('hh-lang')).toBe('es');
+      expect($('button.item')!.textContent).toBe('Cerrar sesión');
+      expect(langs().map((b) => b.textContent)).toEqual(['Automático', 'English', 'Español', 'Nederlands']);
+      expect(langs()[2].getAttribute('aria-pressed')).toBe('true');
+      expect($('a.home')!.getAttribute('aria-label')).toBe('Inicio de Huishouden');
+    } finally {
+      localStorage.removeItem('hh-lang');
+      resetI18nForTests();
+    }
   });
 
   test('the photo carries no referrer', () => {
