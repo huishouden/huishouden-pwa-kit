@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 /**
  * Sets up New Relic (free tier) for a family of apps: one Browser application per app, an uptime
- * check per app, alert conditions with an email destination, drop rules that keep geography coarse,
- * and one dashboard. Safe to re-run: everything is found by name and updated rather than
+ * check per app, alert conditions with an email destination, pipeline cloud rules that keep
+ * geography coarse, and one dashboard. Safe to re-run: everything is found by name and updated rather than
  * duplicated, and uptime checks for addresses no longer in the list are deleted.
  * docs/observability.md; STANDARD.md "Observability".
  *
@@ -198,17 +198,44 @@ async function uptime() {
     await mutate(`delete monitor ${e.name}${e.monitoredUrl ? ` (${e.monitoredUrl})` : ''}: not an app in the list`, `mutation($g: EntityGuid!) { syntheticsDeleteMonitor(guid: $g) { deletedGuid } }`, { g: e.guid });
 }
 
-// 3. New Relic works out the city from the connection; keep only country and region.
+// 3. New Relic works out the city from the connection; keep only country and region. Pipeline cloud
+// rules (NRQL drop rules, their predecessor, ended on 2026-06-30): one per event type, found by name.
+const GEO_EVENTS = ['PageView', 'PageViewTiming', 'PageAction', 'JavaScriptError', 'BrowserPerformance'];
+const GEO_DESCRIPTION = `${FAMILY}: coarse geography only (STANDARD.md Observability)`;
+const geoRuleName = (event: string) => `${FAMILY} coarse geography: ${event}`;
+const geoRuleNrql = (event: string) => `DELETE city, asnLatitude, asnLongitude FROM ${event} WHERE appName LIKE '${FAMILY} %'`;
+const sameNrql = (a: string, b: string) => a.replace(/\s+/g, ' ').trim().toLowerCase() === b.replace(/\s+/g, ' ').trim().toLowerCase();
+
 async function dropRules() {
-  const d = await gql(`query($a: Int!) { actor { account(id: $a) { nrqlDropRules { list { rules { nrql } } } } } }`, { a: ACCOUNT });
-  const have = new Set<string>((d.actor.account.nrqlDropRules.list.rules ?? []).map((r: { nrql: string }) => r.nrql));
-  const rules = ['PageView', 'PageViewTiming', 'PageAction', 'JavaScriptError', 'BrowserPerformance']
-    .map((t) => `SELECT city, asnLatitude, asnLongitude FROM ${t} WHERE appName LIKE '${FAMILY} %'`)
-    .filter((nrql) => !have.has(nrql));
-  if (rules.length)
-    await mutate(`drop city and coordinates (${rules.length} event types)`,
-      `mutation($a: Int!, $r: [NrqlDropRulesCreateDropRuleInput!]!) { nrqlDropRulesCreate(accountId: $a, rules: $r) { failures { error { description } } } }`,
-      { a: ACCOUNT, r: rules.map((nrql) => ({ action: 'DROP_ATTRIBUTES', nrql, description: `${FAMILY}: coarse geography only (STANDARD.md Observability)` })) });
+  const rules: { id: string; name: string; nrql: string; scope?: { id: string } }[] = [];
+  let cursor: string | null = null;
+  do {
+    const d: any = await gql(
+      `query($c: String) { actor { entityManagement { entitySearch(query: "type = 'PIPELINE_CLOUD_RULE'", cursor: $c) { nextCursor entities { id name
+        ... on EntityManagementPipelineCloudRuleEntity { nrql scope { id } } } } } } }`,
+      { c: cursor },
+    );
+    const page = d.actor.entityManagement.entitySearch;
+    rules.push(...page.entities.filter((e: { name?: string; scope?: { id: string } }) => e.name?.startsWith(`${FAMILY} coarse geography: `) && (!e.scope || e.scope.id === String(ACCOUNT))));
+    cursor = page.nextCursor ?? null;
+  } while (cursor);
+
+  for (const event of GEO_EVENTS) {
+    const name = geoRuleName(event);
+    const nrql = geoRuleNrql(event);
+    const [rule, ...duplicates] = rules.filter((r) => r.name === name);
+    if (!rule)
+      await mutate(`create pipeline cloud rule ${name}`,
+        `mutation($r: EntityManagementPipelineCloudRuleEntityCreateInput!) { entityManagementCreatePipelineCloudRule(pipelineCloudRuleEntity: $r) { entity { id } } }`,
+        { r: { name, description: GEO_DESCRIPTION, nrql, scope: { id: String(ACCOUNT), type: 'ACCOUNT' } } });
+    else if (!sameNrql(rule.nrql, nrql))
+      await mutate(`update pipeline cloud rule ${name}`,
+        `mutation($id: ID!, $r: EntityManagementPipelineCloudRuleEntityUpdateInput!) { entityManagementUpdatePipelineCloudRule(id: $id, pipelineCloudRuleEntity: $r) { entity { id } } }`,
+        { id: rule.id, r: { name, description: GEO_DESCRIPTION, nrql } });
+    else log(`pipeline cloud rule ${name}: in place`);
+    for (const extra of duplicates)
+      await mutate(`delete duplicate pipeline cloud rule ${name}`, `mutation($id: ID!) { entityManagementDelete(id: $id) { id } }`, { id: extra.id });
+  }
 }
 
 // 4. Alerts, emailed.
@@ -419,10 +446,10 @@ try {
   if (OUT) writeSiteSettings(settings, OUT);
   if (REPO_VARIABLES) setRepoVariables(settings);
   await uptime();
-  await dropRules();
   const policyId = await alerts();
   const dash = await upsertDashboard();
   log(`\nAlert policy ${policyId ?? '(dry run)'}; dashboard https://one.newrelic.com/redirect/entity/${dash ?? '(dry run)'}`);
+  await dropRules();
 } catch (e) {
   console.error(`newrelic: ${scrub(e instanceof Error ? e.message : String(e))}`);
   process.exit(1);
