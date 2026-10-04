@@ -19,6 +19,7 @@ class GoogleAuthProvider {
 mock.module('firebase/auth', () => ({
   GoogleAuthProvider,
   getAuth: () => ({ currentUser: null }),
+  connectAuthEmulator: (_auth: unknown, url: string) => calls.push(`connectAuthEmulator ${url}`),
   signInWithPopup: (_auth: unknown, provider: GoogleAuthProvider) => {
     calls.push(`popup ${provider.params.prompt}`);
     return Promise.resolve();
@@ -27,6 +28,9 @@ mock.module('firebase/auth', () => ({
     calls.push('signOut');
     return Promise.resolve();
   },
+}));
+mock.module('firebase/firestore', () => ({
+  connectFirestoreEmulator: (_db: unknown, host: string, port: number) => calls.push(`connectFirestoreEmulator ${host}:${port}`),
 }));
 mock.module('../../src/firestore.js', () => ({
   initFirestore: () => {
@@ -61,5 +65,25 @@ describe('initApp', () => {
     await handles.signInWithGoogle();
     await handles.signOutEverywhere();
     expect(calls).toEqual(['popup select_account', 'forgetSilentSignIn', 'forgetGoogleToken', 'signOut']);
+  });
+
+  test('built for the emulators (the kit’s app-tests job): Auth and Firestore go to them, no Google preload', () => {
+    calls.length = 0;
+    const handles = initApp({ app: 'pet', env: { ...env, VITE_USE_EMULATORS: 'true' } });
+    void handles.db;
+    expect(calls).toEqual([
+      'initializeApp demo-p',
+      'connectAuthEmulator http://127.0.0.1:9099',
+      'observability pet',
+      'configureGoogleTokens client false',
+      'initFirestore',
+      'connectFirestoreEmulator 127.0.0.1:8080',
+    ]);
+  });
+
+  test('a production build never connects to the emulators', () => {
+    calls.length = 0;
+    void initApp({ app: 'pet', env }).db;
+    expect(calls.filter((c) => c.startsWith('connect'))).toEqual([]);
   });
 });
