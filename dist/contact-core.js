@@ -1,12 +1,38 @@
 import { kt } from './i18n.js';
 export const CONTACT_FIELDS = [
-    'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'apps', 'private', 'createdAt', 'updatedAt', 'by',
+    'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'pay', 'apps', 'private', 'createdAt', 'updatedAt', 'by',
 ];
+/** Ways of paying a contact that carry a detail worth remembering, in the order forms show them. */
+export const CONTACT_PAY_KINDS = ['zelle', 'venmo', 'bank', 'check', 'portal'];
+/** Lengths the household rules allow for each pay detail; `portal` is an https:// link. */
+export const CONTACT_PAY_LIMITS = { zelle: 120, venmo: 60, bank: 200, check: 300, portal: 500 };
+/**
+ * Pay details as stored: known ways only, trimmed to their limits, a portal only as an https://
+ * link, empty ones left out. Undefined when nothing is left.
+ */
+export function cleanContactPay(pay) {
+    if (!pay || typeof pay !== 'object')
+        return undefined;
+    const out = {};
+    for (const kind of CONTACT_PAY_KINDS) {
+        const raw = pay[kind];
+        const v = typeof raw === 'string' ? raw.trim().slice(0, CONTACT_PAY_LIMITS[kind]) : '';
+        if (!v || (kind === 'portal' && !/^https:\/\/./i.test(v)))
+            continue;
+        out[kind] = v;
+    }
+    return Object.keys(out).length ? out : undefined;
+}
 /** Drops empty optional fields so documents only carry what was filled in; `private` is always written. */
 export function cleanContact(input) {
     const out = {};
     for (const [k, v] of Object.entries(input)) {
-        if (typeof v === 'string') {
+        if (k === 'pay') {
+            const pay = cleanContactPay(v);
+            if (pay)
+                out.pay = pay;
+        }
+        else if (typeof v === 'string') {
             if (v.trim())
                 out[k] = v.trim();
         }
@@ -28,6 +54,7 @@ export function toContact(id, data) {
         address: str('address'),
         mapsUrl: str('mapsUrl'),
         notes: str('notes'),
+        ...(cleanContactPay(data.pay) ? { pay: cleanContactPay(data.pay) } : {}),
         apps: Array.isArray(data.apps) ? data.apps.map(String) : [],
         ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
         createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
@@ -74,7 +101,11 @@ export function normalizeWebsite(url) {
 export function displayWebsite(url) {
     return url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '');
 }
-/** What a contact dialog saves: trimmed to the rules' limits, the website made a full URL, and shown in `app`. */
+/**
+ * What a contact dialog saves: trimmed to the rules' limits, the website made a full URL, and shown in `app`.
+ * `pay`, when given, is kept even when empty (`{}`), so `updateContact` removes cleared pay details;
+ * left out, a contact's pay details are kept as they are.
+ */
 export function contactInput(fields, apps, app) {
     const cut = (s, max) => s?.trim().slice(0, max) || undefined;
     return {
@@ -86,6 +117,7 @@ export function contactInput(fields, apps, app) {
         address: cut(fields.address, CONTACT_LIMITS.address),
         mapsUrl: fields.mapsUrl?.trim() || undefined,
         notes: cut(fields.notes, CONTACT_LIMITS.notes),
+        ...('pay' in fields ? { pay: cleanContactPay(fields.pay) ?? {} } : {}),
         apps: apps.includes(app) ? apps : [...apps, app],
         private: fields.private === true,
     };
