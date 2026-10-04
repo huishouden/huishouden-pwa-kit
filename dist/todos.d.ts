@@ -2,6 +2,7 @@ import { type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { type Role } from './roles.js';
 import { type Op } from './store.js';
 import { type Ymd } from './time.js';
+import { type LocalTexts } from './i18n.js';
 /**
  * The household's to-do list: every app's open, actionable things in one collection,
  * `households/{id}/todos`, so the portal can show one list (sorted by when each was added, to clear
@@ -69,15 +70,22 @@ export interface TodoItem {
      * one person's care. Absent on the shared list.
      */
     audience?: string[];
+    /**
+     * The title, detail and button words in every language (`localizeTodos`), so the portal shows each
+     * reader their own; `title`, `detail` and the labels are the writer's language and the fallback.
+     */
+    texts?: TodoTexts;
     updatedAt: number;
     /** Lowercase email of the member whose app wrote it. */
     by: string;
 }
-export declare const TODO_FIELDS: readonly ["app", "ref", "title", "detail", "createdAt", "due", "who", "url", "status", "private", "owner", "done", "cancel", "updatedAt", "by"];
+/** What a to-do says, per language: its title, detail and the Done and Cancel buttons' words. */
+export type TodoTexts = LocalTexts<'title' | 'detail' | 'done' | 'cancel'>;
+export declare const TODO_FIELDS: readonly ["app", "ref", "title", "detail", "createdAt", "due", "who", "url", "status", "private", "owner", "done", "cancel", "texts", "updatedAt", "by"];
 /** The collection of to-dos for named members only (`./audience`). */
 export declare const PERSONAL_TODOS = "personalTodos";
 /** Fields of a `personalTodos` item: the list's plus `audience`. */
-export declare const PERSONAL_TODO_FIELDS: readonly ["app", "ref", "title", "detail", "createdAt", "due", "who", "url", "status", "private", "owner", "done", "cancel", "updatedAt", "by", "audience"];
+export declare const PERSONAL_TODO_FIELDS: readonly ["app", "ref", "title", "detail", "createdAt", "due", "who", "url", "status", "private", "owner", "done", "cancel", "texts", "updatedAt", "by", "audience"];
 export declare const TODO_ACTION_FIELDS: readonly ["label", "ops", "roles", "owner", "emails"];
 /** Maximum lengths and counts, the same as the rules. */
 export declare const TODO_LIMITS: {
@@ -91,6 +99,31 @@ export declare const TODO_LIMITS: {
     readonly label: 24;
     readonly ops: 8;
     readonly emails: 12;
+};
+/** Limits inside `texts`, the same as the fields they translate. */
+export declare const TODO_TEXT_LIMITS: {
+    readonly title: 120;
+    readonly detail: 200;
+    readonly done: 24;
+    readonly cancel: 24;
+};
+/**
+ * Runs `build` once per language and gives its to-dos with `texts` (title, detail, button words),
+ * so the portal shows each reader their own language. Wrap the app's to-do builder:
+ *
+ * ```ts
+ * syncTodos(db, id, 'bills', await localizeTodos(() => billTodos(bills, now)), { by: me });
+ * ```
+ */
+export declare function localizeTodos<T extends Pick<TodoInput, 'title' | 'detail' | 'done' | 'cancel'>>(build: () => T[]): Promise<(T & {
+    texts: TodoTexts;
+})[]>;
+/** What the portal shows of a to-do in the reader's language: its title, detail and button words. */
+export declare function todoWords(item: Pick<TodoItem, 'title' | 'detail' | 'done' | 'cancel' | 'texts'>): {
+    title: string;
+    detail?: string;
+    done?: string;
+    cancel?: string;
 };
 /**
  * The collections each app's actions may write: the portal refuses an action touching anything

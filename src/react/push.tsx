@@ -11,7 +11,8 @@
 import { useEffect, useState } from 'react';
 import { Bell, BellOff } from 'lucide-react';
 import type { Firestore } from 'firebase/firestore';
-import { disablePush, enablePush, pushEnabled, pushSupport } from '../push';
+import { disablePush, enablePush, pushEnabled, pushSupport, watchPushLang } from '../push';
+import { useKitT } from './i18n';
 import { cardClass, overline, primaryButton, secondaryButton } from './ui';
 
 type State = 'checking' | 'off' | 'on' | 'working';
@@ -33,6 +34,7 @@ export interface NotificationsCardProps {
 }
 
 export function NotificationsCard({ db, householdId, user, app, vapidKey, offText, onText, plain }: NotificationsCardProps) {
+  const kt = useKitT();
   const support = pushSupport();
   const [state, setState] = useState<State>('checking');
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +49,9 @@ export function NotificationsCard({ db, householdId, user, app, vapidKey, offTex
     };
   }, [db, householdId, user]);
 
+  // While on, the stored subscription follows the language, so reminders arrive in it.
+  useEffect(() => (state === 'on' ? watchPushLang(db, householdId, user) : undefined), [state, db, householdId, user]);
+
   const turnOn = async () => {
     setError(null);
     setState('working');
@@ -54,7 +59,7 @@ export function NotificationsCard({ db, householdId, user, app, vapidKey, offTex
       await enablePush(db, householdId, user, vapidKey ?? '', { app });
       setState('on');
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't turn on notifications.");
+      setError(e instanceof Error ? e.message : kt('push.couldNotTurnOn'));
       setState('off');
     }
   };
@@ -66,16 +71,16 @@ export function NotificationsCard({ db, householdId, user, app, vapidKey, offTex
       await disablePush(db, householdId, user);
       setState('off');
     } catch {
-      setError("Couldn't turn off notifications. Try again.");
+      setError(kt('push.couldNotTurnOff'));
       setState('on');
     }
   };
 
   return (
-    <section className={plain ? '' : `${cardClass} p-6`} aria-label="Notifications on this device">
-      <h3 className={overline}>Notifications on this device</h3>
+    <section className={plain ? '' : `${cardClass} p-6`} aria-label={kt('push.title')}>
+      <h3 className={overline}>{kt('push.title')}</h3>
       {!vapidKey ? (
-        <p className="mt-2 text-base text-muted">Notifications are not set up for this app yet.</p>
+        <p className="mt-2 text-base text-muted">{kt('push.notSetUp')}</p>
       ) : !support.supported ? (
         <p className="mt-2 text-base text-muted">{support.message}</p>
       ) : (
@@ -83,11 +88,11 @@ export function NotificationsCard({ db, householdId, user, app, vapidKey, offTex
           <p className="min-w-0 flex-1 text-base text-muted">{state === 'on' ? onText : offText}</p>
           {state === 'on' ? (
             <button type="button" className={secondaryButton} onClick={() => void turnOff()}>
-              <BellOff size={18} /> Turn off
+              <BellOff size={18} /> {kt('push.turnOff')}
             </button>
           ) : (
             <button type="button" className={primaryButton} disabled={state !== 'off'} onClick={() => void turnOn()}>
-              <Bell size={18} /> {state === 'working' ? 'Asking the browser' : 'Turn on'}
+              <Bell size={18} /> {state === 'working' ? kt('push.asking') : kt('push.turnOn')}
             </button>
           )}
         </div>

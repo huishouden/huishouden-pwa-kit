@@ -10,6 +10,7 @@
 
 import { readImageText, type ReadTextOptions } from './ocr';
 import { fitsRule, type EventRule } from './schedule';
+import { kt } from './i18n.js';
 
 export { OCR_LANG_PATH, releaseOcr } from './ocr';
 
@@ -120,11 +121,10 @@ function unitOf(word: string): string | undefined {
   return UNITS.find(([re]) => re.test(w))?.[1];
 }
 
-/** "0.5 ml", "1 tablet", "2 drops", "1.5 tablets". */
+/** "0.5 ml", "1 tablet", "2 drops", "1.5 tablets" ("2 tabletas", "2 tabletten"), in the active language. `unit` is the parser's singular English unit. */
 export function formatDose(amount: number, unit: string): string {
   const n = Math.round(amount * 1000) / 1000;
-  const plural = n > 1 && !['ml', 'mg', 'mcg'].includes(unit) ? (unit === 'patch' ? 'es' : 's') : '';
-  return `${n} ${unit}${plural}`;
+  return kt('dose.amount', { unit, n, count: n > 1 ? 2 : 1 });
 }
 
 const TIME_OF_DAY_ORDER: TimeOfDay[] = ['morning', 'midday', 'evening', 'bedtime'];
@@ -155,7 +155,7 @@ const setDays = (m: RegExpExecArray, s: State) => {
   if (unit.startsWith('w')) s.course.days = n * 7;
   else if (unit.startsWith('m')) {
     s.course.days = n * 30;
-    s.course.assumptions.push(`"${m[0].trim()}" read as ${n * 30} days`);
+    s.course.assumptions.push(kt('dose.assumeMonths', { text: m[0].trim(), days: n * 30 }));
   } else s.course.days = n;
 };
 
@@ -165,7 +165,7 @@ const setDose = (amountIndex: number, unitIndex: number) => (m: RegExpExecArray,
   if (amount === undefined || !unit) return;
   if (s.course.dose && (s.course.doseAmount !== amount || s.course.doseUnit !== unit)) {
     s.course.unparsed.push(m[0].trim());
-    s.course.assumptions.push(`two different doses on the label; kept ${s.course.dose}`);
+    s.course.assumptions.push(kt('dose.assumeTwoDoses', { dose: s.course.dose }));
     return;
   }
   s.course.doseAmount = amount;
@@ -187,7 +187,7 @@ const RULES: Rule[] = [
   { re: /\b(?:as needed|as required|when needed|when required|if needed|p\.?r\.?n\.?)\b(?:\s+for\s+[a-z ]{3,40}?(?=[.,;]|$))?/g, apply: (m, s) => {
     s.course.asNeeded = true;
     const reason = m[0].match(/\bfor\s+(.+)$/);
-    if (reason) s.course.notes.push(`As needed for ${reason[1].trim()}`);
+    if (reason) s.course.notes.push(kt('dose.asNeededFor', { reason: reason[1].trim() }));
   } },
 
   // Intervals.
@@ -207,7 +207,7 @@ const RULES: Rule[] = [
   { re: /\b(?:once|one time)\s+(?:a|per|each|every)\s+week\b|\bonce weekly\b|\bweekly\b|\bevery week\b|\bonce a wk\b/g, apply: freq(1, 168) },
   { re: /\b(?:once|one time)\s+(?:a|per|each|every)\s+month\b|\bmonthly\b|\bevery month\b/g, apply: (m, s) => {
     freq(1, 720)(m, s);
-    s.course.assumptions.push(`"${m[0].trim()}" read as every 30 days`);
+    s.course.assumptions.push(kt('dose.assumeMonthly', { text: m[0].trim() }));
   } },
 
   // Times per day, in words and abbreviations.
@@ -370,7 +370,7 @@ export function parseDirections(text: string): ParsedCourse {
   if (sig) parseSig(sig, course);
   course.unparsed.push(...otherLines);
   if (!course.name && !singleLine) {
-    course.assumptions.push('no medicine name found on the label');
+    course.assumptions.push(kt('dose.assumeNoName'));
   }
   course.confidence = confidenceOf(course);
   return course;
@@ -393,7 +393,7 @@ function parseSig(sig: string, course: ParsedCourse): void {
   if (then > 0) {
     rest = sig.slice(then).replace(/^[.,;\s]+/, '').trim();
     text = text.slice(0, then);
-    course.assumptions.push('the label changes the dose partway; only the first step was read');
+    course.assumptions.push(kt('dose.assumeTaper'));
   }
 
   // 0: not understood, 1: filler wording, 2: understood.
@@ -473,11 +473,13 @@ function resolveFrequency({ course, frequencies }: State): void {
       course.timesPerDay ??= f.timesPerDay;
     } else {
       course.unparsed.push(f.text);
-      course.assumptions.push(`"${first.text}" and "${f.text}" disagree; kept "${first.text}"`);
+      course.assumptions.push(kt('dose.assumeDisagree', { first: first.text, other: f.text }));
     }
   }
   if (todCount && course.timesPerDay !== undefined && course.intervalHours === undefined && todCount !== course.timesPerDay) {
-    course.assumptions.push(`${course.timesPerDay} times a day, but ${todCount} times of day named (${course.timesOfDay!.join(', ')}); check the times`);
+    course.assumptions.push(
+      kt('dose.assumeTimesOfDay', { times: course.timesPerDay, count: todCount, names: course.timesOfDay!.map((time) => kt('dose.timeOfDay', { time })).join(', ') }),
+    );
   }
 }
 
@@ -596,12 +598,15 @@ export interface MedCourse {
 export function toMedCourse(parsed: ParsedCourse, options: DoseTimesOptions & { startDate: string }): MedCourse {
   const times = doseTimes(parsed, options);
   const notes: string[] = [];
-  if (parsed.intervalHours === 48) notes.push('Every other day');
-  else if (parsed.intervalHours && parsed.intervalHours >= 24) notes.push(`Every ${parsed.intervalHours / 24} days`);
-  else if (parsed.intervalHours) notes.push(`Every ${parsed.intervalHours} hours`);
-  if (parsed.asNeeded && !parsed.notes.some((n) => /^as needed/i.test(n))) notes.push('As needed');
-  if (parsed.untilGone) notes.push('Until gone');
-  if (parsed.route && parsed.route !== 'by mouth') notes.push(parsed.route.replace(/^./, (c) => c.toUpperCase()));
+  if (parsed.intervalHours === 48) notes.push(kt('dose.everyOtherDay'));
+  else if (parsed.intervalHours && parsed.intervalHours >= 24) notes.push(kt('dose.everyDays', { n: parsed.intervalHours / 24 }));
+  else if (parsed.intervalHours) notes.push(kt('dose.everyHours', { n: parsed.intervalHours }));
+  const asNeeded = kt('dose.asNeeded').toLowerCase();
+  if (parsed.asNeeded && !parsed.notes.some((n) => /^as needed/i.test(n) || n.toLowerCase().startsWith(asNeeded))) notes.push(kt('dose.asNeeded'));
+  if (parsed.untilGone) notes.push(kt('dose.untilGone'));
+  // The route is the label's own wording (English), except the one the parser names itself.
+  if (parsed.route === 'under the skin') notes.push(kt('dose.underTheSkin'));
+  else if (parsed.route && parsed.route !== 'by mouth') notes.push(parsed.route.replace(/^./, (c) => c.toUpperCase()));
   notes.push(...parsed.notes);
   return {
     name: [parsed.name, parsed.strength].filter(Boolean).join(' '),

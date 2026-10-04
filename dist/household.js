@@ -1,6 +1,8 @@
 import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { addDoc, arrayRemove, arrayUnion, setDoc, updateDoc } from './firestore.js';
 import { observeHousehold } from './observability.js';
+import { kt } from './i18n.js';
+import { isCurrencyCode, setCurrency } from './money.js';
 import { effectiveRoles, toRoles } from './roles.js';
 export const normalizeEmail = (email) => email.trim().toLowerCase();
 const COLLECTION = 'households';
@@ -30,6 +32,9 @@ export function watchHousehold(db, email, onChange) {
         if (docs.length && docs.every((d) => d.pending))
             return;
         const household = pickHousehold(docs, email);
+        // Every amount the kit formats follows the household's currency.
+        if (household)
+            setCurrency(household.currency);
         onChange(household ? { status: 'ready', household } : { status: 'none' });
     }, (error) => onChange({ status: 'error', error }));
 }
@@ -45,8 +50,15 @@ export function toHousehold(id, data) {
         members: Array.isArray(data.members) ? data.members.map(String) : [],
         joined: Array.isArray(data.joined) ? data.joined.map(String) : [],
         roles: toRoles(data.roles),
+        ...(isCurrencyCode(data.currency) ? { currency: data.currency } : {}),
         createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
     };
+}
+/** Sets the currency the household's amounts are shown in (admins and members; the rules check). */
+export async function setHouseholdCurrency(db, householdId, currency) {
+    if (!isCurrencyCode(currency))
+        throw new Error(`Not a currency code: ${currency}`);
+    await updateDoc(doc(db, COLLECTION, householdId), { currency });
 }
 /** Starts a household with only its creator, its admin; others are invited from inside. */
 export async function createHousehold(db, email, name) {
@@ -61,7 +73,7 @@ export async function createHousehold(db, email, name) {
 export async function inviteMember(db, household, email, role = 'member') {
     const address = normalizeEmail(email);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
-        throw new Error(`Not an email address: ${email}`);
+        throw new Error(kt('household.notEmail', { email }));
     const id = typeof household === 'string' ? household : household.id;
     if (role === 'member') {
         await updateDoc(doc(db, COLLECTION, id), { members: arrayUnion(address) });
@@ -70,7 +82,7 @@ export async function inviteMember(db, household, email, role = 'member') {
     if (typeof household === 'string')
         throw new Error('Pass the household to invite someone with a role.');
     if (household.members.includes(address))
-        throw new Error(`${address} is already in the household.`);
+        throw new Error(kt('household.alreadyIn', { email: address }));
     await updateDoc(doc(db, COLLECTION, id), {
         members: arrayUnion(address),
         roles: { ...effectiveRoles(household), [address]: role },

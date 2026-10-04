@@ -1,0 +1,28 @@
+declare const _default: {
+    'calendar.noTitle': string;
+    'calendar.denied': string;
+    'calendar.notAllowed': string;
+    'calendar.popupBlocked': string;
+    'calendar.searchFailed': string;
+    'calendar.whenAllDayWeek': string;
+    'calendar.whenWeek': string;
+    'calendar.whenLater': string;
+    'calendar.matchAllDay': string;
+    'calendar.matchTimed': string;
+    'calendar.signInToSearch': string;
+    'calendar.askOnce': string;
+    'calendar.searching': string;
+    'calendar.find': string;
+    'calendar.noMatches': string;
+    'calendar.matches': string;
+    'calendar.fromCalendar': string;
+    'calendar.openInCalendar': string;
+    'calendar.unlink': string;
+    'calendar.importTitle': string;
+    'calendar.addAll': string;
+    'calendar.events': string;
+    'calendar.addTitle': string;
+    'calendar.newInCalendar': string;
+    'calendar.moreNew': string;
+};
+export default _default;

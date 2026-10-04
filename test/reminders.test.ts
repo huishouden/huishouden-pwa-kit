@@ -224,3 +224,57 @@ describe('reminders for named members only', () => {
     expect([...store.keys()].sort()).toEqual([`${col}/sent`, `${col}/someone-else`]);
   });
 });
+
+const { localizeReminders, remindersForCourseInEveryLang, cleanTexts } = await import('../src/reminders');
+const { kt, resetI18nForTests, setLangForTests } = await import('../src/i18n');
+
+describe('reminders in every language', () => {
+  test('course reminders carry texts in en, es and nl; title and body stay in the page language', async () => {
+    const list = await remindersForCourseInEveryLang(course, options);
+    expect(list[0].title).toBe('Biscuit: Carprofen 75 mg');
+    expect(list[0].body).toBe('1 tablet at 20:00, with food');
+    expect(list[0].texts).toEqual({
+      en: { title: 'Biscuit: Carprofen 75 mg', body: '1 tablet at 20:00, with food' },
+      es: { title: 'Biscuit: Carprofen 75 mg', body: '1 tablet a las 20:00, con comida' },
+      nl: { title: 'Biscuit: Carprofen 75 mg', body: '1 tablet om 20:00, bij het eten' },
+    });
+  });
+
+  test('the course text follows the language; without a dose or a name it still reads', async () => {
+    try {
+      await setLangForTests('nl');
+      const [r] = remindersForCourse({ ...course, dose: '', name: '', withFood: false }, { ...options, forWhom: undefined });
+      expect(r.title).toBe('Medicijn');
+      expect(r.body).toBe('op een lege maag');
+      const [s] = remindersForCourse({ ...course, dose: '', withFood: undefined }, options);
+      expect(s.body).toBe('Dosis om 20:00');
+    } finally {
+      await setLangForTests('en').catch(() => {});
+      resetI18nForTests();
+    }
+  });
+
+  test('localizeReminders runs the builder once per language', async () => {
+    const list = await localizeReminders(() => [{ app: 'car', title: kt('time.dueToday'), body: kt('agenda.allDay'), at: at(20, 9), url: 'https://car.example.com/' }]);
+    expect(list[0].title).toBe('Due today');
+    expect(list[0].texts?.es).toEqual({ title: 'Vence hoy', body: 'Todo el día' });
+    expect(list[0].texts?.nl).toEqual({ title: 'Vandaag', body: 'Hele dag' });
+  });
+
+  test('texts are stored clipped, unknown languages dropped, and read back', () => {
+    const texts = { es: { title: ` ${'x'.repeat(130)} `, body: 'b' }, fr: { title: 'non', body: '' } } as never;
+    const d = reminderDoc({ app: 'pet', title: 'T', at: 5, url: 'https://pet.example.com/', texts }, 'alex@example.com', 100);
+    expect(d.texts).toEqual({ es: { title: 'x'.repeat(120), body: 'b' } });
+    expect(Object.keys(d).every((k) => (REMINDER_FIELDS as readonly string[]).includes(k))).toBe(true);
+    expect(toReminder('r', { ...d }).texts).toEqual(d.texts);
+    expect(cleanTexts({ en: { title: '  ', body: 'x' } })).toBeUndefined();
+  });
+
+  test('syncReminders rewrites a reminder whose texts changed, and leaves an identical one', async () => {
+    store.clear();
+    const input = { app: 'pet', title: 'T', at: at(20, 9), url: 'https://pet.example.com/', ref: 'x', texts: { es: { title: 'T es', body: '' } } };
+    expect((await syncReminders(db, 'h', 'pet', [input], 'alex@example.com', NOW)).written).toBe(1);
+    expect((await syncReminders(db, 'h', 'pet', [input], 'alex@example.com', NOW)).unchanged).toBe(1);
+    expect((await syncReminders(db, 'h', 'pet', [{ ...input, texts: { es: { title: 'T es 2', body: '' } } }], 'alex@example.com', NOW)).written).toBe(1);
+  });
+});

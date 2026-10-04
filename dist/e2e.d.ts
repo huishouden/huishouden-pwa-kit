@@ -172,3 +172,21 @@ export interface PortalTodoOptions {
  * app's own data changed. Each staging site is a full mirror, so the portal is at `/` on it.
  */
 export declare function runPortalTodo(page: Page, title: string, { action, path, timeout }?: PortalTodoOptions): Promise<void>;
+/** English words of the kit's chrome that should never show once a page is in another language. */
+export declare const ENGLISH_CHROME: string[];
+/** Makes every page in `page`'s context open in `lang` (the suite's stored choice), from the next load on. */
+export declare function useLanguage(target: Page | BrowserContext, lang: 'auto' | 'en' | 'es' | 'nl'): Promise<void>;
+export interface LocalizedOptions {
+    path?: string;
+    /** More English words the app's own chrome uses ("Bills due", "Add a bill"). Whole words, case-sensitive. */
+    words?: string[];
+    /** Words to allow after all (sample data that stays English, a brand). */
+    allow?: string[];
+}
+/**
+ * Opens `path` in `lang` and checks it took: `<html lang>`, and none of the kit's English chrome
+ * words (plus `words`) in the visible page, app bar included. Data stays as entered, so mark an
+ * element whose text is household data with `translate="no"` (or `data-hh-data`) to leave it out,
+ * or name its words in `allow`. Returns the visible text it read.
+ */
+export declare function expectLocalized(page: Page, lang: 'es' | 'nl', { path, words, allow }?: LocalizedOptions): Promise<string>;

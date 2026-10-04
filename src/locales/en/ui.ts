@@ -1,0 +1,17 @@
+export default {
+  'ui.close': 'Close',
+  'ui.tryAgain': 'Try again',
+  'ui.undo': 'Undo',
+  'ui.overdue': 'Overdue',
+  'ui.soon': 'Soon',
+  'ui.sampleData': 'Sample data',
+  'ui.nothingSaved': 'Nothing is saved.',
+  'ui.details': 'Details',
+  'ui.hideDetails': 'Hide details',
+  'ui.sections': 'Sections',
+  'ui.more': 'More',
+  'ui.moreShowing': 'More, showing {tab}',
+  'ui.loggedBy': 'Logged by {name}',
+  'ui.addSuggestion': 'Add {label}',
+  'ui.dontSuggest': "Don't suggest {label}",
+} as const;

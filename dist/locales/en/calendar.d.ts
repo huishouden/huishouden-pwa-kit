@@ -1,0 +1,28 @@
+declare const _default: {
+    readonly 'calendar.noTitle': "(no title)";
+    readonly 'calendar.denied': "Google did not grant calendar access.";
+    readonly 'calendar.notAllowed': "Calendar access was not allowed. Try again when you are ready.";
+    readonly 'calendar.popupBlocked': "The browser blocked the Google window. Allow pop-ups for this site and try again.";
+    readonly 'calendar.searchFailed': "Couldn't search your calendar. Check the connection and try again.";
+    readonly 'calendar.whenAllDayWeek': "{day}, all day";
+    readonly 'calendar.whenWeek': "{day} {time}";
+    readonly 'calendar.whenLater': "{day}, {time}";
+    readonly 'calendar.matchAllDay': "{day}, all day · {calendar}";
+    readonly 'calendar.matchTimed': "{day}, {time} · {calendar}";
+    readonly 'calendar.signInToSearch': "Sign in to search your calendar.";
+    readonly 'calendar.askOnce': "Google will ask once to let {app} read your calendar. {app} never changes it.";
+    readonly 'calendar.searching': "Searching your calendars";
+    readonly 'calendar.find': "Find in my calendar";
+    readonly 'calendar.noMatches': "No events matching \"{query}\" in your calendars from last week to a year ahead.";
+    readonly 'calendar.matches': "Calendar matches";
+    readonly 'calendar.fromCalendar': "From your calendar.";
+    readonly 'calendar.openInCalendar': "Open in Calendar";
+    readonly 'calendar.unlink': "Unlink from the calendar event";
+    readonly 'calendar.importTitle': "Import from calendar";
+    readonly 'calendar.addAll': "Add all {count}";
+    readonly 'calendar.events': "Calendar events";
+    readonly 'calendar.addTitle': "Add {title}";
+    readonly 'calendar.newInCalendar': "New in your calendar";
+    readonly 'calendar.moreNew': "More new calendar events";
+};
+export default _default;

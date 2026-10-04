@@ -3,6 +3,7 @@ import { writeBatch } from './firestore.js';
 import { MONEY_APPS } from './roles.js';
 import { cleanAudience, inAudience } from './audience.js';
 import { HOUR, daysBetween, dueText, dueWords, formatTime, longDate, startOfDay, toYmd, type Ymd, ymdToTime, addDays } from './time.js';
+import { capitalize, cleanLocalTexts, kt, localizeRecords, localized, type LocalTexts } from './i18n.js';
 
 /**
  * The household's agenda: dated things from every app in one collection,
@@ -53,12 +54,17 @@ export interface AgendaItem {
    * one person's care. Absent on the shared agenda.
    */
   audience?: string[];
+  /** The title and detail in every language (`localizeAgenda`); `title`/`detail` are the writer's and the fallback. */
+  texts?: AgendaTexts;
   updatedAt: number;
   /** Lowercase email of the member whose app wrote it. */
   by: string;
 }
 
-export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'private', 'updatedAt', 'by'] as const;
+/** What an agenda item says, per language. */
+export type AgendaTexts = LocalTexts<'title' | 'detail'>;
+
+export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'private', 'texts', 'updatedAt', 'by'] as const;
 
 /** The collection of items for named members only (`./audience`). */
 export const PERSONAL_AGENDA = 'personalAgenda';
@@ -68,6 +74,26 @@ export const PERSONAL_AGENDA_FIELDS = [...AGENDA_FIELDS, 'audience'] as const;
 
 /** Maximum lengths, the same as the rules. */
 export const AGENDA_LIMITS = { app: 40, ref: 200, title: 120, detail: 200, url: 2000, who: 60, by: 254 } as const;
+
+/** Limits inside `texts`, the same as the fields they translate. */
+export const AGENDA_TEXT_LIMITS = { title: AGENDA_LIMITS.title, detail: AGENDA_LIMITS.detail } as const;
+
+/**
+ * Runs `build` once per language and gives its items with `texts` (title and detail), so the
+ * portal shows each reader their own language:
+ *
+ * ```ts
+ * syncAgenda(db, id, 'bills', await localizeAgenda(() => billAgenda(bills)), { by: me });
+ * ```
+ */
+export function localizeAgenda<T extends Pick<AgendaInput, 'title' | 'detail'>>(build: () => T[]): Promise<(T & { texts: AgendaTexts })[]> {
+  return localizeRecords(build, (item) => ({ title: item.title, detail: item.detail }));
+}
+
+/** An item's title and detail in the reader's language. */
+export function agendaWords(item: Pick<AgendaItem, 'title' | 'detail' | 'texts'>): { title: string; detail?: string } {
+  return { title: localized(item, 'title', item.title) ?? item.title, detail: localized(item, 'detail', item.detail) };
+}
 
 /** Apps publish items from this many days ago (overdue ones whatever their age)... */
 export const AGENDA_PAST_DAYS = 30;
@@ -108,6 +134,7 @@ export function agendaDoc(app: string, input: AgendaInput, by: string, now = Dat
   const end = input.end !== undefined && Number.isFinite(input.end) && Math.round(input.end) > start ? Math.round(input.end) : undefined;
   const detail = clip(input.detail, AGENDA_LIMITS.detail);
   const who = clip(input.who, AGENDA_LIMITS.who);
+  const texts = cleanLocalTexts(input.texts, AGENDA_TEXT_LIMITS);
   return {
     app,
     ref: input.ref.slice(0, AGENDA_LIMITS.ref),
@@ -121,6 +148,7 @@ export function agendaDoc(app: string, input: AgendaInput, by: string, now = Dat
     ...(who ? { who } : {}),
     ...(input.status ? { status: input.status } : {}),
     private: input.private === true || MONEY_APPS.includes(app),
+    ...(texts ? { texts } : {}),
     updatedAt: now,
     by: by.trim().toLowerCase(),
   };
@@ -294,6 +322,7 @@ export function toAgendaItem(id: string, data: Record<string, unknown>): AgendaI
   const end = num(data.end);
   const detail = str(data.detail);
   const who = str(data.who);
+  const texts = cleanLocalTexts(data.texts, AGENDA_TEXT_LIMITS);
   return {
     id,
     app: str(data.app) ?? '',
@@ -310,6 +339,7 @@ export function toAgendaItem(id: string, data: Record<string, unknown>): AgendaI
     // Left out when the document has no flag, so an admin's or member's sync writes one.
     ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
     ...(Array.isArray(data.audience) ? { audience: data.audience.filter((e): e is string => typeof e === 'string') } : {}),
+    ...(texts ? { texts } : {}),
     updatedAt: num(data.updatedAt) ?? 0,
     by: str(data.by) ?? '',
   };
@@ -395,9 +425,9 @@ function lastDay(item: AgendaItem): Ymd {
 
 /** "All day", "3:30 PM", "3:30 PM – 4:30 PM". */
 export function agendaTime(item: AgendaItem): string {
-  if (item.allDay) return 'All day';
+  if (item.allDay) return kt('agenda.allDay');
   const start = formatTime(item.start);
-  return item.end !== undefined && toYmd(item.end) === toYmd(item.start) ? `${start} – ${formatTime(item.end)}` : start;
+  return item.end !== undefined && toYmd(item.end) === toYmd(item.start) ? kt('agenda.timeRange', { start, end: formatTime(item.end) }) : start;
 }
 
 /** Kinds tied to one occasion: a meal or a dose not given by the end of its day is missed, not still to do. */
@@ -436,7 +466,7 @@ export function todayItems(items: AgendaItem[], now: number, { soonHours = 48, i
     const status = agendaStatus(item, now);
     const first = toYmd(item.start);
     if (status === 'done') {
-      if (includeDone && first <= today && lastDay(item) >= today) out.push({ item, group: 'done', when: 'Done' });
+      if (includeDone && first <= today && lastDay(item) >= today) out.push({ item, group: 'done', when: kt('agenda.done') });
       continue;
     }
     if (item.allDay && !status && lastDay(item) > first) continue;
@@ -446,19 +476,19 @@ export function todayItems(items: AgendaItem[], now: number, { soonHours = 48, i
       // A timed one with an end is due within a window (put the bins out before pickup): once the
       // window has closed it is missed, not something still to do.
       if (!item.allDay && item.end !== undefined && item.end <= now) continue;
-      const when = due < today || item.allDay ? dueText(due, today) : `Overdue since ${formatTime(item.start)}`;
+      const when = due < today || item.allDay ? dueText(due, today) : kt('agenda.overdueSince', { time: formatTime(item.start) });
       out.push({ item, group: 'overdue', when });
       continue;
     }
     if (first <= today && lastDay(item) >= today) {
       if (!item.allDay && !status && (item.end ?? item.start) < now) continue;
-      const when = item.allDay ? (status ? 'Due today' : 'Today') : agendaTime(item);
+      const when = item.allDay ? (status ? kt('time.dueToday') : capitalize(kt('time.today'))) : agendaTime(item);
       out.push({ item, group: 'today', when });
       continue;
     }
     if (first > today && item.start < soonUntil) {
       const day = dueWords(first, today);
-      out.push({ item, group: 'soon', when: item.allDay ? day : `${day}, ${formatTime(item.start)}` });
+      out.push({ item, group: 'soon', when: item.allDay ? day : kt('agenda.dayAtTime', { day, time: formatTime(item.start) }) });
     }
   }
   const rank: Record<TodayGroup, number> = { overdue: 0, today: 1, soon: 2, done: 3 };
@@ -488,10 +518,10 @@ const MAX_SPAN_DAYS = 31;
 export function dayLabel(day: Ymd, now: number): string {
   const today = toYmd(now);
   const n = daysBetween(today, day);
-  if (n === 0) return 'Today';
-  if (n === 1) return 'Tomorrow';
-  if (n === -1) return 'Yesterday';
-  return longDate(day, today);
+  if (n === 0) return capitalize(kt('time.today'));
+  if (n === 1) return capitalize(kt('time.tomorrow'));
+  if (n === -1) return capitalize(kt('time.yesterday'));
+  return capitalize(longDate(day, today));
 }
 
 /** Items by local day, for a calendar list: an item spanning several days shows on each of them. */

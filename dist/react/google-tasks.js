@@ -9,7 +9,9 @@ import { jsx as _jsx } from "react/jsx-runtime";
 import { useCallback, useEffect, useRef } from 'react';
 import { ListTodo } from 'lucide-react';
 import { cachedGoogleTasksToken, googleTasks } from '../google-tasks';
-import { formatDayShort } from '../time';
+import { formatDayShort, weekdayShort } from '../time';
+import { kt } from '../i18n';
+import { useKitT } from './i18n';
 import { SuggestionsCard, useSuggestions } from './suggestions';
 /** Open tasks in the chosen lists that the app doesn't have and this member hasn't dismissed, oldest first. */
 export function useGoogleTasksSuggestions({ auth, app, listIds, isImported, since }) {
@@ -49,17 +51,16 @@ export function googleTaskDue(t, now = Date.now()) {
     const day = new Date(y, m - 1, d).getTime();
     const days = Math.round((day - new Date(new Date(now).toDateString()).getTime()) / 86_400_000);
     if (days === 0)
-        return 'Due today';
+        return kt('time.dueToday');
     if (days === 1)
-        return 'Due tomorrow';
-    if (days > 1 && days < 7)
-        return `Due ${new Date(day).toLocaleDateString(undefined, { weekday: 'short' })}`;
-    return `Due ${formatDayShort(day)}`;
+        return kt('time.dueTomorrow');
+    return kt('googleTasks.dueOn', { day: days > 1 && days < 7 ? weekdayShort(day) : formatDayShort(day) });
 }
 /**
  * The card for new Google Tasks: "New in Google Tasks: Call the dentist · Due Fri · My Tasks", with
  * Add and Not this one (`SuggestionsCard`). `listTitle` names the Google list it came from.
  */
 export function GoogleTasksSuggestions({ suggestions, listTitle, onAdd, onDismiss, now = Date.now() }) {
-    return (_jsx(SuggestionsCard, { suggestions: suggestions, idOf: (t) => t.id, titleOf: (t) => t.title, detailOf: (t) => [googleTaskDue(t, now), listTitle?.(t.listId)].filter(Boolean).join(' · ') || null, lead: "New in Google Tasks", label: "New in Google Tasks", moreLabel: "More new Google Tasks", icon: _jsx(ListTodo, { size: 20, className: "shrink-0 text-link", "aria-hidden": "true" }), onAdd: onAdd, onDismiss: onDismiss }));
+    const kt = useKitT();
+    return (_jsx(SuggestionsCard, { suggestions: suggestions, idOf: (t) => t.id, titleOf: (t) => t.title, detailOf: (t) => [googleTaskDue(t, now), listTitle?.(t.listId)].filter(Boolean).join(' · ') || null, lead: kt('googleTasks.new'), label: kt('googleTasks.new'), moreLabel: kt('googleTasks.more'), icon: _jsx(ListTodo, { size: 20, className: "shrink-0 text-link", "aria-hidden": "true" }), onAdd: onAdd, onDismiss: onDismiss }));
 }

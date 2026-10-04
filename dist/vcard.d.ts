@@ -1,11 +1,3 @@
-/**
- * Contacts the person already has, read into the household's contact fields: a contact card file
- * (.vcf, vCard 2.1, 3.0 or 4.0, as iPhone, Android, Google Contacts and Outlook export them), the
- * phone's own contact picker (Contact Picker API, Chrome on Android), or a card shared into the
- * installed app (`pwaApp({ shareTarget: { contacts: true } })`).
- *
- * Nothing is uploaded: cards are read on the device. Photos are skipped.
- */
 import { type ContactInput } from './contacts';
 /** A phone number, email or website with what the card calls it ("Mobile", "Work", "Office"). */
 export interface LabelledValue {

@@ -7,7 +7,7 @@ import { type Role } from './roles.js';
  * access to members of the parent document — so adding someone here gives them every app at once.
  *
  * Shape matches the rules every app shares:
- *   { name: string, members: string[], joined?: string[], roles?: { [email]: Role }, createdAt: number }
+ *   { name: string, members: string[], joined?: string[], roles?: { [email]: Role }, currency?: string, createdAt: number }
  */
 export interface Household {
     id: string;
@@ -18,6 +18,8 @@ export interface Household {
     joined: string[];
     /** Roles written out (`./roles`); anyone missing is a member, except the creator (first), an admin. */
     roles?: Record<string, Role>;
+    /** ISO 4217 code amounts are shown in ("USD", "EUR"); unset means US dollars. Admins and members set it. */
+    currency?: string;
     createdAt: number;
 }
 export type HouseholdState = {
@@ -50,6 +52,8 @@ export declare function watchHousehold(db: Firestore, email: string, onChange: (
 /** One-off lookup of the same household `watchHousehold` follows; null when not a member anywhere. */
 export declare function findHousehold(db: Firestore, email: string): Promise<Household | null>;
 export declare function toHousehold(id: string, data: Record<string, unknown>): Household;
+/** Sets the currency the household's amounts are shown in (admins and members; the rules check). */
+export declare function setHouseholdCurrency(db: Firestore, householdId: string, currency: string): Promise<void>;
 /** Starts a household with only its creator, its admin; others are invited from inside. */
 export declare function createHousehold(db: Firestore, email: string, name: string): Promise<string>;
 type People = Pick<Household, 'id' | 'members' | 'roles'>;

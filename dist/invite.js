@@ -1,21 +1,22 @@
 import { googleAccessToken, googleFetch } from './google-token';
+import { kt } from './i18n.js';
 /**
  * Tells someone they were invited to the household, the way sharing a Google Sheet does: an email
  * from the inviter's own Gmail. Sending needs Gmail's send permission, which Google asks for once
  * in a popup; the app only ever sends these invitations. `inviteMailto` is the fallback that opens
- * a prefilled draft in the person's own mail app instead.
+ * a prefilled draft in the person's own mail app instead. Written in the inviter's language.
  */
 export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
 export function inviteSubject(invite) {
-    return `${invite.from} invited you to ${invite.householdName}`;
+    return kt('invite.subject', { from: invite.from, household: invite.householdName });
 }
 export function inviteBody(invite) {
     return [
-        `${invite.from} added you to ${invite.householdName} on Huishouden, the household's shared apps for spending, tasks and more.`,
+        kt('invite.added', { from: invite.from, household: invite.householdName }),
         '',
-        `Open ${invite.url} and sign in with Google as ${invite.to}. You'll have every app straight away.`,
+        kt('invite.open', { url: invite.url, to: invite.to }),
         '',
-        'On a phone or tablet, use "Install app" or "Add to Home screen" in the browser menu to keep it on your home screen.',
+        kt('invite.install'),
     ].join('\n');
 }
 /** RFC 2822 message, base64url-encoded as the Gmail API expects. */
@@ -41,7 +42,7 @@ function toBase64(text) {
 }
 /** Sends the invitation from the signed-in person's Gmail (asks for send permission the first time; call from a tap). */
 export async function sendInviteEmail(auth, invite) {
-    const token = await googleAccessToken(auth, [GMAIL_SEND_SCOPE], { deniedMessage: 'Google did not allow sending email.' });
+    const token = await googleAccessToken(auth, [GMAIL_SEND_SCOPE], { deniedMessage: kt('invite.denied') });
     await googleFetch(token, 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { label: 'Gmail', method: 'POST', body: { raw: rawMessage(invite) } });
 }
 /** A prefilled draft in the person's own mail app, for when sending from Gmail isn't wanted. */

@@ -178,6 +178,29 @@ gives medicine.
   runs one flow as `test-helper@example.com` (a helper in the staging household): a refused action
   shows its sentence and a permitted one works.
 
+## Languages
+
+Every app is fully translated: English, Spanish and Dutch ([docs/i18n.md](docs/i18n.md) has the
+step-by-step, the API and the glossary).
+
+- **No English literal in UI code.** Every visible string, `aria-label` and toast goes through
+  `t()` (`./i18n`, `useT()` from `./react/i18n`), with the app's catalogues in
+  `src/locales/{en,es,nl}.json`. Sentences are whole messages with variables and plurals, never
+  concatenated words: word order differs between the languages.
+- **New UI text ships in every language** in the same PR: an English-only key fails
+  `pwa-i18n-check` in CI, and the `cr` reviewer checks that the Spanish and Dutch read naturally and
+  use the glossary's words (reviewer note: a PR that adds or changes visible text without updating
+  `es.json` and `nl.json` is not ready).
+- **One locale formats everything**: dates, times, numbers, money and distances only through the
+  kit's formatters or `getLocale()`; never `toLocaleDateString(undefined, …)`, `'en-US'` or
+  `navigator.language`. Money is in the household's currency.
+- **Data stays as entered.** Names, notes and other household data are never translated; sample
+  data may stay English.
+- **Notifications** are read on other devices: reminder text is built with `inEveryLang` and
+  stored as the reminder's `texts`, so each device gets its own language.
+- **Tests**: each app's e2e has an `i18n.spec.ts` with `expectLocalized` for Spanish and Dutch;
+  PRs that change UI show phone screenshots in each language.
+
 ## Shared code
 
 - **Copy once, then extract.** When a second app needs code another app already has, it moves into

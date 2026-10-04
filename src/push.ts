@@ -1,5 +1,6 @@
 import { collection, doc, getDoc, type Firestore } from 'firebase/firestore';
-import { deleteDoc, setDoc } from './firestore.js';
+import { deleteDoc, setDoc, updateDoc } from './firestore.js';
+import { getLang, isLang, kt, onLangChange, type Lang } from './i18n.js';
 
 /**
  * Push notifications for reminders, with the browser's own Web Push (VAPID; no Firebase Cloud
@@ -14,6 +15,10 @@ import { deleteDoc, setDoc } from './firestore.js';
  * iPhone and iPad: push works only in an app added to the Home Screen, on iOS/iPadOS 16.4 or
  * later; `pushSupport()` says so, so the app can explain instead of showing a dead button.
  *
+ * Each subscription carries the device's language (`lang`, ./i18n), so the sender shows a
+ * reminder's `texts` in it (./reminders). `enablePush` writes it; `syncPushLang` (or
+ * `watchPushLang`, running for as long as the app is open) rewrites it when the language changes.
+ *
  * Fields match the rules exactly (see PUSH_SUBSCRIPTION_FIELDS); keep them in step.
  */
 export interface PushSubscriptionDoc {
@@ -23,10 +28,12 @@ export interface PushSubscriptionDoc {
   endpoint: string;
   keys: { p256dh: string; auth: string };
   ua?: string;
+  /** The device's language (`en`, `es`, `nl`): which of a reminder's `texts` it is sent. */
+  lang?: Lang;
   createdAt: number;
 }
 
-export const PUSH_SUBSCRIPTION_FIELDS = ['email', 'app', 'endpoint', 'keys', 'ua', 'createdAt'] as const;
+export const PUSH_SUBSCRIPTION_FIELDS = ['email', 'app', 'endpoint', 'keys', 'ua', 'lang', 'createdAt'] as const;
 
 export type PushUnsupportedReason =
   /** iPhone/iPad in a browser tab: add the app to the Home Screen first. */
@@ -40,12 +47,17 @@ export type PushUnsupportedReason =
 
 export type PushSupport = { supported: true } | { supported: false; reason: PushUnsupportedReason; message: string };
 
-const MESSAGES: Record<PushUnsupportedReason, string> = {
-  'ios-not-installed': 'On iPhone and iPad, notifications work once the app is on the Home Screen: tap Share, then "Add to Home Screen", and open it from there.',
-  'ios-too-old': 'Notifications need iOS or iPadOS 16.4 or later.',
-  'unsupported-browser': "This browser can't show notifications from web apps.",
-  denied: 'Notifications are blocked for this app. Allow them in the browser or system settings for this site.',
-};
+const MESSAGE_KEYS = {
+  'ios-not-installed': 'push.iosNotInstalled',
+  'ios-too-old': 'push.iosTooOld',
+  'unsupported-browser': 'push.unsupported',
+  denied: 'push.denied',
+} as const satisfies Record<PushUnsupportedReason, string>;
+
+/** The sentence to show for a reason, in the active language. */
+export function pushMessage(reason: PushUnsupportedReason): string {
+  return kt(MESSAGE_KEYS[reason]);
+}
 
 interface Env {
   userAgent: string;
@@ -81,7 +93,7 @@ export function iosVersion(userAgent: string, maxTouchPoints = 0): number | null
 
 /** Whether this device can get reminders as notifications, and if not, why (with a sentence to show). */
 export function pushSupport(env: Env = currentEnv()): PushSupport {
-  const no = (reason: PushUnsupportedReason): PushSupport => ({ supported: false, reason, message: MESSAGES[reason] });
+  const no = (reason: PushUnsupportedReason): PushSupport => ({ supported: false, reason, message: pushMessage(reason) });
   const ios = iosVersion(env.userAgent, env.maxTouchPoints);
   if (ios !== null) {
     if (ios > 0 && ios < 16.04) return no('ios-too-old');
@@ -135,12 +147,12 @@ export async function enablePush(
   vapidPublicKey: string,
   options: EnablePushOptions,
 ): Promise<{ id: string; endpoint: string }> {
-  if (!user.email) throw new Error('Sign in first.');
-  if (!vapidPublicKey) throw new Error('Notifications are not set up for this app (VITE_VAPID_PUBLIC_KEY is empty).');
+  if (!user.email) throw new Error(kt('feedback.signInFirst'));
+  if (!vapidPublicKey) throw new Error(kt('push.notConfigured'));
   const support = pushSupport();
   if (!support.supported) throw new Error(support.message);
   const permission = await Notification.requestPermission();
-  if (permission !== 'granted') throw new Error(permission === 'denied' ? MESSAGES.denied : 'Notifications were not allowed.');
+  if (permission !== 'granted') throw new Error(permission === 'denied' ? pushMessage('denied') : kt('push.notAllowed'));
 
   const registration = await navigator.serviceWorker.ready;
   const key = applicationServerKey(vapidPublicKey);
@@ -153,7 +165,7 @@ export async function enablePush(
   subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
 
   const json = subscription.toJSON();
-  if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error('The browser returned an incomplete push subscription.');
+  if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error(kt('push.incomplete'));
   const email = user.email.trim().toLowerCase();
   const id = await pushSubscriptionId(email, json.endpoint);
   const data: PushSubscriptionDoc = {
@@ -162,6 +174,7 @@ export async function enablePush(
     endpoint: json.endpoint,
     keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
     ua: navigator.userAgent.slice(0, 300),
+    lang: getLang(),
     createdAt: Date.now(),
   };
   await setDoc(doc(subscriptionsOf(db, householdId), id), data);
@@ -176,6 +189,34 @@ export async function pushEnabled(db: Firestore, householdId: string, user: { em
   if (!subscription) return false;
   const stored = await getDoc(doc(subscriptionsOf(db, householdId), await pushSubscriptionId(user.email, subscription.endpoint)));
   return stored.exists();
+}
+
+/**
+ * Rewrites the `lang` of this device's stored subscription for the signed-in member when it
+ * differs from `lang` (default: the page's language). Only that one field of their own document;
+ * nothing when notifications are off here. Resolves to whether it wrote.
+ */
+export async function syncPushLang(db: Firestore, householdId: string, user: { email: string | null }, lang: Lang = getLang()): Promise<boolean> {
+  if (!user.email || !isLang(lang) || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return false;
+  const registration = await navigator.serviceWorker.getRegistration();
+  const subscription = await registration?.pushManager.getSubscription();
+  if (!subscription) return false;
+  const ref = doc(subscriptionsOf(db, householdId), await pushSubscriptionId(user.email, subscription.endpoint));
+  const stored = await getDoc(ref);
+  if (!stored.exists() || stored.data().lang === lang) return false;
+  await updateDoc(ref, { lang });
+  return true;
+}
+
+/**
+ * Keeps this device's subscription in the page's language: syncs once now and again whenever the
+ * language changes (the app bar's menu, another tab). Mount it once in the app's shell, signed in;
+ * returns the unsubscribe. Failures are silent: the next change or open tries again.
+ */
+export function watchPushLang(db: Firestore, householdId: string, user: { email: string | null }): () => void {
+  const sync = () => void syncPushLang(db, householdId, user).catch(() => {});
+  sync();
+  return onLangChange(sync);
 }
 
 /**

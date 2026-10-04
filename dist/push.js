@@ -1,12 +1,17 @@
 import { collection, doc, getDoc } from 'firebase/firestore';
-import { deleteDoc, setDoc } from './firestore.js';
-export const PUSH_SUBSCRIPTION_FIELDS = ['email', 'app', 'endpoint', 'keys', 'ua', 'createdAt'];
-const MESSAGES = {
-    'ios-not-installed': 'On iPhone and iPad, notifications work once the app is on the Home Screen: tap Share, then "Add to Home Screen", and open it from there.',
-    'ios-too-old': 'Notifications need iOS or iPadOS 16.4 or later.',
-    'unsupported-browser': "This browser can't show notifications from web apps.",
-    denied: 'Notifications are blocked for this app. Allow them in the browser or system settings for this site.',
+import { deleteDoc, setDoc, updateDoc } from './firestore.js';
+import { getLang, isLang, kt, onLangChange } from './i18n.js';
+export const PUSH_SUBSCRIPTION_FIELDS = ['email', 'app', 'endpoint', 'keys', 'ua', 'lang', 'createdAt'];
+const MESSAGE_KEYS = {
+    'ios-not-installed': 'push.iosNotInstalled',
+    'ios-too-old': 'push.iosTooOld',
+    'unsupported-browser': 'push.unsupported',
+    denied: 'push.denied',
 };
+/** The sentence to show for a reason, in the active language. */
+export function pushMessage(reason) {
+    return kt(MESSAGE_KEYS[reason]);
+}
 function currentEnv() {
     const nav = typeof navigator !== 'undefined' ? navigator : undefined;
     const win = typeof window !== 'undefined' ? window : undefined;
@@ -29,7 +34,7 @@ export function iosVersion(userAgent, maxTouchPoints = 0) {
 }
 /** Whether this device can get reminders as notifications, and if not, why (with a sentence to show). */
 export function pushSupport(env = currentEnv()) {
-    const no = (reason) => ({ supported: false, reason, message: MESSAGES[reason] });
+    const no = (reason) => ({ supported: false, reason, message: pushMessage(reason) });
     const ios = iosVersion(env.userAgent, env.maxTouchPoints);
     if (ios !== null) {
         if (ios > 0 && ios < 16.04)
@@ -74,15 +79,15 @@ function sameKey(a, b) {
  */
 export async function enablePush(db, householdId, user, vapidPublicKey, options) {
     if (!user.email)
-        throw new Error('Sign in first.');
+        throw new Error(kt('feedback.signInFirst'));
     if (!vapidPublicKey)
-        throw new Error('Notifications are not set up for this app (VITE_VAPID_PUBLIC_KEY is empty).');
+        throw new Error(kt('push.notConfigured'));
     const support = pushSupport();
     if (!support.supported)
         throw new Error(support.message);
     const permission = await Notification.requestPermission();
     if (permission !== 'granted')
-        throw new Error(permission === 'denied' ? MESSAGES.denied : 'Notifications were not allowed.');
+        throw new Error(permission === 'denied' ? pushMessage('denied') : kt('push.notAllowed'));
     const registration = await navigator.serviceWorker.ready;
     const key = applicationServerKey(vapidPublicKey);
     let subscription = await registration.pushManager.getSubscription();
@@ -94,7 +99,7 @@ export async function enablePush(db, householdId, user, vapidPublicKey, options)
     subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
     const json = subscription.toJSON();
     if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth)
-        throw new Error('The browser returned an incomplete push subscription.');
+        throw new Error(kt('push.incomplete'));
     const email = user.email.trim().toLowerCase();
     const id = await pushSubscriptionId(email, json.endpoint);
     const data = {
@@ -103,6 +108,7 @@ export async function enablePush(db, householdId, user, vapidPublicKey, options)
         endpoint: json.endpoint,
         keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
         ua: navigator.userAgent.slice(0, 300),
+        lang: getLang(),
         createdAt: Date.now(),
     };
     await setDoc(doc(subscriptionsOf(db, householdId), id), data);
@@ -118,6 +124,35 @@ export async function pushEnabled(db, householdId, user) {
         return false;
     const stored = await getDoc(doc(subscriptionsOf(db, householdId), await pushSubscriptionId(user.email, subscription.endpoint)));
     return stored.exists();
+}
+/**
+ * Rewrites the `lang` of this device's stored subscription for the signed-in member when it
+ * differs from `lang` (default: the page's language). Only that one field of their own document;
+ * nothing when notifications are off here. Resolves to whether it wrote.
+ */
+export async function syncPushLang(db, householdId, user, lang = getLang()) {
+    if (!user.email || !isLang(lang) || typeof navigator === 'undefined' || !('serviceWorker' in navigator))
+        return false;
+    const registration = await navigator.serviceWorker.getRegistration();
+    const subscription = await registration?.pushManager.getSubscription();
+    if (!subscription)
+        return false;
+    const ref = doc(subscriptionsOf(db, householdId), await pushSubscriptionId(user.email, subscription.endpoint));
+    const stored = await getDoc(ref);
+    if (!stored.exists() || stored.data().lang === lang)
+        return false;
+    await updateDoc(ref, { lang });
+    return true;
+}
+/**
+ * Keeps this device's subscription in the page's language: syncs once now and again whenever the
+ * language changes (the app bar's menu, another tab). Mount it once in the app's shell, signed in;
+ * returns the unsubscribe. Failures are silent: the next change or open tries again.
+ */
+export function watchPushLang(db, householdId, user) {
+    const sync = () => void syncPushLang(db, householdId, user).catch(() => { });
+    sync();
+    return onLangChange(sync);
 }
 /**
  * Turns notifications off on this device for the signed-in member by deleting their stored

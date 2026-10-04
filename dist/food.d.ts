@@ -11,8 +11,10 @@ import { type Firestore, type Unsubscribe } from 'firebase/firestore';
  */
 export declare const DIETS: readonly ["vegan", "vegetarian", "pescatarian", "gluten-free", "dairy-free", "nut allergy", "shellfish allergy", "gerd", "pregnant", "low-sodium", "halal", "kosher"];
 export type Diet = (typeof DIETS)[number];
-/** How a chip names each diet. */
+/** How a chip names each diet in English. Shown text uses `dietLabel` (the active language). */
 export declare const DIET_LABELS: Record<Diet, string>;
+/** A diet's chip in the active language: "Vegetarian", "Vegetariano", "Vegetarisch". */
+export declare function dietLabel(diet: Diet): string;
 /** What each diet means for a meal, from well-known guidance, in plain words. */
 export declare const DIET_GUIDANCE: Record<Diet, string>;
 /**
@@ -32,7 +34,10 @@ export declare const GENTLE_DIETS: readonly Diet[];
  */
 export declare const SPICE_LEVELS: readonly ["none", "mild", "medium", "hot"];
 export type SpiceTolerance = (typeof SPICE_LEVELS)[number];
+/** Heat tolerance in English. Shown text uses `spiceLabel`. */
 export declare const SPICE_LABELS: Record<SpiceTolerance, string>;
+/** A heat tolerance in the active language: "Loves heat", "Le encanta el picante", "Houdt van pittig". */
+export declare function spiceLabel(spice: SpiceTolerance): string;
 /** The highest heat (0–3) that suits someone most of the time. */
 export declare const SPICE_MAX_HEAT: Record<SpiceTolerance, number>;
 export interface FoodPerson {

@@ -1,0 +1,21 @@
+declare const _default: {
+    'appBar.home': string;
+    'appBar.openingGoogle': string;
+    'appBar.signInWithGoogle': string;
+    'appBar.signIn': string;
+    'appBar.withGoogle': string;
+    'appBar.settingsMenu': string;
+    'appBar.signedInAs': string;
+    'appBar.you': string;
+    'appBar.account': string;
+    'appBar.allApps': string;
+    'appBar.privacy': string;
+    'appBar.signOut': string;
+    'appBar.theme': string;
+    'appBar.language': string;
+    'theme.auto': string;
+    'theme.light': string;
+    'theme.dark': string;
+    'lang.auto': string;
+};
+export default _default;

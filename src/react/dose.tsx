@@ -17,6 +17,7 @@
 import { useRef, useState } from 'react';
 import { ScanText } from 'lucide-react';
 import { parseDirections, readLabel, type ParsedCourse } from '../dose';
+import { useKitT } from './i18n';
 import { secondaryButton } from './ui';
 
 declare global {
@@ -50,7 +51,9 @@ export interface LabelScanProps {
 const defaultRead = (photo: Blob, onProgress: (progress: number) => void) =>
   window.__mockLabelText !== undefined ? Promise.resolve(window.__mockLabelText) : readLabel(photo, { onProgress });
 
-export function LabelScan({ onRead, intro = 'Take a photo of the pharmacy label. It is read on this device and not kept.', read = defaultRead }: LabelScanProps) {
+export function LabelScan({ onRead, intro, read = defaultRead }: LabelScanProps) {
+  const kt = useKitT();
+  intro ??= kt('dose.scanIntro');
   const photo = useRef<HTMLInputElement>(null);
   const [scan, setScan] = useState<Scan>({ status: 'idle' });
 
@@ -78,28 +81,32 @@ export function LabelScan({ onRead, intro = 'Take a photo of the pharmacy label.
         accept="image/*"
         capture="environment"
         className="hidden"
-        aria-label="Label photo"
+        aria-label={kt('dose.labelPhoto')}
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) void readPhoto(file);
         }}
       />
       <button type="button" className={secondaryButton} disabled={scan.status === 'reading'} onClick={() => photo.current?.click()}>
-        <ScanText size={18} /> {scan.status === 'reading' ? `Reading the label ${Math.round(scan.progress * 100)}%` : scan.status === 'done' ? 'Scan again' : 'Scan the label'}
+        <ScanText size={18} /> {scan.status === 'reading'
+          ? kt('dose.reading', { percent: Math.round(scan.progress * 100) })
+          : scan.status === 'done'
+            ? kt('dose.scanAgain')
+            : kt('dose.scan')}
       </button>
       {scan.status === 'idle' && <p className="text-sm text-muted">{intro}</p>}
       {scan.status === 'error' && (
         <p role="alert" className="text-base text-error">
-          Couldn't read that photo. Try again in good light with the label flat, or fill it in below.
+          {kt('dose.readError')}
         </p>
       )}
       {scan.status === 'done' && (
         <div role="status" className="space-y-3 text-base text-ink-soft">
           {scan.filled.length === 0 ? (
-            <p>Nothing on that photo could be filled in. Try again closer, or fill it in below.</p>
+            <p>{kt('dose.nothingFilled')}</p>
           ) : (
-            <section aria-label="Filled in from the label">
-              <p className="font-medium text-link">Filled in from the label. Check each field before saving.</p>
+            <section aria-label={kt('dose.filledSection')}>
+              <p className="font-medium text-link">{kt('dose.filledCheck')}</p>
               <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
                 {scan.filled.map((f) => (
                   <div key={f.label} className="contents">
@@ -111,8 +118,8 @@ export function LabelScan({ onRead, intro = 'Take a photo of the pharmacy label.
             </section>
           )}
           {scan.parsed.assumptions.length > 0 && (
-            <section aria-label="Check these">
-              <p className="text-sm font-medium text-ink">Check these</p>
+            <section aria-label={kt('dose.checkThese')}>
+              <p className="text-sm font-medium text-ink">{kt('dose.checkThese')}</p>
               <ul className="list-disc pl-5 text-sm">
                 {scan.parsed.assumptions.map((a) => (
                   <li key={a}>{a}</li>
@@ -121,10 +128,10 @@ export function LabelScan({ onRead, intro = 'Take a photo of the pharmacy label.
             </section>
           )}
           {scan.parsed.unparsed.length > 0 && (
-            <section aria-label="Read but not used">
-              <p className="text-sm font-medium text-ink">Read but not used</p>
-              <p className="text-sm text-muted">Nothing above holds these lines. Add anything that matters to the notes yourself.</p>
-              <ul aria-label="Not used" className="mt-1 list-disc pl-5 text-sm">
+            <section aria-label={kt('dose.notUsedSection')}>
+              <p className="text-sm font-medium text-ink">{kt('dose.notUsedSection')}</p>
+              <p className="text-sm text-muted">{kt('dose.notUsedHelp')}</p>
+              <ul aria-label={kt('dose.notUsed')} className="mt-1 list-disc pl-5 text-sm">
                 {scan.parsed.unparsed.map((u) => (
                   <li key={u}>{u}</li>
                 ))}
@@ -132,14 +139,12 @@ export function LabelScan({ onRead, intro = 'Take a photo of the pharmacy label.
             </section>
           )}
           {scan.parsed.ignored.length > 0 && (
-            <p className="text-sm text-muted">
-              Left out: {scan.parsed.ignored.length === 1 ? 'one pharmacy line' : `${scan.parsed.ignored.length} pharmacy lines`} (prescription number, quantity, address and the like).
-            </p>
+            <p className="text-sm text-muted">{kt('dose.leftOut', { n: scan.parsed.ignored.length })}</p>
           )}
           {lines.length > 0 && (
             <details className="text-sm text-muted">
-              <summary className="cursor-pointer select-none py-1">Everything read from the photo</summary>
-              <ul aria-label="Read from the photo" className="mt-1 space-y-0.5 pl-1">
+              <summary className="cursor-pointer select-none py-1">{kt('dose.everythingRead')}</summary>
+              <ul aria-label={kt('dose.readFromPhoto')} className="mt-1 space-y-0.5 pl-1">
                 {lines.map((l, i) => (
                   <li key={i}>{l}</li>
                 ))}

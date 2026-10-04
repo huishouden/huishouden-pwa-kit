@@ -239,6 +239,15 @@ export declare function themeBoot(): {
     name: string;
     transformIndexHtml(html: string): string;
 };
+/**
+ * The suite's language (./i18n) on <html lang> before the first paint: the stored choice, else the
+ * first of the device's languages the suite speaks, else English. Screen readers and the browser's
+ * hyphenation and translate offer read it before the app's bundle loads.
+ */
+export declare function langBoot(): {
+    name: string;
+    transformIndexHtml(html: string): string;
+};
 /** File-name prefix of the New Relic agent's chunks (`./observability`). */
 export declare const TELEMETRY_PREFIX = "hh-telemetry-";
 /** Those chunks, left out of the precache (`globIgnores`), whatever the assets directory. */

@@ -127,7 +127,7 @@ describe('places', () => {
     expect(usesMiles('not a locale')).toBe(false);
     expect(formatDistance(0.8, 'en-US')).toBe('0.5 mi');
     expect(formatDistance(0.65, 'nl-NL')).toBe('650 m');
-    expect(formatDistance(3.14, 'de-DE')).toBe('3.1 km');
+    expect(formatDistance(3.14, 'de-DE')).toBe('3,1 km');
   });
   test('tel links keep only digits and plus', () => {
     expect(telHref('+1 (555) 010-0100')).toBe('tel:+15550100100');

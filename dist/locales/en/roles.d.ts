@@ -1,0 +1,25 @@
+declare const _default: {
+    readonly 'roles.admin': "Admin";
+    readonly 'roles.member': "Member";
+    readonly 'roles.helper': "Helper";
+    readonly 'roles.kid': "Kid";
+    readonly 'roles.adminDescription': "Everything, and invites people and sets their roles.";
+    readonly 'roles.memberDescription': "Everything except inviting people and setting roles.";
+    readonly 'roles.helperDescription': "Sees the everyday things, ticks them off and adds their own. No money, nothing private, no settings.";
+    readonly 'roles.kidDescription': "Like a helper, without medicine.";
+    readonly 'roles.refuseManagePeople': "Only admins can invite or remove people and set roles.";
+    readonly 'roles.refuseChangeSettings': "Only admins and members can change settings.";
+    readonly 'roles.refuseSeeMoney': "Only admins and members can see the household’s money.";
+    readonly 'roles.refuseSeePrivate': "Only admins and members can see this.";
+    readonly 'roles.refuseEditOthers': "Only admins and members can change or delete what someone else added.";
+    readonly 'roles.refuseGiveMedicine': "Only admins, members and helpers can give medicine.";
+    readonly 'roles.refuseAdd': "Only household members can add things.";
+    readonly 'roles.refuseTick': "Only household members can tick things off.";
+    readonly 'roles.notInHousehold': "{email} is not in this household.";
+    readonly 'roles.whoCanGive': "Who can give it";
+    readonly 'roles.allHelpers': "All helpers";
+    readonly 'roles.onlyApproved': "Only approved helpers";
+    readonly 'roles.noHelpers': "No helpers yet. An admin can make someone a helper in the household settings.";
+    readonly 'roles.alwaysGive': "Admins and members can always give it; kids can’t.";
+};
+export default _default;

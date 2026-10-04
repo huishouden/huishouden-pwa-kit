@@ -1,5 +1,6 @@
 import type { Auth } from 'firebase/auth';
 import { googleAccessToken, googleFetch } from './google-token';
+import { kt } from './i18n.js';
 import type { LabelledValue, ParsedContact } from './vcard';
 
 /**
@@ -30,7 +31,7 @@ declare global {
 /** A token that can read Google Contacts: from a tap, asking once; kept for its hour on this device. */
 export function googleContactsToken(auth: Auth): Promise<string> {
   if (typeof window !== 'undefined' && typeof window.__mockGoogleContactsToken === 'string') return Promise.resolve(window.__mockGoogleContactsToken);
-  return googleAccessToken(auth, GOOGLE_CONTACTS_SCOPES, { persist: true, deniedMessage: 'Google did not grant access to Google Contacts.' });
+  return googleAccessToken(auth, GOOGLE_CONTACTS_SCOPES, { persist: true, deniedMessage: kt('contacts.googleDenied') });
 }
 
 /** The Google Contacts search can be offered: a member is signed in (or a test stands in). */

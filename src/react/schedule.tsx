@@ -10,23 +10,22 @@ import {
   describePrep, describeRule, eventOccurrences, MAX_PREP_DAYS, PREP_PRESETS, PREP_TITLE_MAX, weekdayOfMonth,
   type EventPrep, type EventRule, type Nth, type OccurrenceChanges, type PrepOffset,
 } from '../schedule';
-import { addDays, isHhmm, isYmd, ordinal, WEEKDAYS, weekday, type Ymd } from '../time';
+import { addDays, dateFormat, isHhmm, isYmd, weekday, weekdayName, type Ymd } from '../time';
+import { useKitT } from './i18n';
 import { Checkbox, Chip, Field, inputClass, selectClass } from './ui';
 
 type Mode = 'week' | 'weeks' | 'month' | 'year';
 
 const modeOf = (r: EventRule): Mode => (r.freq === 'week' ? (r.every === 1 ? 'week' : 'weeks') : r.freq);
 
-const ORDINALS: Record<number, string> = { 1: 'first', 2: 'second', 3: 'third', 4: 'fourth', [-1]: 'last' };
-
-/** The next `count` dates of a rule in words: "Thu, Oct 23 · Thu, Oct 30 · Thu, Nov 6". */
+/** The next `count` dates of a rule in words, in the active locale: "Thu, Oct 23 · Thu, Oct 30 · Thu, Nov 6". */
 export function nextDatesText(rule: EventRule, today: Ymd, count = 3, changes?: OccurrenceChanges | null): string {
-  const fmt = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const fmt = dateFormat({ weekday: 'short', month: 'short', day: 'numeric' });
   return eventOccurrences(rule, today, addDays(today, 800), { changes })
     .slice(0, count)
     .map((o) => {
       const [y, m, d] = o.date.split('-').map(Number);
-      return fmt.format(new Date(y, m - 1, d));
+      return fmt.format(new Date(y, m - 1, d)).replace(/[\u202f\u00a0]/g, ' ');
     })
     .join(' · ');
 }
@@ -35,7 +34,9 @@ export function nextDatesText(rule: EventRule, today: Ymd, count = 3, changes?: 
  * How an event repeats. `rule.start` is the first day it can happen ("Starting"); the weekday chips,
  * the month choice and "every N" are read from and written to the rule.
  */
-export function RulePicker({ rule, onChange, today, label = 'Repeats' }: { rule: EventRule; onChange: (rule: EventRule) => void; today: Ymd; label?: string }) {
+export function RulePicker({ rule, onChange, today, label }: { rule: EventRule; onChange: (rule: EventRule) => void; today: Ymd; label?: string }) {
+  const kt = useKitT();
+  label ??= kt('schedule.repeats');
   const id = useId();
   const mode = modeOf(rule);
   const days = rule.freq === 'week' && rule.days?.length ? rule.days : [weekday(rule.start)];
@@ -70,9 +71,9 @@ export function RulePicker({ rule, onChange, today, label = 'Repeats' }: { rule:
   const monthChoices: { label: string; rule: EventRule }[] =
     rule.freq === 'month'
       ? [
-          { label: `On the ${ordinalDay(rule.start)}`, rule: { freq: 'month', every: rule.every, start: rule.start } },
-          ...(w.nth <= 4 ? [{ label: `On the ${ORDINALS[w.nth]} ${WEEKDAYS[w.weekday]}`, rule: { freq: 'month' as const, every: rule.every, start: rule.start, nth: w.nth as Nth, weekday: w.weekday } }] : []),
-          ...(w.last ? [{ label: `On the last ${WEEKDAYS[w.weekday]}`, rule: { freq: 'month' as const, every: rule.every, start: rule.start, nth: -1 as Nth, weekday: w.weekday } }] : []),
+          { label: kt('schedule.onTheDay', { day: Number(rule.start.slice(8)) }), rule: { freq: 'month', every: rule.every, start: rule.start } },
+          ...(w.nth <= 4 ? [{ label: kt('schedule.onTheNth', { nth: w.nth, day: weekdayName(w.weekday) }), rule: { freq: 'month' as const, every: rule.every, start: rule.start, nth: w.nth as Nth, weekday: w.weekday } }] : []),
+          ...(w.last ? [{ label: kt('schedule.onTheNth', { nth: -1, day: weekdayName(w.weekday) }), rule: { freq: 'month' as const, every: rule.every, start: rule.start, nth: -1 as Nth, weekday: w.weekday } }] : []),
         ]
       : [];
 
@@ -80,18 +81,18 @@ export function RulePicker({ rule, onChange, today, label = 'Repeats' }: { rule:
     <fieldset className="space-y-3 rounded-2xl border border-line p-4">
       <legend className="px-1 text-sm font-medium text-ink-soft">{label}</legend>
       <div className="flex flex-wrap gap-2">
-        <Chip active={mode === 'week'} onClick={() => setMode('week')}>Every week</Chip>
-        <Chip active={mode === 'weeks'} onClick={() => setMode('weeks')}>Every few weeks</Chip>
-        <Chip active={mode === 'month'} onClick={() => setMode('month')}>Every month</Chip>
-        <Chip active={mode === 'year'} onClick={() => setMode('year')}>Every year</Chip>
+        <Chip active={mode === 'week'} onClick={() => setMode('week')}>{kt('schedule.modeWeek')}</Chip>
+        <Chip active={mode === 'weeks'} onClick={() => setMode('weeks')}>{kt('schedule.modeWeeks')}</Chip>
+        <Chip active={mode === 'month'} onClick={() => setMode('month')}>{kt('schedule.modeMonth')}</Chip>
+        <Chip active={mode === 'year'} onClick={() => setMode('year')}>{kt('schedule.modeYear')}</Chip>
       </div>
 
       {(mode === 'weeks' || mode === 'month') && (
         <label className="flex items-center gap-2 text-base text-ink-soft">
-          <span>Every</span>
+          <span>{kt('schedule.pickerEvery')}</span>
           <select
             className={`${selectClass} w-auto tabular-nums`}
-            aria-label={mode === 'weeks' ? 'How many weeks' : 'How many months'}
+            aria-label={mode === 'weeks' ? kt('schedule.howManyWeeks') : kt('schedule.howManyMonths')}
             value={rule.every}
             onChange={(e) => onChange({ ...rule, every: Number(e.target.value) })}
           >
@@ -99,22 +100,22 @@ export function RulePicker({ rule, onChange, today, label = 'Repeats' }: { rule:
               <option key={n} value={n}>{n}</option>
             ))}
           </select>
-          <span>{mode === 'weeks' ? 'weeks' : rule.every === 1 ? 'month' : 'months'}</span>
+          <span>{kt('schedule.pickerUnit', { unit: mode === 'weeks' ? 'weeks' : 'months', n: rule.every })}</span>
         </label>
       )}
 
       {rule.freq === 'week' && (
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="On">
-          {WEEKDAYS.map((name, d) => (
-            <Chip key={name} active={days.includes(d)} onClick={() => toggleDay(d)} label={name}>
-              {name.slice(0, 3)}
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label={kt('schedule.onDays')}>
+          {[0, 1, 2, 3, 4, 5, 6].map((d) => (
+            <Chip key={d} active={days.includes(d)} onClick={() => toggleDay(d)} label={weekdayName(d)}>
+              {weekdayName(d, { short: true })}
             </Chip>
           ))}
         </div>
       )}
 
       {rule.freq === 'month' && (
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Which day">
+        <div className="flex flex-wrap gap-2" role="group" aria-label={kt('schedule.whichDay')}>
           {monthChoices.map((c) => (
             <Chip key={c.label} active={(c.rule.nth ?? null) === (rule.nth ?? null)} onClick={() => onChange(c.rule)}>
               {c.label}
@@ -123,14 +124,15 @@ export function RulePicker({ rule, onChange, today, label = 'Repeats' }: { rule:
         </div>
       )}
 
-      <Field label={rule.freq === 'year' ? 'On' : 'Starting'} hint={`${describeRule(rule)}. Next: ${nextDatesText(rule, rule.start > today ? rule.start : today) || 'none'}.`}>
+      <Field
+        label={rule.freq === 'year' ? kt('schedule.on') : kt('schedule.starting')}
+        hint={kt('schedule.ruleHint', { rule: describeRule(rule), dates: nextDatesText(rule, rule.start > today ? rule.start : today) || kt('schedule.none') })}
+      >
         <input id={`${id}-start`} className={inputClass} type="date" value={rule.start} onChange={(e) => setStart(e.target.value)} />
       </Field>
     </fieldset>
   );
 }
-
-const ordinalDay = (day: Ymd) => ordinal(Number(day.slice(8)));
 
 const samePrep = (a: PrepOffset, b: PrepOffset) => a.daysBefore === b.daysBefore && a.time === b.time;
 
@@ -138,49 +140,51 @@ const samePrep = (a: PrepOffset, b: PrepOffset) => a.daysBefore === b.daysBefore
  * Something to do before each occurrence: off until ticked, then what, when (the evening before,
  * the morning of, or N days before at a time) and whether to send a reminder then.
  */
-export function PrepPicker({ prep, onChange, placeholder = 'Take the garbage out', suggestedTitle = '' }: {
+export function PrepPicker({ prep, onChange, placeholder, suggestedTitle = '' }: {
   prep: EventPrep | null;
   onChange: (prep: EventPrep | null) => void;
   placeholder?: string;
   /** The title a newly ticked one starts with. */
   suggestedTitle?: string;
 }) {
+  const kt = useKitT();
+  placeholder ??= kt('schedule.prepPlaceholder');
   const preset = prep ? PREP_PRESETS.find((p) => samePrep(p.offset, prep.offset)) : undefined;
   const set = (patch: Partial<EventPrep>) => prep && onChange({ ...prep, ...patch });
   return (
     <fieldset className="space-y-3 rounded-2xl border border-line p-4">
-      <legend className="px-1 text-sm font-medium text-ink-soft">Something to do before</legend>
+      <legend className="px-1 text-sm font-medium text-ink-soft">{kt('schedule.prepLegend')}</legend>
       <Checkbox checked={!!prep} onChange={(on) => onChange(on ? { title: suggestedTitle, offset: PREP_PRESETS[0].offset, remind: true } : null)}>
-        Something to do before each one
+        {kt('schedule.prepToggle')}
       </Checkbox>
       {prep && (
         <>
-          <Field label="What to do">
+          <Field label={kt('schedule.prepWhat')}>
             <input className={inputClass} value={prep.title} maxLength={PREP_TITLE_MAX} placeholder={placeholder} onChange={(e) => set({ title: e.target.value })} />
           </Field>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="When">
+          <div className="flex flex-wrap gap-2" role="group" aria-label={kt('schedule.prepWhenLabel')}>
             {PREP_PRESETS.map((p) => (
-              <Chip key={p.label} active={preset?.label === p.label} onClick={() => set({ offset: p.offset })}>
+              <Chip key={`${p.offset.daysBefore}-${p.offset.time}`} active={preset === p} onClick={() => set({ offset: p.offset })}>
                 {p.label}
               </Chip>
             ))}
             <Chip active={!preset} onClick={() => set({ offset: { daysBefore: 2, time: prep.offset.time } })}>
-              Days before
+              {kt('schedule.daysBefore')}
             </Chip>
           </div>
           <div className="flex flex-wrap items-end gap-3">
             {!preset && (
               <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-ink-soft">Days before</span>
+                <span className="mb-1.5 block text-sm font-medium text-ink-soft">{kt('schedule.daysBefore')}</span>
                 <select className={`${selectClass} w-auto tabular-nums`} value={prep.offset.daysBefore} onChange={(e) => set({ offset: { ...prep.offset, daysBefore: Number(e.target.value) } })}>
                   {Array.from({ length: MAX_PREP_DAYS + 1 }, (_, n) => (
-                    <option key={n} value={n}>{n === 0 ? 'Same day' : n}</option>
+                    <option key={n} value={n}>{n === 0 ? kt('schedule.sameDay') : n}</option>
                   ))}
                 </select>
               </label>
             )}
             <label className="block">
-              <span className="mb-1.5 block text-sm font-medium text-ink-soft">By</span>
+              <span className="mb-1.5 block text-sm font-medium text-ink-soft">{kt('schedule.by')}</span>
               <input
                 className={`${inputClass} w-auto`}
                 type="time"
@@ -191,7 +195,7 @@ export function PrepPicker({ prep, onChange, placeholder = 'Take the garbage out
           </div>
           <p className="text-sm text-muted">{describePrep(prep.offset)}.</p>
           <Checkbox checked={prep.remind} onChange={(remind) => set({ remind })}>
-            Send a reminder then
+            {kt('schedule.prepRemind')}
           </Checkbox>
         </>
       )}

@@ -7,6 +7,7 @@
  * Nominatim's usage policy: at most one search a second, run on an explicit action (a button),
  * never on every keystroke.
  */
+import { formatNumber, getLocale, kt } from './i18n.js';
 /** Great-circle distance in kilometres. */
 export function distanceKm(a, b) {
     const rad = (d) => (d * Math.PI) / 180;
@@ -159,7 +160,7 @@ async function searchNominatim(q, limit, fetchImpl, near, radiusKm = 15) {
 export class PlaceSearchUnavailable extends Error {
     /** `cause` is the underlying error, or an `AggregateError` of both when Overpass and Nominatim failed. */
     constructor(cause) {
-        super('The free map service is busy or unreachable', { cause });
+        super(kt('places.unavailable'), { cause });
         this.name = 'PlaceSearchUnavailable';
     }
 }
@@ -210,16 +211,19 @@ function region(locale) {
         return undefined;
     }
 }
-export function usesMiles(locale = navigator.language) {
+export function usesMiles(locale = getLocale()) {
     return MILES_REGIONS.has(region(locale) ?? '');
 }
-/** "0.5 mi", "12 mi" where miles are used; "650 m", "3.1 km" elsewhere. */
-export function formatDistance(km, locale = navigator.language) {
+/** "0.5 mi", "12 mi" where miles are used; "650 m", "3.1 km" ("3,1 km") elsewhere. */
+export function formatDistance(km, locale = getLocale()) {
+    const unit = (n, u, digits) => formatNumber(n, locale, { style: 'unit', unit: u, unitDisplay: 'short', minimumFractionDigits: digits, maximumFractionDigits: digits }).replace(/[\u202f\u00a0]/g, ' ');
     if (usesMiles(locale)) {
         const mi = km / 1.609344;
-        return `${mi < 10 ? mi.toFixed(1) : Math.round(mi)} mi`;
+        return mi < 10 ? unit(mi, 'mile', 1) : unit(Math.round(mi), 'mile', 0);
     }
-    return km < 1 ? `${Math.round(km * 100) * 10} m` : `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
+    if (km < 1)
+        return unit(Math.round(km * 100) * 10, 'meter', 0);
+    return km < 10 ? unit(km, 'kilometer', 1) : unit(Math.round(km), 'kilometer', 0);
 }
 /** `tel:` link for a phone number as people write it. */
 export function telHref(phone) {

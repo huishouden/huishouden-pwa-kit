@@ -1,4 +1,5 @@
 import { type Firestore } from 'firebase/firestore';
+import { type Lang } from './i18n.js';
 /**
  * Push notifications for reminders, with the browser's own Web Push (VAPID; no Firebase Cloud
  * Messaging). `enablePush` asks permission, subscribes through the app's service worker and
@@ -12,6 +13,10 @@ import { type Firestore } from 'firebase/firestore';
  * iPhone and iPad: push works only in an app added to the Home Screen, on iOS/iPadOS 16.4 or
  * later; `pushSupport()` says so, so the app can explain instead of showing a dead button.
  *
+ * Each subscription carries the device's language (`lang`, ./i18n), so the sender shows a
+ * reminder's `texts` in it (./reminders). `enablePush` writes it; `syncPushLang` (or
+ * `watchPushLang`, running for as long as the app is open) rewrites it when the language changes.
+ *
  * Fields match the rules exactly (see PUSH_SUBSCRIPTION_FIELDS); keep them in step.
  */
 export interface PushSubscriptionDoc {
@@ -24,9 +29,11 @@ export interface PushSubscriptionDoc {
         auth: string;
     };
     ua?: string;
+    /** The device's language (`en`, `es`, `nl`): which of a reminder's `texts` it is sent. */
+    lang?: Lang;
     createdAt: number;
 }
-export declare const PUSH_SUBSCRIPTION_FIELDS: readonly ["email", "app", "endpoint", "keys", "ua", "createdAt"];
+export declare const PUSH_SUBSCRIPTION_FIELDS: readonly ["email", "app", "endpoint", "keys", "ua", "lang", "createdAt"];
 export type PushUnsupportedReason = 
 /** iPhone/iPad in a browser tab: add the app to the Home Screen first. */
 'ios-not-installed'
@@ -43,6 +50,8 @@ export type PushSupport = {
     reason: PushUnsupportedReason;
     message: string;
 };
+/** The sentence to show for a reason, in the active language. */
+export declare function pushMessage(reason: PushUnsupportedReason): string;
 interface Env {
     userAgent: string;
     maxTouchPoints: number;
@@ -81,6 +90,22 @@ export declare function enablePush(db: Firestore, householdId: string, user: {
 export declare function pushEnabled(db: Firestore, householdId: string, user: {
     email: string | null;
 }): Promise<boolean>;
+/**
+ * Rewrites the `lang` of this device's stored subscription for the signed-in member when it
+ * differs from `lang` (default: the page's language). Only that one field of their own document;
+ * nothing when notifications are off here. Resolves to whether it wrote.
+ */
+export declare function syncPushLang(db: Firestore, householdId: string, user: {
+    email: string | null;
+}, lang?: Lang): Promise<boolean>;
+/**
+ * Keeps this device's subscription in the page's language: syncs once now and again whenever the
+ * language changes (the app bar's menu, another tab). Mount it once in the app's shell, signed in;
+ * returns the unsubscribe. Failures are silent: the next change or open tries again.
+ */
+export declare function watchPushLang(db: Firestore, householdId: string, user: {
+    email: string | null;
+}): () => void;
 /**
  * Turns notifications off on this device for the signed-in member by deleting their stored
  * subscription. The browser's subscription stays, because on a shared tablet another member's

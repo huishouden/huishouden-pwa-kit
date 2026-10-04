@@ -1,0 +1,21 @@
+declare const _default: {
+    readonly 'appBar.home': "Huishouden home";
+    readonly 'appBar.openingGoogle': "Opening Google";
+    readonly 'appBar.signInWithGoogle': "Sign in with Google";
+    readonly 'appBar.signIn': "Sign in";
+    readonly 'appBar.withGoogle': "with Google";
+    readonly 'appBar.settingsMenu': "Theme, language and privacy";
+    readonly 'appBar.signedInAs': "Signed in as {who}";
+    readonly 'appBar.you': "you";
+    readonly 'appBar.account': "Account";
+    readonly 'appBar.allApps': "All apps";
+    readonly 'appBar.privacy': "Privacy";
+    readonly 'appBar.signOut': "Sign out";
+    readonly 'appBar.theme': "Theme";
+    readonly 'appBar.language': "Language";
+    readonly 'theme.auto': "Automatic";
+    readonly 'theme.light': "Light";
+    readonly 'theme.dark': "Dark";
+    readonly 'lang.auto': "Automatic";
+};
+export default _default;

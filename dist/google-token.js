@@ -1,5 +1,6 @@
 import { loadGsi, loadedGsi } from './gsi';
 import { reportError } from './observability';
+import { kt } from './i18n.js';
 const STORE_KEY = 'hh-google-tokens';
 /** Stop using a token this long before Google says it ends. */
 const MARGIN_MS = 5 * 60_000;
@@ -59,16 +60,16 @@ export function cachedGoogleToken(auth, scopes) {
  * blocked (`popup_failed_to_open`) or the member says no (`access_denied`); `./feedback` words
  * each (`popupCancelled`, `popupBlocked`, `googleAccessMessage`).
  */
-export async function googleAccessToken(auth, scopes, { persist = false, deniedMessage = 'Google did not grant access.', clientId } = {}) {
+export async function googleAccessToken(auth, scopes, { persist = false, deniedMessage = kt('googleToken.denied'), clientId } = {}) {
     const user = auth.currentUser;
     if (!user)
-        throw new Error('Sign in first.');
+        throw new Error(kt('feedback.signInFirst'));
     const cached = cachedGoogleToken(auth, scopes);
     if (cached)
         return cached;
     const client_id = clientId || configuredClientId;
     if (!client_id)
-        throw new GoogleTokenError('Google access is not set up for this app.', 'not_configured');
+        throw new GoogleTokenError(kt('googleToken.notConfigured'), 'not_configured');
     const key = `${user.uid} ${[...scopes].sort().join(' ')}`;
     const inFlight = pending.get(key);
     if (inFlight)
@@ -76,7 +77,7 @@ export async function googleAccessToken(auth, scopes, { persist = false, deniedM
     const ask = async () => {
         const gsi = loadedGsi() ??
             (await loadGsi().catch(() => {
-                throw new GoogleTokenError("Couldn't reach Google. Check the connection and try again.", 'unavailable');
+                throw new GoogleTokenError(kt('googleToken.unreachable'), 'unavailable');
             }));
         const answer = await new Promise((resolve, reject) => {
             const client = gsi.oauth2.initTokenClient({
@@ -87,11 +88,11 @@ export async function googleAccessToken(auth, scopes, { persist = false, deniedM
                 callback: resolve,
                 error_callback: (e) => {
                     if (e.type === 'popup_closed')
-                        reject(new GoogleTokenError('Google’s window was closed.', 'popup_closed'));
+                        reject(new GoogleTokenError(kt('googleToken.closed'), 'popup_closed'));
                     else if (e.type === 'popup_failed_to_open')
-                        reject(new GoogleTokenError('The browser blocked Google’s window.', 'popup_failed_to_open'));
+                        reject(new GoogleTokenError(kt('googleToken.blocked'), 'popup_failed_to_open'));
                     else
-                        reject(new GoogleTokenError(e.message || 'Google did not answer.', 'unknown'));
+                        reject(new GoogleTokenError(e.message || kt('googleToken.noAnswer'), 'unknown'));
                 },
             });
             client.requestAccessToken({ prompt: '' });
@@ -99,7 +100,7 @@ export async function googleAccessToken(auth, scopes, { persist = false, deniedM
         if (answer.error === 'access_denied')
             throw new GoogleTokenError(deniedMessage, 'access_denied');
         if (answer.error)
-            throw new GoogleTokenError(`Google answered: ${answer.error_description || answer.error}`, 'unknown');
+            throw new GoogleTokenError(kt('googleToken.answered', { error: answer.error_description || answer.error }), 'unknown');
         const granted = answer.scope ? answer.scope.split(/\s+/).filter(Boolean) : [...scopes];
         // The consent screen lets the member untick a scope; a token without it would only fail later.
         if (!answer.access_token || !scopes.every((s) => granted.includes(s)))

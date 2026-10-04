@@ -1,6 +1,8 @@
 import { collection, doc, getDocs, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { addDoc, arrayRemove, arrayUnion, setDoc, updateDoc } from './firestore.js';
 import { observeHousehold } from './observability.js';
+import { kt } from './i18n.js';
+import { isCurrencyCode, setCurrency } from './money.js';
 import { effectiveRoles, toRoles, type Role } from './roles.js';
 
 /**
@@ -10,7 +12,7 @@ import { effectiveRoles, toRoles, type Role } from './roles.js';
  * access to members of the parent document — so adding someone here gives them every app at once.
  *
  * Shape matches the rules every app shares:
- *   { name: string, members: string[], joined?: string[], roles?: { [email]: Role }, createdAt: number }
+ *   { name: string, members: string[], joined?: string[], roles?: { [email]: Role }, currency?: string, createdAt: number }
  */
 export interface Household {
   id: string;
@@ -21,6 +23,8 @@ export interface Household {
   joined: string[];
   /** Roles written out (`./roles`); anyone missing is a member, except the creator (first), an admin. */
   roles?: Record<string, Role>;
+  /** ISO 4217 code amounts are shown in ("USD", "EUR"); unset means US dollars. Admins and members set it. */
+  currency?: string;
   createdAt: number;
 }
 
@@ -68,6 +72,8 @@ export function watchHousehold(db: Firestore, email: string, onChange: (state: H
       // Stay loading while the only household is a local one the server hasn't accepted yet.
       if (docs.length && docs.every((d) => d.pending)) return;
       const household = pickHousehold(docs, email);
+      // Every amount the kit formats follows the household's currency.
+      if (household) setCurrency(household.currency);
       onChange(household ? { status: 'ready', household } : { status: 'none' });
     },
     (error) => onChange({ status: 'error', error }),
@@ -87,8 +93,15 @@ export function toHousehold(id: string, data: Record<string, unknown>): Househol
     members: Array.isArray(data.members) ? data.members.map(String) : [],
     joined: Array.isArray(data.joined) ? data.joined.map(String) : [],
     roles: toRoles(data.roles),
+    ...(isCurrencyCode(data.currency) ? { currency: data.currency } : {}),
     createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
   };
+}
+
+/** Sets the currency the household's amounts are shown in (admins and members; the rules check). */
+export async function setHouseholdCurrency(db: Firestore, householdId: string, currency: string): Promise<void> {
+  if (!isCurrencyCode(currency)) throw new Error(`Not a currency code: ${currency}`);
+  await updateDoc(doc(db, COLLECTION, householdId), { currency });
 }
 
 /** Starts a household with only its creator, its admin; others are invited from inside. */
@@ -106,14 +119,14 @@ type People = Pick<Household, 'id' | 'members' | 'roles'>;
  */
 export async function inviteMember(db: Firestore, household: string | People, email: string, role: Role = 'member'): Promise<void> {
   const address = normalizeEmail(email);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) throw new Error(`Not an email address: ${email}`);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) throw new Error(kt('household.notEmail', { email }));
   const id = typeof household === 'string' ? household : household.id;
   if (role === 'member') {
     await updateDoc(doc(db, COLLECTION, id), { members: arrayUnion(address) });
     return;
   }
   if (typeof household === 'string') throw new Error('Pass the household to invite someone with a role.');
-  if (household.members.includes(address)) throw new Error(`${address} is already in the household.`);
+  if (household.members.includes(address)) throw new Error(kt('household.alreadyIn', { email: address }));
   await updateDoc(doc(db, COLLECTION, id), {
     members: arrayUnion(address),
     roles: { ...effectiveRoles(household), [address]: role },

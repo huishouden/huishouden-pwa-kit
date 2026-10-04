@@ -1,0 +1,21 @@
+import type en from '../en/food.js';
+import type { CatalogueOf } from '../../i18n.js';
+
+export default {
+  'food.diet.vegan': 'Vegano',
+  'food.diet.vegetarian': 'Vegetariano',
+  'food.diet.pescatarian': 'Pescetariano',
+  'food.diet.glutenFree': 'Sin gluten',
+  'food.diet.dairyFree': 'Sin lácteos',
+  'food.diet.nutAllergy': 'Alergia a frutos secos',
+  'food.diet.shellfishAllergy': 'Alergia a mariscos',
+  'food.diet.gerd': 'ERGE (reflujo)',
+  'food.diet.pregnant': 'Embarazo',
+  'food.diet.lowSodium': 'Bajo en sodio',
+  'food.diet.halal': 'Halal',
+  'food.diet.kosher': 'Kosher',
+  'food.spice.none': 'Nada de picante',
+  'food.spice.mild': 'Un poco',
+  'food.spice.medium': 'Medio',
+  'food.spice.hot': 'Le encanta el picante',
+} satisfies CatalogueOf<typeof en>;

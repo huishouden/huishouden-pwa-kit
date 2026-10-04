@@ -267,9 +267,9 @@ export interface PrepOffset {
 }
 export declare const MAX_PREP_DAYS = 14;
 export declare const isPrepOffset: (v: unknown) => v is PrepOffset;
-/** The usual ones, for a picker: the evening before, the morning of. */
+/** The usual ones, for a picker: the evening before, the morning of. `label` is in the active language. */
 export declare const PREP_PRESETS: readonly {
-    label: string;
+    readonly label: string;
     offset: PrepOffset;
 }[];
 /** "The evening before at 7 PM", "The morning of, by 7 AM", "2 days before at 9 AM", "The day before at 12 PM". */

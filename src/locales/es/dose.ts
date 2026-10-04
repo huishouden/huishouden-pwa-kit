@@ -1,0 +1,38 @@
+import type en from '../en/dose.js';
+import type { CatalogueOf } from '../../i18n.js';
+
+export default {
+  'dose.amount':
+    '{unit, select, tablet {{count, plural, one {{n} tableta} other {{n} tabletas}}} chew {{count, plural, one {{n} masticable} other {{n} masticables}}} capsule {{count, plural, one {{n} cápsula} other {{n} cápsulas}}} pill {{count, plural, one {{n} pastilla} other {{n} pastillas}}} drop {{count, plural, one {{n} gota} other {{n} gotas}}} puff {{count, plural, one {{n} inhalación} other {{n} inhalaciones}}} spray {{count, plural, one {{n} pulverización} other {{n} pulverizaciones}}} unit {{count, plural, one {{n} unidad} other {{n} unidades}}} teaspoon {{count, plural, one {{n} cucharadita} other {{n} cucharaditas}}} tablespoon {{count, plural, one {{n} cucharada} other {{n} cucharadas}}} scoop {{count, plural, one {{n} medida} other {{n} medidas}}} packet {{count, plural, one {{n} sobre} other {{n} sobres}}} patch {{count, plural, one {{n} parche} other {{n} parches}}} other {{n} {unit}}}',
+  'dose.timeOfDay': '{time, select, morning {mañana} midday {mediodía} evening {noche} bedtime {hora de dormir} other {{time}}}',
+  'dose.assumeMonths': 'Se leyó "{text}" como {days} días',
+  'dose.assumeMonthly': 'Se leyó "{text}" como cada 30 días',
+  'dose.assumeTwoDoses': 'La etiqueta indica dos dosis distintas; se mantuvo {dose}',
+  'dose.assumeNoName': 'No se encontró el nombre del medicamento en la etiqueta',
+  'dose.assumeTaper': 'La etiqueta cambia la dosis a mitad del tratamiento; solo se leyó el primer paso',
+  'dose.assumeDisagree': '"{first}" y "{other}" no coinciden; se mantuvo "{first}"',
+  'dose.assumeTimesOfDay': '{times} veces al día, pero se nombran {count} momentos del día ({names}); revisa los horarios',
+  'dose.asNeededFor': 'Según sea necesario para {reason}',
+  'dose.asNeeded': 'Según sea necesario',
+  'dose.untilGone': 'Hasta terminarlo',
+  'dose.everyOtherDay': 'Un día sí y otro no',
+  'dose.everyDays': 'Cada {n} días',
+  'dose.everyHours': 'Cada {n} horas',
+  'dose.underTheSkin': 'Bajo la piel',
+  'dose.scanIntro': 'Toma una foto de la etiqueta de la farmacia. Se lee en este dispositivo y no se guarda.',
+  'dose.labelPhoto': 'Foto de la etiqueta',
+  'dose.reading': 'Leyendo la etiqueta {percent}%',
+  'dose.scanAgain': 'Escanear de nuevo',
+  'dose.scan': 'Escanear la etiqueta',
+  'dose.readError': 'No se pudo leer esa foto. Inténtalo de nuevo con buena luz y la etiqueta plana, o complétalo abajo.',
+  'dose.nothingFilled': 'No se pudo completar nada con esa foto. Inténtalo más de cerca, o complétalo abajo.',
+  'dose.filledSection': 'Completado con la etiqueta',
+  'dose.filledCheck': 'Completado con la etiqueta. Revisa cada campo antes de guardar.',
+  'dose.checkThese': 'Revisa esto',
+  'dose.notUsedSection': 'Leído pero no usado',
+  'dose.notUsedHelp': 'Ningún campo de arriba guarda estas líneas. Agrega a las notas lo que sea importante.',
+  'dose.notUsed': 'No usado',
+  'dose.leftOut': '{n, plural, one {Se omitió una línea de la farmacia (número de receta, cantidad, dirección y similares).} other {Se omitieron # líneas de la farmacia (número de receta, cantidad, dirección y similares).}}',
+  'dose.everythingRead': 'Todo lo que se leyó en la foto',
+  'dose.readFromPhoto': 'Leído en la foto',
+} satisfies CatalogueOf<typeof en>;

@@ -6,6 +6,7 @@
  *
  * Nothing is uploaded: cards are read on the device. Photos are skipped.
  */
+import { kt, type KitKey } from './i18n.js';
 import { CONTACT_LIMITS as LIMITS, type ContactInput } from './contacts';
 
 /** A phone number, email or website with what the card calls it ("Mobile", "Work", "Office"). */
@@ -168,23 +169,26 @@ function rawValue(p: Property): string {
 const text = (p: Property) => unescapeText(rawValue(p)).trim();
 const structured = (p: Property) => splitUnescaped(rawValue(p), ';').map((s) => unescapeText(s).trim());
 
-const TYPE_LABELS: Record<string, string> = {
-  cell: 'Mobile',
-  mobile: 'Mobile',
-  iphone: 'iPhone',
-  home: 'Home',
-  work: 'Work',
-  main: 'Main',
-  fax: 'Fax',
-  pager: 'Pager',
-  other: 'Other',
-  text: 'Text',
-  video: 'Video',
+// Labels shown beside a number or address, in the active language ("iPhone" is a name).
+const TYPE_LABELS: Record<string, KitKey | ''> = {
+  cell: 'contacts.label.mobile',
+  mobile: 'contacts.label.mobile',
+  iphone: '',
+  home: 'contacts.label.home',
+  work: 'contacts.label.work',
+  main: 'contacts.label.main',
+  fax: 'contacts.label.fax',
+  pager: 'contacts.label.pager',
+  other: 'contacts.label.other',
+  text: 'contacts.label.text',
+  video: 'contacts.label.video',
   internet: '',
   voice: '',
   pref: '',
   x400: '',
 };
+
+const typeWord = (t: string): string | undefined => (t === 'iphone' ? 'iPhone' : TYPE_LABELS[t] ? kt(TYPE_LABELS[t] as KitKey) : undefined);
 
 /** Apple writes custom labels as "_$!<Mobile>!$_" for its own and plain text for the person's. */
 const cleanLabel = (s: string) => s.replace(/^_\$!<(.+)>!\$_$/, '$1').trim();
@@ -192,8 +196,8 @@ const cleanLabel = (s: string) => s.replace(/^_\$!<(.+)>!\$_$/, '$1').trim();
 function typeLabel(p: Property): string | undefined {
   const types = (p.params.TYPE ?? []).flatMap((t) => t.split(',')).map((t) => t.toLowerCase());
   // "work fax" reads better than "Fax" alone; "home" alone says little next to "Mobile".
-  if (types.includes('fax')) return types.includes('home') ? 'Home fax' : types.includes('work') ? 'Work fax' : 'Fax';
-  for (const t of ['cell', 'mobile', 'iphone', 'main', 'work', 'home', 'pager', 'other', 'text', 'video']) if (types.includes(t)) return TYPE_LABELS[t];
+  if (types.includes('fax')) return kt(types.includes('home') ? 'contacts.label.homeFax' : types.includes('work') ? 'contacts.label.workFax' : 'contacts.label.fax');
+  for (const t of ['cell', 'mobile', 'iphone', 'main', 'work', 'home', 'pager', 'other', 'text', 'video']) if (types.includes(t)) return typeWord(t);
   const custom = types.find((t) => t.startsWith('x-'));
   return custom ? custom.slice(2) : undefined;
 }
@@ -331,8 +335,8 @@ export function contactFromCard(card: ParsedContact, { role: fillRole = true }: 
   else if (roleText) notes.push(roleText);
   const otherPhones = card.phones.filter((p) => p !== phone);
   const otherEmails = card.emails.filter((e) => e !== email);
-  if (otherPhones.length) notes.push(`Other phones: ${otherPhones.map(labelled).join(', ')}`);
-  if (otherEmails.length) notes.push(`Other emails: ${otherEmails.map(labelled).join(', ')}`);
+  if (otherPhones.length) notes.push(kt('contacts.otherPhones', { list: otherPhones.map(labelled).join(', ') }));
+  if (otherEmails.length) notes.push(kt('contacts.otherEmails', { list: otherEmails.map(labelled).join(', ') }));
   if (card.note) notes.push(card.note);
   out.notes = cut(notes.join('\n'), LIMITS.notes);
   for (const k of Object.keys(out) as (keyof ContactFill)[]) if (out[k] === undefined) delete out[k];
