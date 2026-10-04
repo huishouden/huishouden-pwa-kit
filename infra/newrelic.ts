@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 /**
  * Sets up New Relic (free tier) for a family of apps: one Browser application per app, an uptime
- * check per app, alert conditions with an email destination, pipeline cloud rules that keep
- * geography coarse, and one dashboard. Safe to re-run: everything is found by name and updated rather than
- * duplicated, and uptime checks for addresses no longer in the list are deleted.
+ * check per app, alert conditions with an email destination, and one dashboard. Safe to re-run:
+ * everything is found by name and updated rather than duplicated, and uptime checks for addresses no
+ * longer in the list are deleted. Ends with what New Relic keeps of the apps' geography (city, how
+ * long), and the pipeline cloud rules that would drop the city where the account's plan allows them.
  * docs/observability.md; STANDARD.md "Observability".
  *
  *   NEW_RELIC_API_KEY=… NEW_RELIC_ACCOUNT_ID=… ALERT_EMAIL=… bun infra/newrelic.ts apps.json [--out observability.json] [--repo-variables]
@@ -17,7 +18,7 @@
  * the `VITE_NEWRELIC_*` variables on each app's repo instead (apps on sites of their own; needs `gh`
  * signed in with admin on the repos).
  *
- * Ends with each app's page views (REPORTING_SINCE, default `1 day ago`).
+ * Reports each app's page views (REPORTING_SINCE, default `1 day ago`).
  * Optional: GITHUB_OWNER (default huishouden), FAMILY (default Huishouden), DRY_RUN=1.
  * The user key (NRAK-…) is read from the environment only and never printed.
  */
@@ -199,24 +200,42 @@ async function uptime() {
     await mutate(`delete monitor ${e.name}${e.monitoredUrl ? ` (${e.monitoredUrl})` : ''}: not an app in the list`, `mutation($g: EntityGuid!) { syntheticsDeleteMonitor(guid: $g) { deletedGuid } }`, { g: e.guid });
 }
 
-// 3. New Relic works out the city from the connection; keep only country and region. Pipeline cloud
-// rules (NRQL drop rules, their predecessor, ended on 2026-06-30): one per event type, found by name.
+// 3. Geography. New Relic Browser works out country, region, city and the network's coordinates
+// (`asnLatitude`, `asnLongitude`) from the address a report comes from. Pipeline cloud rules can delete
+// city and coordinates at ingest (NRQL drop rules, their predecessor, were discontinued on 2026-08-31), but Pipeline
+// Control is part of New Relic's Advanced Compute, which the free plan doesn't include: New Relic
+// answers "Access denied ... can_create PIPELINE_CLOUD_RULE" even to an All Product Admin, whose role
+// does carry "Pipeline control cloud rules: modify". That refusal is a known limitation, reported
+// with what is kept and for how long; the rules are made by the first run on a plan that has them.
+// docs/observability.md "Geography".
 const GEO_EVENTS = ['PageView', 'PageViewTiming', 'PageAction', 'JavaScriptError', 'BrowserPerformance'];
 const GEO_DESCRIPTION = `${FAMILY}: coarse geography only (STANDARD.md Observability)`;
 const geoRuleName = (event: string) => `${FAMILY} coarse geography: ${event}`;
 const geoRuleNrql = (event: string) => `DELETE city, asnLatitude, asnLongitude FROM ${event} WHERE appName LIKE '${FAMILY} %'`;
 const sameNrql = (a: string, b: string) => a.replace(/\s+/g, ' ').trim().toLowerCase() === b.replace(/\s+/g, ' ').trim().toLowerCase();
+const BROWSER_RETENTION = ['Browser', 'Browser:EventLog', 'Browser:JSErrors', 'PcvPerf'];
 
-async function dropRules() {
+/** A GitHub Actions notice when running there, a plain line otherwise. */
+const notice = (title: string, text: string) => log(process.env.GITHUB_ACTIONS === 'true' ? `::notice title=${title}::${text}` : `${title}: ${text}`);
+
+async function geography() {
+  const r: any = await gql(`query($a: Int!) { actor { account(id: $a) { dataManagement { eventRetentionPolicies { namespace namespaceLevelRetention { retentionInDays } } } } } }`, { a: ACCOUNT });
+  const days = (r.actor.account.dataManagement.eventRetentionPolicies ?? [])
+    .filter((p: { namespace: string }) => BROWSER_RETENTION.includes(p.namespace))
+    .map((p: { namespaceLevelRetention?: { retentionInDays?: number } }) => p.namespaceLevelRetention?.retentionInDays ?? 0);
+  const kept = days.length ? `${Math.max(...days)} days` : 'an unknown time';
+  const q = `SELECT count(*) AS total, filter(count(*), WHERE city IS NOT NULL) AS city FROM PageView WHERE appName LIKE '${FAMILY} %' SINCE ${process.env.REPORTING_SINCE ?? '1 day ago'}`;
+  const n: any = await gql(`query($a: Int!, $q: Nrql!) { actor { account(id: $a) { nrql(query: $q) { results } } } }`, { a: ACCOUNT, q });
+  const row = n.actor.account.nrql.results?.[0] ?? {};
+  log(`\nGeography: ${row.city ?? 0} of ${row.total ?? 0} page views since ${process.env.REPORTING_SINCE ?? '1 day ago'} carry a city; Browser data is kept ${kept}.`);
+
   try {
     await geoRules();
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (!/access denied/i.test(message)) throw e;
-    throw new Error(
-      `New Relic refused this key's user the pipeline cloud rules that drop city and coordinates (${message.slice(0, 160)}). ` +
-        'Give that user a role that can manage Pipeline Control (Administration > Access management), or create the rules once in Pipeline Control > Cloud rules; until then city and coordinates are kept.',
-    );
+    notice('City kept (known limitation)',
+      `New Relic refused the pipeline cloud rules (${message.replace(/, invocation=.*$/, '').slice(0, 140)}). Pipeline Control needs Advanced Compute, which the free plan doesn't include, so city and network coordinates are kept ${kept} with the rest of the Browser data, as the portal's /privacy page says (docs/observability.md, Geography).`);
   }
 }
 
@@ -474,7 +493,7 @@ try {
   const dash = await upsertDashboard();
   log(`\nAlert policy ${policyId ?? '(dry run)'}; dashboard https://one.newrelic.com/redirect/entity/${dash ?? '(dry run)'}`);
   await reporting();
-  await dropRules();
+  await geography();
 } catch (e) {
   console.error(`newrelic: ${scrub(e instanceof Error ? e.message : String(e))}`);
   process.exit(1);

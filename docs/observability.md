@@ -9,7 +9,7 @@ The rules for apps are in [STANDARD.md](../STANDARD.md#observability).
 |---|---|---|---|
 | Browser JS errors | Yes, with stack traces, per app and version | No (Crashlytics has no web SDK) | Worker only |
 | Core Web Vitals | Yes (LCP, INP, CLS per page view) | Yes (Performance Monitoring) | No |
-| Usage, coarse geography, no device id | Yes (PageView, PageAction; session tracking can be turned off) | Yes, but Analytics is ad-tech: cookies, Google signals, a consent banner in many countries | No |
+| Usage, geography from the network, no device id | Yes (PageView, PageAction; session tracking can be turned off) | Yes, but Analytics is ad-tech: cookies, Google signals, a consent banner in many countries | No |
 | Alerts by email | Yes, on any query | Performance alerts only; no error alerts | Paid plans |
 | Uptime checks | Unlimited ping monitors | No | No |
 | Worker heartbeat | Event API + loss-of-signal alert | No | Logs only, no alert on free |
@@ -28,7 +28,8 @@ Analytics sends far more than these apps need.
 | Feature use and screens (`track`, `trackView`) | `PageAction` (`actionName`, `view`) | Not under GPC or DNT | Which features matter |
 | Hashed household (`householdTag`) | attribute `household` | Not under GPC or DNT | Count active households without knowing which |
 | App, version, build SHA | attributes `app`, `application.version`, `buildSha` | Always | Errors per release |
-| Device type, browser, country and region | derived by New Relic from the request | Always | Devices to test on; where the apps are used |
+| Device type and browser | derived by New Relic from the request | Always | Devices to test on |
+| Country, region, city, network (`asn`, `asnOrganization`) and the network's coordinates (`asnLatitude`, `asnLongitude`) | derived by New Relic from the network address the report comes from | Always | Where the apps are used; see [Geography](#geography) |
 
 Nothing is stored on the device: the agent runs with session tracking off
 (`privacy.cookies_enabled: false`), so there is no cookie and no localStorage id, every count is per
@@ -38,8 +39,9 @@ and `track`, `trackView`'s count and the household hash are skipped silently; er
 still go. There is no opt-out screen.
 
 Not collected: names, emails, household ids, entries or anything typed, query strings and
-fragments, city (dropped at ingest by a pipeline cloud rule), IP addresses (New Relic does not store them for
-Browser), session ids, replays, traces, AJAX URLs, clicks. `redact` and the agent's `obfuscate`
+fragments, the device's location (the agent has no access to it; the apps that use it for a store
+nearby keep it on the device), IP addresses (New Relic uses the address only to work out the geography
+and overwrites it within 24 hours), session ids, replays, traces, AJAX URLs, clicks. `redact` and the agent's `obfuscate`
 rules strip emails, `households/…` and `profiles/…` path ids, query strings and long numbers from
 every message, stack trace and URL before it is sent.
 
@@ -48,6 +50,34 @@ Nothing at all is sent when the browser is automated (Playwright, CI), the page 
 `/hh-observability.json` and no `VITE_NEWRELIC_*` variables (staging gets neither).
 
 The portal's `/privacy` page says this for people using the apps; every app's account menu links it.
+
+## Geography
+
+New Relic Browser places every report by the network address it comes from: `countryCode`,
+`regionCode`, `city`, the network (`asn`, `asnOrganization`) and that network's coordinates
+(`asnLatitude`, `asnLongitude`). It is the location of the internet provider's network, often a
+nearby city rather than the person's own, and never the device's location. All of it is kept as
+long as the rest of the Browser data: 8 days on the free plan (`dataManagement` retention for the
+`Browser`, `Browser:EventLog`, `Browser:JSErrors` and `PcvPerf` namespaces; the free plan allows 1 to
+8), then deleted.
+
+City and coordinates are kept because nothing on the free plan can drop them:
+
+| Way to drop them | Result (checked 2026-10-04) |
+|---|---|
+| NRQL drop rules (`nrqlDropRulesCreate`) | Discontinued 2026-08-31 ([EOL notice](https://docs.newrelic.com/eol/2025/05/drop-rule-filter/)); NerdGraph answers "Customer account is not authorized to create legacy drop rules" |
+| Pipeline cloud rules (`entityManagementCreatePipelineCloudRule`, scope `ACCOUNT`) | "Access denied ... can_create PIPELINE_CLOUD_RULE", although the key's user is in the Admin group with All Product Admin, a role that carries "Pipeline control cloud rules: modify". Pipeline Control is sold as part of Advanced Compute ([costs](https://docs.newrelic.com/docs/new-relic-control/pipeline-control/costs/)); free accounts "must upgrade to a paid plan to continue using drop rules" ([EOL notice](https://docs.newrelic.com/eol/2025/05/drop-rule-filter/)) |
+| Pipeline cloud rules, scope `ORGANIZATION` | "Scope not supported: ORGANIZATION" (cloud rules are per account) |
+| Browser agent settings | None turn geography off: it is added at ingest, not by the agent ([security for browser monitoring](https://docs.newrelic.com/docs/browser/new-relic-browser/performance-quality/security-browser-monitoring/)); obfuscation rules only rewrite what the agent sends |
+| Sending only errors | Errors carry the same attributes, so it would change nothing |
+| A relay without `X-Forwarded-For` ([proxy settings](https://docs.newrelic.com/docs/browser/new-relic-browser/configuration/proxy-agent-requests/): "New Relic will geolocate your proxy as the client instead") | Works: New Relic locates only from `X-Forwarded-For`, else the connecting address, and ignores `CF-Connecting-IP` and `X-Real-IP` (tested). Not built: it needs a public endpoint (a Cloudflare Worker route) that forwards to New Relic, a decision for the maintainers |
+
+The monitoring workflow still tries the pipeline cloud rules every run (`DELETE city, asnLatitude,
+asnLongitude FROM <event> WHERE appName LIKE 'Huishouden %'` for `PageView`, `PageViewTiming`,
+`PageAction`, `JavaScriptError` and `BrowserPerformance`), so they appear on the first run after the
+account gets Pipeline Control. Until then the refusal is a notice, not a failure, and the run's
+summary says how many page views carried a city and how long Browser data is kept. The portal's
+`/privacy` page says the same in plain words.
 
 ## In an app
 
@@ -110,8 +140,9 @@ deleted by hand), and on demand. It:
 
 1. Creates or updates, by name: a Browser app per app (`Huishouden Baby`, …), a ping monitor per
    app at its path on the suite's site (`https://<site>.web.app/<app>/`), the alert policy,
-   conditions, email destination, channel and workflow, the dashboard, and a pipeline cloud rule
-   per browser event type that drops city and coordinates (NRQL drop rules ended 2026-06-30). A family ping
+   conditions, email destination, channel and workflow, the dashboard, and, where the plan allows
+   them, a pipeline cloud rule per browser event type that drops city and coordinates
+   ([Geography](#geography); refused on the free plan, reported as a notice). A family ping
    monitor whose name is not one of the apps' (a removed app) is deleted; an existing monitor at an
    old per-app address is moved to the path.
 2. Writes each app's browser settings (account id, app id, browser key `NRJS-…`; public by design,
