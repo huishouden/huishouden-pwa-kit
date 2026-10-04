@@ -9,7 +9,7 @@ if (typeof document === 'undefined') GlobalRegistrator.register({ url: 'https://
 afterAll(() => GlobalRegistrator.unregister());
 const { createRoot } = await import('react-dom/client');
 const { ContactCard, ContactDialog } = await import('../src/react/contacts');
-const { cleanContact, cleanContactPay, contactInput, sampleContacts, toContact } = await import('../src/contacts');
+const { CONTACT_FIELDS, cleanContact, cleanContactPay, contactInput, contactPayDoc, sampleContacts, tidyContactPay, toContact, withContactPay } = await import('../src/contacts');
 type Contact = import('../src/contacts').Contact;
 
 const landlord: Contact = {
@@ -51,11 +51,46 @@ describe('contact pay details: the data', () => {
     expect(cleanContactPay('zelle')).toBeUndefined();
   });
 
-  test('saved and read like the other fields; empty pay is left out of the document', () => {
-    expect(cleanContact({ name: 'Example Rentals', apps: ['bills'], pay: { venmo: '@example-rentals', zelle: '' } })).toEqual({ name: 'Example Rentals', apps: ['bills'], pay: { venmo: '@example-rentals' }, private: false });
-    expect(cleanContact({ name: 'Example Rentals', apps: ['bills'], pay: {} })).toEqual({ name: 'Example Rentals', apps: ['bills'], private: false });
-    expect(toContact('c1', { name: 'Example Rentals', apps: [], pay: { zelle: 'a@example.com', bogus: 1 } }).pay).toEqual({ zelle: 'a@example.com' });
-    expect(toContact('c1', { name: 'Example Rentals', apps: [] }).pay).toBeUndefined();
+  test("never on the contact's own document, which helpers and kids read; never read from it", () => {
+    expect(cleanContact({ name: 'Example Rentals', apps: ['bills'], pay: { venmo: '@example-rentals' } })).toEqual({ name: 'Example Rentals', apps: ['bills'], private: false });
+    expect(toContact('c1', { name: 'Example Rentals', apps: [], pay: { zelle: 'a@example.com' } }).pay).toBeUndefined();
+    expect(CONTACT_FIELDS as readonly string[]).not.toContain('pay');
+  });
+
+  test('their own document: cleaned, stamped, none left is none (delete it)', () => {
+    expect(contactPayDoc({ venmo: '@example-rentals', zelle: '' }, 'alex@example.com', 7)).toEqual({ venmo: '@example-rentals', updatedAt: 7, by: 'alex@example.com' });
+    expect(contactPayDoc({ zelle: ' ' }, 'alex@example.com', 7)).toBeNull();
+  });
+
+  test('attached to the contacts they belong to; a stale one is dropped', () => {
+    const plain = { ...landlord, pay: undefined, id: 'c2' };
+    const out = withContactPay<Contact>([{ ...landlord, pay: { bank: 'old' } }, plain], new Map([['c1', { zelle: 'x@example.com' }]]));
+    expect(out[0].pay).toEqual({ zelle: 'x@example.com' });
+    expect('pay' in out[1]).toBe(false);
+    expect(withContactPay([landlord], new Map())[0].pay).toBeUndefined();
+  });
+
+  test('tidied on load: pay still on a contact moves (what is already moved wins), old orphans go, recent ones stay for Undo', () => {
+    const day = 24 * 3600_000;
+    const now = 10 * day;
+    const tidy = tidyContactPay(
+      [
+        { id: 'c1', data: { name: 'Example Rentals', pay: { zelle: 'old@example.com', venmo: '@rentals' } } },
+        { id: 'c2', data: { name: 'Example Plumbing' } },
+        { id: 'c3', data: { name: 'Empty', pay: {} } },
+      ],
+      [
+        { id: 'c1', data: { zelle: 'new@example.com', updatedAt: now - 1 } },
+        { id: 'gone', data: { zelle: 'g@example.com', updatedAt: now - 2 * day } },
+        { id: 'just-deleted', data: { zelle: 'j@example.com', updatedAt: now - 60_000 } },
+      ],
+      now,
+    );
+    expect(tidy.moves).toEqual([
+      { id: 'c1', pay: { zelle: 'new@example.com', venmo: '@rentals' } },
+      { id: 'c3', pay: {} },
+    ]);
+    expect(tidy.orphans).toEqual(['gone']);
   });
 
   test("a dialog's save carries pay only when it showed it; cleared pay stays as {} so the update removes it", () => {

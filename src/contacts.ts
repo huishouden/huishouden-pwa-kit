@@ -1,6 +1,18 @@
 import { collection, doc, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { addDoc, deleteDoc, deleteField, setDoc, updateDoc, writeBatch } from './firestore.js';
-import { cleanContact, cleanContactPay, toContact, type Contact, type ContactInput, type ContactPayKind } from './contact-core.js';
+import {
+  CONTACT_PAY_COLLECTION,
+  cleanContact,
+  cleanContactPay,
+  contactPayDoc,
+  tidyContactPay,
+  toContact,
+  withContactPay,
+  type Contact,
+  type ContactInput,
+  type ContactPay,
+  type ContactPayKind,
+} from './contact-core.js';
 
 /**
  * The household's contacts over the Firebase SDK. The data contract and the screen helpers are in
@@ -9,67 +21,182 @@ import { cleanContact, cleanContactPay, toContact, type Contact, type ContactInp
 export * from './contact-core.js';
 
 const contactsOf = (db: Firestore, householdId: string) => collection(db, 'households', householdId, 'contacts');
+const payOf = (db: Firestore, householdId: string) => collection(db, 'households', householdId, CONTACT_PAY_COLLECTION);
 
 export interface WatchContactsOptions {
   /** Only those shown in this app. */
   app?: string;
-  /** A helper or kid (`isRestricted(role)`): only contacts not marked private, as the rules require. */
+  /**
+   * A helper or kid (`isRestricted(role)`): only contacts not marked private, as the rules require,
+   * and no pay details (never read, so no permission error either).
+   */
   restricted?: boolean;
+  /** Who is signed in, for the `by` of pay details tidied on load (see `tidyContactPay`). */
+  by?: string;
   onError?: (error: Error) => void;
 }
 
 /**
  * Follows the household's contacts, optionally only those shown in one app, sorted by name. Pass
- * `restricted` for helpers and kids: the rules refuse them a list that could include private ones.
+ * `restricted` for helpers and kids: the rules refuse them a list that could include private ones,
+ * and pay details. For admins and members each contact carries its pay details (`contactPay`), the
+ * first list waits for both, and once both have come from the server any pay details still on a
+ * contact's own document are moved to `contactPay` and those of deleted contacts removed.
  */
 export function watchContacts(
   db: Firestore,
   householdId: string,
   onChange: (contacts: Contact[]) => void,
-  { app, restricted, onError }: WatchContactsOptions = {},
+  { app, restricted, by, onError }: WatchContactsOptions = {},
 ): Unsubscribe {
   const all = contactsOf(db, householdId);
-  return onSnapshot(
-    restricted ? query(all, where('private', '==', false)) : all,
-    (snap) =>
-      onChange(
-        snap.docs
-          .map((d) => toContact(d.id, d.data()))
-          .filter((c) => !app || c.apps.includes(app))
-          .sort((a, b) => a.name.localeCompare(b.name)),
+  let raw: { id: string; data: Record<string, unknown> }[] | null = null;
+  let payDocs: { id: string; data: Record<string, unknown> }[] | null = restricted ? [] : null;
+  let fromServer = { contacts: false, pay: !!restricted };
+  let tidied = false;
+  const tidy = () => {
+    if (restricted || tidied || !raw || !payDocs || !fromServer.contacts || !fromServer.pay) return;
+    tidied = true;
+    tidyPay(db, householdId, raw, payDocs, by).catch((e) => console.warn('Moving contact pay details failed', e));
+  };
+  const emit = () => {
+    if (!raw || !payDocs) return;
+    const pay = new Map<string, ContactPay>();
+    for (const p of payDocs) {
+      const clean = cleanContactPay(p.data);
+      if (clean) pay.set(p.id, clean);
+    }
+    onChange(
+      withContactPay(
+        raw.map((d) => toContact(d.id, d.data)),
+        pay,
+      )
+        .filter((c) => !app || c.apps.includes(app))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    );
+  };
+  const unsubs = [
+    onSnapshot(
+      restricted ? query(all, where('private', '==', false)) : all,
+      { includeMetadataChanges: !restricted },
+      (snap) => {
+        const first = raw === null;
+        raw = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+        if (!snap.metadata.fromCache) fromServer = { ...fromServer, contacts: true };
+        // With metadata changes on (for the tidy), a snapshot that only says "now from the server" isn't a new list.
+        if (first || snap.docChanges().length) emit();
+        tidy();
+      },
+      (error) => onError?.(error),
+    ),
+  ];
+  if (!restricted) {
+    unsubs.push(
+      onSnapshot(
+        payOf(db, householdId),
+        { includeMetadataChanges: true },
+        (snap) => {
+          const first = payDocs === null;
+          payDocs = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+          if (!snap.metadata.fromCache) fromServer = { ...fromServer, pay: true };
+          if (first || snap.docChanges().length) emit();
+          tidy();
+        },
+        // Contacts still show without their pay details (rules not yet deployed, a role just changed).
+        (error) => {
+          console.warn('Contact pay details unavailable', error);
+          payDocs = [];
+          emit();
+        },
       ),
-    (error) => onError?.(error),
-  );
+    );
+  }
+  return () => unsubs.forEach((u) => u());
 }
 
+async function tidyPay(
+  db: Firestore,
+  householdId: string,
+  contacts: { id: string; data: Record<string, unknown> }[],
+  pay: { id: string; data: Record<string, unknown> }[],
+  by: string | undefined,
+): Promise<void> {
+  const now = Date.now();
+  const { moves, orphans } = tidyContactPay(contacts, pay, now);
+  const existing = new Set(pay.map((p) => p.id));
+  const writes = [
+    ...moves.map((m) => (batch: ReturnType<typeof writeBatch>) => {
+      const data = cleanContactPay(m.pay);
+      if (data) batch.set(doc(payOf(db, householdId), m.id), { ...data, updatedAt: now, ...(by ? { by } : {}) });
+      else if (existing.has(m.id)) batch.delete(doc(payOf(db, householdId), m.id));
+      batch.update(doc(contactsOf(db, householdId), m.id), { pay: deleteField() });
+    }),
+    ...orphans.map((id) => (batch: ReturnType<typeof writeBatch>) => batch.delete(doc(payOf(db, householdId), id))),
+  ];
+  for (let i = 0; i < writes.length; i += 200) {
+    const batch = writeBatch(db);
+    for (const w of writes.slice(i, i + 200)) w(batch);
+    await batch.commit();
+  }
+}
+
+/** Writes the contact's pay details (`contactPay`) in `batch`: set, or deleted when none are left. */
+function putPay(batch: ReturnType<typeof writeBatch>, db: Firestore, householdId: string, id: string, pay: unknown, by: string, now: number) {
+  const data = contactPayDoc(pay, by, now);
+  const ref = doc(payOf(db, householdId), id);
+  if (data) batch.set(ref, data);
+  else batch.delete(ref);
+}
+
+/** Adds a contact; its pay details, when `input` has some, go to `contactPay` (admins and members only). */
 export async function addContact(db: Firestore, householdId: string, input: ContactInput, by: string): Promise<string> {
-  const ref = await addDoc(contactsOf(db, householdId), { ...cleanContact(input), createdAt: Date.now(), by });
+  const now = Date.now();
+  const data = { ...cleanContact(input), createdAt: now, by };
+  if (!cleanContactPay(input.pay)) return (await addDoc(contactsOf(db, householdId), data)).id;
+  const ref = doc(contactsOf(db, householdId));
+  const batch = writeBatch(db);
+  batch.set(ref, data);
+  putPay(batch, db, householdId, ref.id, input.pay, by, now);
+  await batch.commit();
   return ref.id;
 }
 
 /**
  * Replaces the contact's details; fields left empty are removed. Pay details are replaced only when
- * `input` has `pay` (`{}` removes them), so an app that doesn't show them never drops them.
+ * `input` has `pay` (`{}` removes them), so an app that doesn't show them never drops them, and a
+ * helper's or kid's save (which never has them) never touches them.
  */
 export async function updateContact(db: Firestore, householdId: string, id: string, input: ContactInput, by: string): Promise<void> {
+  const now = Date.now();
   const cleaned = cleanContact(input) as Record<string, unknown>;
-  const update: Record<string, unknown> = { ...cleaned, updatedAt: Date.now(), by };
+  const update: Record<string, unknown> = { ...cleaned, updatedAt: now, by };
   for (const k of ['role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes']) if (!(k in cleaned)) update[k] = deleteField();
-  if ('pay' in input && !('pay' in cleaned)) update.pay = deleteField();
-  await updateDoc(doc(contactsOf(db, householdId), id), update);
+  if (!('pay' in input)) return updateDoc(doc(contactsOf(db, householdId), id), update);
+  const batch = writeBatch(db);
+  batch.update(doc(contactsOf(db, householdId), id), update);
+  putPay(batch, db, householdId, id, input.pay, by, now);
+  await batch.commit();
 }
 
 /**
- * Remembers one pay detail on a contact (the Zelle phone a bill was paid to), keeping the others;
+ * Remembers one pay detail for a contact (the Zelle phone a bill was paid to), keeping the others;
  * an empty value forgets it. Admins and members only (the rules).
  */
 export async function setContactPay(db: Firestore, householdId: string, id: string, kind: ContactPayKind, value: string, by: string): Promise<void> {
   const v = cleanContactPay({ [kind]: value })?.[kind];
-  await updateDoc(doc(contactsOf(db, householdId), id), { [`pay.${kind}`]: v ?? deleteField(), updatedAt: Date.now(), by });
+  await setDoc(doc(payOf(db, householdId), id), { [kind]: v ?? deleteField(), updatedAt: Date.now(), by }, { merge: true });
 }
 
-export async function deleteContact(db: Firestore, householdId: string, id: string): Promise<void> {
-  await deleteDoc(doc(contactsOf(db, householdId), id));
+/**
+ * Deletes a contact. With `pay` (an admin or member, whose contacts carry it) its pay details go
+ * too; a helper's or kid's deletion leaves them for an admin's or member's app to remove a day later.
+ */
+export async function deleteContact(db: Firestore, householdId: string, id: string, { pay = false }: { pay?: boolean } = {}): Promise<void> {
+  if (!pay) return deleteDoc(doc(contactsOf(db, householdId), id));
+  const batch = writeBatch(db);
+  batch.delete(doc(contactsOf(db, householdId), id));
+  batch.delete(doc(payOf(db, householdId), id));
+  await batch.commit();
 }
 
 /**
@@ -78,7 +205,7 @@ export async function deleteContact(db: Firestore, householdId: string, id: stri
  */
 export async function removeContactFromApp(db: Firestore, householdId: string, contact: Contact, app: string, by: string): Promise<void> {
   const others = contact.apps.filter((a) => a !== app);
-  if (others.length === 0) return deleteContact(db, householdId, contact.id);
+  if (others.length === 0) return deleteContact(db, householdId, contact.id, { pay: !!contact.pay });
   await updateDoc(doc(contactsOf(db, householdId), contact.id), { apps: others, updatedAt: Date.now(), by });
 }
 
@@ -98,15 +225,18 @@ export async function markUnflaggedOpen(db: Firestore, householdId: string, coll
   return unflagged.length;
 }
 
-/** Puts a deleted contact back under its old id (Undo), so appointments that point at it still do. */
+/**
+ * Puts a deleted contact back under its old id (Undo), so appointments that point at it still do,
+ * with its pay details when it carried them (an admin's or member's contact).
+ */
 export async function restoreContact(db: Firestore, householdId: string, contact: Contact): Promise<void> {
   const { id, createdAt, updatedAt, by, ...input } = contact;
-  await setDoc(doc(contactsOf(db, householdId), id), {
-    ...cleanContact(input),
-    createdAt,
-    ...(updatedAt ? { updatedAt } : {}),
-    by,
-  });
+  const data = { ...cleanContact(input), createdAt, ...(updatedAt ? { updatedAt } : {}), by };
+  if (!cleanContactPay(contact.pay)) return setDoc(doc(contactsOf(db, householdId), id), data);
+  const batch = writeBatch(db);
+  batch.set(doc(contactsOf(db, householdId), id), data);
+  putPay(batch, db, householdId, id, contact.pay, by, updatedAt ?? createdAt);
+  await batch.commit();
 }
 
 /** The three contact writes an app's actions make, over Firestore or the sample's memory. */
