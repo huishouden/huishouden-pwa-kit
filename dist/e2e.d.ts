@@ -1,5 +1,6 @@
-import { type APIRequestContext, type BrowserContext, type Page } from '@playwright/test';
+import { type APIRequestContext, type Browser, type BrowserContext, type Page, type TestType } from '@playwright/test';
 import { type DeviceFeatures } from './security-headers.js';
+import { type TestHousehold, type TestRole, type TestUser } from './staging.js';
 /** Loads `path` and fails on any uncaught page error. Returns the errors seen for further checks. */
 export declare function expectCleanLoad(page: Page, path?: string): Promise<string[]>;
 /**
@@ -145,29 +146,74 @@ export interface CalendarStubOptions {
  */
 export declare function stubCalendar(page: Page | BrowserContext, { events, cachedToken }: CalendarStubOptions): Promise<void>;
 export interface SignInTestUserOptions {
-    /** One of the seeded test users (`TEST_USERS` in `@huishouden/pwa-kit/staging`). */
-    email: string;
+    /** Which of the household's people signs in: `admin`, `member`, `helper` or `kid`. */
+    as?: TestRole;
+    /** Or one of the household's people by email (`household.users.helper.email`). */
+    email?: string;
+    /** The household (default the run's own, `testHousehold()`; `useTestHousehold` passes the spec's). */
+    household?: TestHousehold;
     /** Page to open once signed in, relative to BASE_URL (default `./`, the app's own path). */
     path?: string;
     /** Firebase JS SDK version loaded from gstatic for the sign-in (default `FIREBASE_WEB_SDK`). */
     sdkVersion?: string;
-    /** Where HH_STAGING_* and VITE_FIREBASE_* are read from (default `process.env`). */
+    /** Where HH_* and VITE_FIREBASE_* are read from (default `process.env`). */
     env?: Record<string, string | undefined>;
 }
 /** The Firebase web SDK the test sign-in loads; its saved session is read by any v9+ app build. */
 export declare const FIREBASE_WEB_SDK = "12.19.0";
 /**
- * Signs a seeded test user in on a staging site, then opens `path` signed in. Staging only: it
- * throws if the build's VITE_FIREBASE_PROJECT_ID or the site's /__/firebase/init.json names any
- * project but huishouden-staging, or neither names one (`stagingWebConfig`). The custom token it
- * mints is signed by the staging service account, so Firebase would refuse it anywhere else too.
+ * Signs one of a test household's people in, then opens `path` signed in. On staging (the kit's
+ * staging job) it throws if the build's VITE_FIREBASE_PROJECT_ID or the site's /__/firebase/init.json
+ * names any project but huishouden-staging, or neither names one (`stagingWebConfig`), and the
+ * custom token is signed by the staging service account, so Firebase would refuse it anywhere else.
+ * On the emulators (`HH_E2E_TARGET=emulator`, the kit's app-tests job) the token is unsigned and
+ * the sign-in goes to the Auth emulator.
  *
  * How: on the site's /__/firebase/init.json (same origin, no app code running) it loads the Firebase
  * SDK from gstatic, runs `signInWithCustomToken`, and leaves the session in IndexedDB where the
- * app's own Firebase finds it on load, exactly as after a real sign-in. Needs the staging CI job's
- * HH_STAGING_ACCESS_TOKEN and HH_STAGING_SA; call `test.skip(!process.env.HH_STAGING_SA)` around it.
+ * app's own Firebase finds it on load, exactly as after a real sign-in. The household's people must
+ * be seeded first (`useTestHousehold`, or `seedTestHousehold` in a `beforeAll`).
  */
-export declare function signInTestUser(page: Page, { email, path, sdkVersion, env }: SignInTestUserOptions): Promise<void>;
+export declare function signInTestUser(page: Page, { as, email, household, path, sdkVersion, env }: SignInTestUserOptions): Promise<TestUser>;
+/** A spec file's own test household: see `useTestHousehold`. */
+export interface TestHouseholdHandle {
+    /** The household (resolved inside hooks and tests: its id comes from the spec file's name). */
+    readonly household: TestHousehold;
+    /** Its people: `users.helper.email`. */
+    readonly users: Record<TestRole, TestUser>;
+    /** Signs `as` in on `page` and opens `path` (default `./`). */
+    signIn(page: Page, as: TestRole, path?: string): Promise<TestUser>;
+    /**
+     * A new page signed in as `as`, in a browser context the spec file keeps for that person: signed
+     * in once per file, not once per test. Pages close after each test, so no Firestore listener is
+     * left reading; the contexts close after the file.
+     */
+    open(browser: Browser, as: TestRole, path?: string): Promise<Page>;
+    /** Writes app data under the household in one batched commit: `{ 'agenda/e1': {...} }`. */
+    write(docs: Record<string, Record<string, unknown>>): Promise<void>;
+    /** One document under the household, with admin access (one read), or null. */
+    get(path: string): Promise<Record<string, unknown> | null>;
+}
+export interface UseTestHouseholdOptions {
+    /** Default the spec file's name: each spec file has a household of its own in each run. */
+    scope?: string;
+    /** App data to seed with the household, in the same commit. */
+    docs?: Record<string, Record<string, unknown>>;
+}
+/**
+ * A household of its own for this spec file in this run, with an admin, a member, a helper and a
+ * kid, seeded before its tests (one commit) and removed by the job after the run. Skips the file
+ * where signed-in tests can't run (no staging credentials, no emulators).
+ *
+ * ```ts
+ * const hh = useTestHousehold(test);
+ * test('a helper ...', async ({ page }) => {
+ *   await hh.signIn(page, 'helper');
+ *   await expect(page.getByLabel(`Role for ${hh.users.helper.email}`)).toHaveValue('helper');
+ * });
+ * ```
+ */
+export declare function useTestHousehold(t: TestType<any, any>, { scope, docs }?: UseTestHouseholdOptions): TestHouseholdHandle;
 export interface PortalTodoOptions {
     /** `done` (default) or `cancel`, which also confirms. */
     action?: 'done' | 'cancel';
