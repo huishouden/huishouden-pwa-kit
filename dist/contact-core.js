@@ -1,7 +1,12 @@
 import { kt } from './i18n.js';
 export const CONTACT_FIELDS = [
-    'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'pay', 'apps', 'private', 'createdAt', 'updatedAt', 'by',
+    'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'apps', 'private', 'createdAt', 'updatedAt', 'by',
 ];
+/**
+ * Where a contact's pay details live: `households/{id}/contactPay/{contactId}`, admins and members
+ * only. Its fields are the ways of paying plus `updatedAt` and `by` (CONTACT_PAY_FIELDS).
+ */
+export const CONTACT_PAY_COLLECTION = 'contactPay';
 /** Ways of paying a contact that carry a detail worth remembering, in the order forms show them. */
 export const CONTACT_PAY_KINDS = ['zelle', 'venmo', 'bank', 'check', 'portal'];
 /** Lengths the household rules allow for each pay detail; `portal` is an https:// link. */
@@ -23,16 +28,53 @@ export function cleanContactPay(pay) {
     }
     return Object.keys(out).length ? out : undefined;
 }
-/** Drops empty optional fields so documents only carry what was filled in; `private` is always written. */
+export const CONTACT_PAY_FIELDS = [...CONTACT_PAY_KINDS, 'updatedAt', 'by'];
+/**
+ * The `contactPay` document for these pay details, or null when none are left (delete it then).
+ */
+export function contactPayDoc(pay, by, now) {
+    const clean = cleanContactPay(pay);
+    return clean ? { ...clean, updatedAt: now, by } : null;
+}
+/** Contacts with their pay details (`contactPay` documents by contact id) attached. */
+export function withContactPay(contacts, pay) {
+    return contacts.map((c) => {
+        const { pay: _old, ...rest } = c;
+        const p = pay.get(c.id);
+        return (p ? { ...rest, pay: p } : rest);
+    });
+}
+/**
+ * What an admin's or member's app tidies once contacts and pay details have loaded from the server:
+ * pay details on contact documents (written before they moved to `contactPay`) are moved, a
+ * `contactPay` document already there winning way by way; pay details whose contact was deleted
+ * (by a helper, who can't remove them) are deleted once older than `orphanAfter` (a day), so an
+ * Undo of the deletion still finds them.
+ */
+export function tidyContactPay(contacts, pay, now, orphanAfter = 24 * 3600_000) {
+    const payById = new Map(pay.map((p) => [p.id, p.data]));
+    const ids = new Set(contacts.map((c) => c.id));
+    const moves = contacts.flatMap((c) => {
+        if (!('pay' in c.data))
+            return [];
+        const merged = { ...(cleanContactPay(c.data.pay) ?? {}), ...(cleanContactPay(payById.get(c.id)) ?? {}) };
+        return [{ id: c.id, pay: merged }];
+    });
+    const orphans = pay
+        .filter((p) => !ids.has(p.id) && now - (typeof p.data.updatedAt === 'number' ? p.data.updatedAt : 0) > orphanAfter)
+        .map((p) => p.id);
+    return { moves, orphans };
+}
+/**
+ * The contact's document: empty optional fields dropped so it only carries what was filled in;
+ * `private` always written. Pay details are never on it (`contactPayDoc`).
+ */
 export function cleanContact(input) {
     const out = {};
     for (const [k, v] of Object.entries(input)) {
-        if (k === 'pay') {
-            const pay = cleanContactPay(v);
-            if (pay)
-                out.pay = pay;
-        }
-        else if (typeof v === 'string') {
+        if (k === 'pay')
+            continue;
+        if (typeof v === 'string') {
             if (v.trim())
                 out[k] = v.trim();
         }
@@ -42,6 +84,7 @@ export function cleanContact(input) {
     out.private = input.private === true;
     return out;
 }
+/** A contact document as a Contact. Pay details are read from `contactPay`, never from here. */
 export function toContact(id, data) {
     const str = (k) => (typeof data[k] === 'string' ? data[k] : undefined);
     return {
@@ -54,7 +97,6 @@ export function toContact(id, data) {
         address: str('address'),
         mapsUrl: str('mapsUrl'),
         notes: str('notes'),
-        ...(cleanContactPay(data.pay) ? { pay: cleanContactPay(data.pay) } : {}),
         apps: Array.isArray(data.apps) ? data.apps.map(String) : [],
         ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
         createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,

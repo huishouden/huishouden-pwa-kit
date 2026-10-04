@@ -22,7 +22,9 @@ export interface Contact {
     /**
      * How the household pays them, by way of paying, remembered from a bill so the next one fills
      * in: the Zelle phone or email, the Venmo @handle, bank details, the mailing address for a
-     * check, the online portal's link. Only admins and members write it.
+     * check, the online portal's link. Money, so it is not on the contact's document (which helpers
+     * and kids read) but in `households/{id}/contactPay/{contactId}`, which only admins and members
+     * read and write; loaded for them alone (`watchContacts` without `restricted`).
      */
     pay?: ContactPay;
     /** Apps that show this contact, by short name: ["baby"]. */
@@ -33,7 +35,12 @@ export interface Contact {
     updatedAt?: number;
     by: string;
 }
-export declare const CONTACT_FIELDS: readonly ["name", "role", "phone", "email", "website", "address", "mapsUrl", "notes", "pay", "apps", "private", "createdAt", "updatedAt", "by"];
+export declare const CONTACT_FIELDS: readonly ["name", "role", "phone", "email", "website", "address", "mapsUrl", "notes", "apps", "private", "createdAt", "updatedAt", "by"];
+/**
+ * Where a contact's pay details live: `households/{id}/contactPay/{contactId}`, admins and members
+ * only. Its fields are the ways of paying plus `updatedAt` and `by` (CONTACT_PAY_FIELDS).
+ */
+export declare const CONTACT_PAY_COLLECTION = "contactPay";
 /** Ways of paying a contact that carry a detail worth remembering, in the order forms show them. */
 export declare const CONTACT_PAY_KINDS: readonly ["zelle", "venmo", "bank", "check", "portal"];
 export type ContactPayKind = (typeof CONTACT_PAY_KINDS)[number];
@@ -52,9 +59,46 @@ export declare const CONTACT_PAY_LIMITS: {
  * link, empty ones left out. Undefined when nothing is left.
  */
 export declare function cleanContactPay(pay: unknown): ContactPay | undefined;
+export declare const CONTACT_PAY_FIELDS: readonly ["zelle", "venmo", "bank", "check", "portal", "updatedAt", "by"];
+/**
+ * The `contactPay` document for these pay details, or null when none are left (delete it then).
+ */
+export declare function contactPayDoc(pay: unknown, by: string, now: number): (ContactPay & {
+    updatedAt: number;
+    by: string;
+}) | null;
+/** Contacts with their pay details (`contactPay` documents by contact id) attached. */
+export declare function withContactPay<C extends Contact>(contacts: C[], pay: ReadonlyMap<string, ContactPay>): C[];
+export interface ContactPayTidy {
+    /** Pay details still on a contact's own document (saved before they moved): copy, then remove there. */
+    moves: {
+        id: string;
+        pay: ContactPay;
+    }[];
+    /** `contactPay` documents whose contact is gone, untouched for `orphanAfter`: delete. */
+    orphans: string[];
+}
+/**
+ * What an admin's or member's app tidies once contacts and pay details have loaded from the server:
+ * pay details on contact documents (written before they moved to `contactPay`) are moved, a
+ * `contactPay` document already there winning way by way; pay details whose contact was deleted
+ * (by a helper, who can't remove them) are deleted once older than `orphanAfter` (a day), so an
+ * Undo of the deletion still finds them.
+ */
+export declare function tidyContactPay(contacts: {
+    id: string;
+    data: Record<string, unknown>;
+}[], pay: {
+    id: string;
+    data: Record<string, unknown>;
+}[], now: number, orphanAfter?: number): ContactPayTidy;
 export type ContactInput = Omit<Contact, 'id' | 'createdAt' | 'updatedAt' | 'by'>;
-/** Drops empty optional fields so documents only carry what was filled in; `private` is always written. */
+/**
+ * The contact's document: empty optional fields dropped so it only carries what was filled in;
+ * `private` always written. Pay details are never on it (`contactPayDoc`).
+ */
 export declare function cleanContact(input: ContactInput): ContactInput;
+/** A contact document as a Contact. Pay details are read from `contactPay`, never from here. */
 export declare function toContact(id: string, data: Record<string, unknown>): Contact;
 /** Field lengths the household rules allow for contacts. */
 export declare const CONTACT_LIMITS: {
