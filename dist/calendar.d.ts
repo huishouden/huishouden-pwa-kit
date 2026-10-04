@@ -4,7 +4,8 @@ import { type Hhmm } from './time';
 /**
  * Finds Google Calendar events that match a piece of household data (a task, an appointment), so
  * an app can fill in its date, time and place from the calendar instead of retyping them.
- * Read-only: the app never writes to the calendar.
+ * Read-only: the app never writes to the calendar. Events Huishouden's calendar export wrote (the
+ * person's "Huishouden" calendar) are never matched or suggested.
  */
 export declare const CALENDAR_SCOPES: string[];
 export interface CalendarMatch {
@@ -68,7 +69,17 @@ interface GoogleEvent {
         dateTime?: string;
         date?: string;
     };
+    extendedProperties?: {
+        private?: Record<string, string>;
+        shared?: Record<string, string>;
+    };
+    iCalUID?: string;
 }
+/**
+ * A Google event as a match, or null for one that isn't an event to bring in: cancelled, without a
+ * time, or written by Huishouden's own calendar export (`./calendar-export`, its private
+ * `huishouden` property), which would otherwise come back as a suggestion of itself.
+ */
 export declare function toMatch(e: GoogleEvent, calendarName: string, calendarId?: string): CalendarMatch | null;
 export interface FindEventsOptions {
     /** Window searched, ms since epoch. Default: a week ago to a year ahead. */

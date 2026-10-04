@@ -2,6 +2,7 @@
 import agenda from './en/agenda.js';
 import appBar from './en/appBar.js';
 import calendar from './en/calendar.js';
+import calendarExport from './en/calendarExport.js';
 import chart from './en/chart.js';
 import common from './en/common.js';
 import contacts from './en/contacts.js';
@@ -29,6 +30,7 @@ export default {
     ...agenda,
     ...appBar,
     ...calendar,
+    ...calendarExport,
     ...chart,
     ...common,
     ...contacts,

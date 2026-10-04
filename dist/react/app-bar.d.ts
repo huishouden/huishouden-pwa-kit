@@ -31,7 +31,7 @@ export interface AppBarProps {
 export declare function AppBar({ app, glyph, portalUrl, version, theme, user, signingIn, onSignIn, onSignOut, className, children }: AppBarProps): import("react").ReactElement<{
     ref: import("react").RefObject<HhAppBar | null>;
     app: string;
-    glyph: "list" | "home" | "check" | "card" | "bottle" | "paw" | "wrench" | "car" | "cart" | "pill";
+    glyph: "home" | "car" | "list" | "check" | "card" | "bottle" | "paw" | "wrench" | "cart" | "pill";
     'portal-url': string;
     version: string | undefined;
     theme: string | undefined;
