@@ -388,12 +388,15 @@ jobs:
           HH_STAGING_ACCESS_TOKEN: ${{ steps.gcp.outputs.access_token }}
           HH_STAGING_SA: ${{ vars.STAGING_GCP_DEPLOY_SA }}
         run: if jq -e '.scripts["e2e:signed-in"]' package.json >/dev/null; then bun run e2e:signed-in; else echo "no e2e:signed-in script"; fi
-      - name: Check the site is an authorized sign-in origin
+      # Only the staging portal's site is an origin of the staging OAuth client (docs/one-site.md
+      # "Sign-in origins"): Google allows 10 domains, fewer than the staging sites, and the per-app
+      # sites are for these tests, which sign in without Google's prompt.
+      - name: Check the staging suite site is an authorized sign-in origin
         if: vars.STAGING_VITE_GOOGLE_CLIENT_ID != ''
         continue-on-error: true # manual Google sign-in only; the tests above don't need it
         run: |
           if [ ! -e node_modules/.bin/pwa-oauth-origins ]; then exit 0; fi
-          bunx pwa-oauth-origins "$VITE_GOOGLE_CLIENT_ID" "$BASE_URL" --project=huishouden-staging
+          bunx pwa-oauth-origins "$VITE_GOOGLE_CLIENT_ID" https://huishouden-staging.web.app https://huishouden-staging.firebaseapp.com --project=huishouden-staging
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
@@ -559,14 +562,15 @@ jobs:
         env:
           BASE_URL: ${{ inputs.site-url }}
       # Chrome's sign-in prompt needs the site registered on the OAuth client, which no API can do.
-      - name: Check the site is an authorized sign-in origin
+      # Only the suite's site, the project's default one (docs/one-site.md "Sign-in origins"), and
+      # the auth handler: the old per-app sites only redirect.
+      - name: Check the suite site is an authorized sign-in origin
         if: steps.has-e2e.outputs.present == 'true' && vars.VITE_GOOGLE_CLIENT_ID != ''
         run: |
           if [ ! -e node_modules/.bin/pwa-oauth-origins ]; then echo "::notice::Kit older than 0.16; origin check skipped"; exit 0; fi
-          bunx pwa-oauth-origins "$CLIENT_ID" "$SITE" --project="$PROJECT"
+          bunx pwa-oauth-origins "$CLIENT_ID" "https://$PROJECT.web.app" "https://$PROJECT.firebaseapp.com" --project="$PROJECT"
         env:
           CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
-          SITE: ${{ inputs.site-url }}
           PROJECT: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
       - name: Take README screenshots
         id: shots

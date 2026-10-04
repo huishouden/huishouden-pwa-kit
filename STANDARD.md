@@ -473,13 +473,17 @@ nothing deployed or tested there can read or write real household data.
   `main` only. There is no service-account key anywhere.
 - **Rules**: `huishouden/rules` runs the emulator tests, then deploys to staging on every same-repo
   PR and on `main`, and to production on `main`. Staging carries whichever rules were deployed last.
-- **By hand**: sign in with Google on a staging site to click through anything; a person starts
-  with no household there and creates one on the staging portal. Flows that need Google's consent
+- **By hand**: sign in with Google on the staging portal's site,
+  `https://huishouden-staging.web.app/<app>/`, to click through anything; a person starts with no
+  household there and creates one on the staging portal. It is the only staging origin on the OAuth
+  client (Google allows 10; docs/one-site.md "Sign-in origins"), so One Tap and Google API tokens
+  fail on the per-app staging sites. Flows that need Google's consent
   for an API (Gmail, Calendar, Contacts) stay manual: test users have no Google account, and the
   automated suites stub those APIs (`stubGoogleTokens`, `page.route`).
 - **Not on staging**: push notifications (the sender reads production only) and Apps Script.
 - **Setup**: `infra/bootstrap.sh --staging <apps.conf>` (with `STAGING_PROJECT` in the conf)
-  creates the sites, web apps, Firestore, authorized domains, WIF and the `STAGING_*` variables.
+  creates the sites, web apps, Firestore, authorized domains, WIF and the `STAGING_*` variables,
+  and checks the OAuth client's origins.
   Until those variables exist the staging jobs skip, so apps can adopt this kit before staging does.
 
 ## Tests

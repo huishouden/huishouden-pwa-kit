@@ -4,6 +4,12 @@
 #
 #   infra/bootstrap.sh path/to/apps.conf
 #   infra/bootstrap.sh --staging path/to/apps.conf
+#   infra/bootstrap.sh [--staging] --prune-domains path/to/apps.conf
+#
+# Sign-in lists (docs/one-site.md "Sign-in origins"): the OAuth client's Authorized JavaScript
+# origins need only the suite's site (the project's default site) and <project>.firebaseapp.com;
+# Firebase Auth's authorized domains get those two, plus each app's staging site and localhost in
+# staging only. Other authorized domains are listed; --prune-domains removes them.
 #
 # --staging provisions the separate staging project, huishouden-staging, instead (STANDARD.md
 # "Staging"): the same apps with sites named <STAGING_PROJECT>-<app> (the production default site becomes the staging default
@@ -31,8 +37,16 @@
 set -euo pipefail
 
 STAGING=false
-if [[ "${1:-}" == --staging ]]; then STAGING=true; shift; fi
-CONFIG=${1:?usage: bootstrap.sh [--staging] path/to/apps.conf}
+PRUNE_DOMAINS=false
+while [[ "${1:-}" == --* ]]; do
+  case "$1" in
+    --staging) STAGING=true ;;
+    --prune-domains) PRUNE_DOMAINS=true ;;
+    *) echo "unknown option $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+CONFIG=${1:?usage: bootstrap.sh [--staging] [--prune-domains] path/to/apps.conf}
 # shellcheck source=/dev/null
 source "$CONFIG"
 : "${PROJECT:?PROJECT missing in $CONFIG}" "${GITHUB_OWNER:?GITHUB_OWNER missing in $CONFIG}"
@@ -229,22 +243,44 @@ JSON
 done
 
 if [[ -n "${client_id:-}" ]]; then
+  # Only the suite's site and the auth handler: Google allows an unverified app 10 authorized
+  # domains, each *.web.app counting separately, and the per-app sites never show Google's prompt.
   step "Sign-in origins on the OAuth web client"
-  sites=$(for entry in "${APPS[@]}"; do IFS=: read -r _ site _ <<<"$entry"; [[ -z "$site" ]] || echo "https://$site.web.app"; done)
-  # shellcheck disable=SC2086
-  bun "$(dirname "${BASH_SOURCE[0]}")/../scripts/oauth-origins.ts" "$client_id" $sites --project="$PROJECT" || true
+  bun "$(dirname "${BASH_SOURCE[0]}")/../scripts/oauth-origins.ts" "$client_id" --project="$PROJECT" || true
 fi
 
 step "Auth authorized domains"
 # Firebase Auth only accepts sign-ins from listed domains. Needs Auth initialised (console step 1).
+# Production: the suite's site and the auth handler only (the old per-app sites just redirect).
+# Staging adds each app's own staging site (its PR runs sign in there) and localhost.
 AUTH_API="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config"
 auth_headers=(-H "Authorization: Bearer $(gcloud auth print-access-token)" -H "x-goog-user-project: $PROJECT")
 current=$(curl -s "${auth_headers[@]}" "$AUTH_API")
 if jq -e '.authorizedDomains' >/dev/null <<<"$current"; then
-  wanted=$(for entry in "${APPS[@]}"; do IFS=: read -r _ site _ <<<"$entry"; [[ -z "$site" ]] || echo "$site.web.app"; done)
-  domains=$(jq -c --arg w "$wanted" '(.authorizedDomains + ($w | split("\n") | map(select(. != "")))) | unique' <<<"$current")
-  curl -s -X PATCH "${auth_headers[@]}" -H "Content-Type: application/json" \
-    "$AUTH_API?updateMask=authorizedDomains" -d "{\"authorizedDomains\": $domains}" | jq -c '.authorizedDomains'
+  wanted=$(
+    echo "$PROJECT.web.app"
+    echo "$PROJECT.firebaseapp.com"
+    if $STAGING; then
+      for entry in "${APPS[@]}"; do IFS=: read -r _ site _ <<<"$entry"; [[ -z "$site" ]] || echo "$site.web.app"; done
+      echo localhost
+    fi
+  )
+  wanted_json=$(jq -Rnc '[inputs | select(. != "")] | unique' <<<"$wanted")
+  extra=$(jq -r --argjson w "$wanted_json" '.authorizedDomains - $w | .[]' <<<"$current")
+  if $PRUNE_DOMAINS; then
+    domains=$wanted_json
+  else
+    domains=$(jq -c --argjson w "$wanted_json" '(.authorizedDomains + $w) | unique' <<<"$current")
+  fi
+  if [[ "$(jq -c 'sort' <<<"$domains")" != "$(jq -c '.authorizedDomains | sort' <<<"$current")" ]]; then
+    curl -s -X PATCH "${auth_headers[@]}" -H "Content-Type: application/json" \
+      "$AUTH_API?updateMask=authorizedDomains" -d "{\"authorizedDomains\": $domains}" | jq -c '.authorizedDomains'
+  else
+    jq -c '.authorizedDomains' <<<"$current"
+  fi
+  if [[ -n "$extra" ]] && ! $PRUNE_DOMAINS; then
+    echo "Not needed (re-run with --prune-domains to remove): $(tr '\n' ' ' <<<"$extra")"
+  fi
 else
   echo "Auth not initialised yet; do console step 1, then re-run."
 fi
@@ -255,7 +291,8 @@ Manual steps the APIs don't cover (project $PROJECT):
   1. Firebase console > Authentication > Get started > Sign-in method > Google > Enable
      (initialises Auth on the free plan and creates the OAuth web client; no supported API does either)
   2. Google Cloud console > Google Auth Platform > Clients > the "Web client (auto created by Google
-     Service)" > Authorized JavaScript origins: add https://<site>.web.app for each app using silent
-     sign-in (@huishouden/pwa-kit/auth); the origins step above lists any still missing. Then re-run
-     this script so apps get ${VAR}VITE_GOOGLE_CLIENT_ID.
+     Service)" > Authorized JavaScript origins: add https://$PROJECT.web.app (the suite's site) and
+     https://$PROJECT.firebaseapp.com, nothing per app (Google allows an unverified app 10 authorized
+     domains); the origins step above lists any still missing. Then re-run this script so apps get
+     ${VAR}VITE_GOOGLE_CLIENT_ID.
 EOF
