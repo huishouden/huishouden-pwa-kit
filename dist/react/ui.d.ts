@@ -2,7 +2,7 @@
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
  * checkbox, section tabs (a bottom bar on phones), member badge, "Sample data" banner every app shows, and
- * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`.
+ * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`, and a copy button.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -88,6 +88,15 @@ export declare function Field({ label, children, hint }: {
     label: string;
     children: ReactNode;
     hint?: string;
+}): import("react").JSX.Element;
+/**
+ * Copies `text` to the clipboard from a tap, and says "Copied" for a moment: a Zelle email, an
+ * account number. `what` names it for screen readers and the tooltip ("Copy the Zelle email").
+ */
+export declare function CopyButton({ text, what, className }: {
+    text: string;
+    what: string;
+    className?: string;
 }): import("react").JSX.Element;
 export declare function Checkbox({ checked, onChange, children }: {
     checked: boolean;

@@ -1,5 +1,5 @@
-import { collection, doc, getDoc, type Firestore } from 'firebase/firestore';
-import { deleteDoc, setDoc, updateDoc } from './firestore.js';
+import { collection, doc, getDoc, onSnapshot, type Firestore, type Unsubscribe } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, deleteDoc, setDoc, updateDoc } from './firestore.js';
 import { getLang, isLang, kt, onLangChange, type Lang } from './i18n.js';
 
 /**
@@ -236,4 +236,44 @@ export async function disablePush(
   if (!subscription) return;
   await deleteDoc(doc(subscriptionsOf(db, householdId), await pushSubscriptionId(user.email, subscription.endpoint)));
   if (unsubscribeDevice) await subscription.unsubscribe();
+}
+
+/**
+ * Each member's own notification preferences, on every device they use:
+ * `households/{id}/notificationPrefs/{email}`. `muted` lists the apps whose reminders they don't
+ * want (["bills"]); the shared sender skips them for that person, whatever the household or the
+ * app schedules for everyone else. Only the member reads and writes their own document.
+ *
+ * Fields match the rules exactly (see NOTIFICATION_PREFS_FIELDS); keep them in step.
+ */
+export interface NotificationPrefsDoc {
+  /** Short names of apps whose reminders this member doesn't get. */
+  muted: string[];
+  updatedAt: number;
+}
+
+export const NOTIFICATION_PREFS = 'notificationPrefs';
+export const NOTIFICATION_PREFS_FIELDS = ['muted', 'updatedAt'] as const;
+
+const prefsOf = (db: Firestore, householdId: string, email: string) => doc(db, 'households', householdId, NOTIFICATION_PREFS, email.trim().toLowerCase());
+
+/** The apps a stored preferences document mutes: short names only, without repeats. */
+export function mutedApps(data: unknown): string[] {
+  const muted = (data as { muted?: unknown } | null | undefined)?.muted;
+  return Array.isArray(muted) ? [...new Set(muted.filter((a): a is string => typeof a === 'string' && /^[a-z][a-z0-9-]{0,39}$/.test(a)))] : [];
+}
+
+/** Follows which apps the member has muted for themselves (none until they mute one). */
+export function watchMutedApps(db: Firestore, householdId: string, email: string, onChange: (muted: string[]) => void, onError?: (error: Error) => void): Unsubscribe {
+  return onSnapshot(
+    prefsOf(db, householdId, email),
+    (snap) => onChange(mutedApps(snap.data())),
+    (error) => onError?.(error),
+  );
+}
+
+/** Mutes or unmutes one app's reminders for the member, on all their devices. */
+export async function setAppMuted(db: Firestore, householdId: string, email: string, app: string, muted: boolean): Promise<void> {
+  if (!email) throw new Error(kt('feedback.signInFirst'));
+  await setDoc(prefsOf(db, householdId, email), { muted: muted ? arrayUnion(app) : arrayRemove(app), updatedAt: Date.now() }, { merge: true });
 }

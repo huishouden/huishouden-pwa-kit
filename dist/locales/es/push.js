@@ -13,4 +13,6 @@ export default {
     'push.turnOff': 'Desactivar',
     'push.turnOn': 'Activar',
     'push.asking': 'Preguntando al navegador',
+    'push.muteHint': 'Solo para ti, en todos tus dispositivos. Los demás los siguen recibiendo.',
+    'push.couldNotMute': 'No se pudo cambiar. Inténtalo de nuevo.',
 };

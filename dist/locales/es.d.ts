@@ -14,6 +14,8 @@ declare const _default: {
     'ui.loggedBy': string;
     'ui.addSuggestion': string;
     'ui.dontSuggest': string;
+    'ui.copy': string;
+    'ui.copied': string;
     'todos.addedToday': string;
     'todos.addedYesterday': string;
     'todos.addedDays': string;
@@ -147,6 +149,8 @@ declare const _default: {
     'push.turnOff': string;
     'push.turnOn': string;
     'push.asking': string;
+    'push.muteHint': string;
+    'push.couldNotMute': string;
     'places.unavailable': string;
     'photo.cantShrink': string;
     'photo.tooDetailed': string;
@@ -329,6 +333,9 @@ declare const _default: {
     'contacts.label.video': string;
     'contacts.otherPhones': string;
     'contacts.otherEmails': string;
+    'contacts.noOne': string;
+    'contacts.withRole': string;
+    'contacts.removedContact': string;
     'common.save': string;
     'common.cancel': string;
     'common.close': string;

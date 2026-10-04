@@ -13,4 +13,6 @@ export default {
     'push.turnOff': 'Uitzetten',
     'push.turnOn': 'Aanzetten',
     'push.asking': 'Browser vraagt toestemming',
+    'push.muteHint': 'Alleen voor jou, op al je apparaten. De anderen krijgen ze nog wel.',
+    'push.couldNotMute': 'Dat lukte niet. Probeer het opnieuw.',
 };

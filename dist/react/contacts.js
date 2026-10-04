@@ -4,7 +4,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
  * the phone's contact picker, a contact card file or Google Contacts; an OpenStreetMap business
  * search that fills in the address, phone and website, and for businesses the map lacks, filling
  * from a listing screenshot or pasted listing text) and the contact card with tap-to-call, email,
- * website and map links. Saves go through `contactInput` in `../contacts`, so every app trims and
+ * website and map links, and the select that names one of them on a record. Saves go through `contactInput` in `../contacts`, so every app trims and
  * links the same way.
  */
 import { useRef, useState } from 'react';
@@ -16,7 +16,7 @@ import { googleAccessMessage, popupCancelled } from '../feedback';
 import { mapsSearchUrl, parsePlaceText, readPlaceScreenshot, searchPlaces, telHref } from '../places';
 import { capitalize, formatList, kt as kitT } from '../i18n';
 import { useKitT } from './i18n';
-import { Checkbox, Chip, Dialog, ErrorNotice, Field, cardClass, deleteButton, ghostButton, iconButton, inputClass, linkClass, overline, primaryButton, secondaryButton } from './ui';
+import { Checkbox, Chip, Dialog, ErrorNotice, Field, cardClass, deleteButton, ghostButton, iconButton, inputClass, linkClass, overline, primaryButton, secondaryButton, selectClass } from './ui';
 const FIELD_KEYS = {
     name: 'contacts.field.name',
     role: 'contacts.field.role',
@@ -279,4 +279,14 @@ export function ContactCard({ contact: c, role, onEdit, onDelete }) {
     const kt = useKitT();
     const maps = c.mapsUrl || (c.address ? mapsSearchUrl(`${c.name}, ${c.address}`) : null);
     return (_jsxs("section", { className: `${cardClass} p-5`, "aria-label": c.name, children: [_jsxs("div", { className: "flex items-start gap-2", children: [_jsxs("div", { className: "min-w-0 flex-1", children: [_jsx("p", { className: overline, children: role }), _jsx("h3", { className: "mt-0.5 text-xl font-semibold text-ink [overflow-wrap:anywhere]", children: c.name }), c.private && _jsx(PrivateMark, {})] }), onEdit && (_jsx("button", { type: "button", className: iconButton, onClick: onEdit, "aria-label": kt('contacts.editName', { name: c.name }), children: _jsx(Pencil, { size: 18 }) })), onDelete && (_jsx("button", { type: "button", className: iconButton, onClick: onDelete, "aria-label": kt('contacts.deleteName', { name: c.name }), children: _jsx(Trash2, { size: 18 }) }))] }), _jsxs("div", { className: "mt-2 flex flex-col items-start", children: [c.phone && (_jsxs("a", { className: `${linkClass} text-lg tabular-nums`, href: telHref(c.phone), "aria-label": kt('contacts.call', { name: c.name, phone: c.phone }), children: [_jsx(Phone, { size: 18, "aria-hidden": "true" }), " ", c.phone] })), c.email && (_jsxs("a", { className: `${linkClass} [overflow-wrap:anywhere]`, href: `mailto:${c.email}`, children: [_jsx(Mail, { size: 18, "aria-hidden": "true" }), " ", c.email] })), c.website && (_jsxs("a", { className: `${linkClass} [overflow-wrap:anywhere]`, href: c.website, target: "_blank", rel: "noopener noreferrer", children: [_jsx(Globe, { size: 18, "aria-hidden": "true" }), " ", displayWebsite(c.website)] }))] }), c.address && (_jsxs("div", { className: "mt-1 text-base text-ink-soft", children: [_jsxs("p", { className: "flex items-start gap-1.5", children: [_jsx(MapPin, { size: 18, className: "mt-0.5 shrink-0 text-muted", "aria-hidden": "true" }), " ", _jsx("span", { className: "[overflow-wrap:anywhere]", children: c.address })] }), maps && (_jsxs("a", { className: linkClass, href: maps, target: "_blank", rel: "noopener noreferrer", children: [_jsx(ExternalLink, { size: 18, "aria-hidden": "true" }), " ", kt('contacts.openMaps')] }))] })), c.notes && _jsx("p", { className: "mt-2 text-base whitespace-pre-line text-muted", children: c.notes })] }));
+}
+/**
+ * Names one of the household's contacts on a record (who a bill is paid to, who does a job): a
+ * select of `contacts` with their roles, "No one" (or `empty`) first. A contact that was removed
+ * stays chosen and shows as removed, so saving doesn't drop it unseen.
+ */
+export function ContactSelect({ id, value, contacts, onChange, empty, roleLabel = (r) => r, label, }) {
+    const kt = useKitT();
+    const removed = value && !contacts.some((c) => c.id === value);
+    return (_jsxs("select", { id: id, className: selectClass, value: value, onChange: (e) => onChange(e.target.value), "aria-label": label, children: [_jsx("option", { value: "", children: empty ?? kt('contacts.noOne') }), contacts.map((c) => (_jsx("option", { value: c.id, children: c.role ? kt('contacts.withRole', { name: c.name, role: roleLabel(c.role) }) : c.name }, c.id))), removed && _jsx("option", { value: value, children: kt('contacts.removedContact') })] }));
 }
