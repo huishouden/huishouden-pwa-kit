@@ -7,7 +7,7 @@ import { isHhmm, isYmd } from './time.js';
 import { ROLES } from './role-core.js';
 export const AGENDA_KINDS = ['appointment', 'due', 'renewal', 'bill', 'birthday', 'medicine', 'feeding', 'task', 'other'];
 export const AGENDA_STATUSES = ['upcoming', 'overdue', 'done'];
-export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'private', 'texts', 'series', 'edit', 'updatedAt', 'by'];
+export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'private', 'texts', 'series', 'edit', 'calendarDetail', 'updatedAt', 'by'];
 export const SERIES_FIELDS = ['rule', 'time', 'minutes', 'original', 'through'];
 export const SERIES_DEFAULT_MINUTES = 60;
 export const AGENDA_EDIT_KINDS = ['reschedule', 'retime', 'rename', 'notes', 'skip', 'cancel'];
@@ -32,7 +32,7 @@ export const PERSONAL_AGENDA = 'personalAgenda';
 /** Fields of a `personalAgenda` item: the agenda's plus `audience`. */
 export const PERSONAL_AGENDA_FIELDS = [...AGENDA_FIELDS, 'audience'];
 /** Maximum lengths, the same as the rules. */
-export const AGENDA_LIMITS = { app: 40, ref: 200, title: 120, detail: 200, url: 2000, who: 60, by: 254 };
+export const AGENDA_LIMITS = { app: 40, ref: 200, title: 120, detail: 200, calendarDetail: 200, url: 2000, who: 60, by: 254 };
 /** Limits inside `texts`, the same as the fields they translate. */
 export const AGENDA_TEXT_LIMITS = { title: AGENDA_LIMITS.title, detail: AGENDA_LIMITS.detail };
 /**
@@ -80,6 +80,7 @@ export function agendaDoc(app, input, by, now = Date.now()) {
     const start = Math.round(input.start);
     const end = input.end !== undefined && Number.isFinite(input.end) && Math.round(input.end) > start ? Math.round(input.end) : undefined;
     const detail = clip(input.detail, AGENDA_LIMITS.detail);
+    const calendarDetail = clip(input.calendarDetail, AGENDA_LIMITS.calendarDetail);
     const who = clip(input.who, AGENDA_LIMITS.who);
     const texts = cleanLocalTexts(input.texts, AGENDA_TEXT_LIMITS);
     const series = input.series === undefined ? undefined : cleanSeries(input.series);
@@ -102,6 +103,7 @@ export function agendaDoc(app, input, by, now = Date.now()) {
         ...(texts ? { texts } : {}),
         ...(series ? { series } : {}),
         ...(edit ? { edit } : {}),
+        ...(calendarDetail ? { calendarDetail } : {}),
         updatedAt: now,
         by: by.trim().toLowerCase(),
     };
@@ -307,6 +309,7 @@ export function toAgendaItem(id, data) {
         ...(texts ? { texts } : {}),
         ...(series ? { series } : {}),
         ...(edit ? { edit } : {}),
+        ...(str(data.calendarDetail) ? { calendarDetail: str(data.calendarDetail) } : {}),
         updatedAt: num(data.updatedAt) ?? 0,
         by: str(data.by) ?? '',
     };

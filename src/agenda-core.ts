@@ -70,6 +70,12 @@ export interface AgendaItem {
    * Done (`./todo-core`), made as the person so the app's rules still decide.
    */
   edit?: AgendaEdit;
+  /**
+   * More than the portal shows, for the reader's own calendar only, when they turn on detail
+   * (`./calendar-export`): a Health dose's medicine names. The portal never displays it; like the
+   * rest of the item, only its readers can read it.
+   */
+  calendarDetail?: string;
   updatedAt: number;
   /** Lowercase email of the member whose app wrote it. */
   by: string;
@@ -78,7 +84,7 @@ export interface AgendaItem {
 /** What an agenda item says, per language. */
 export type AgendaTexts = LocalTexts<'title' | 'detail'>;
 
-export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'private', 'texts', 'series', 'edit', 'updatedAt', 'by'] as const;
+export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'private', 'texts', 'series', 'edit', 'calendarDetail', 'updatedAt', 'by'] as const;
 
 /**
  * An occurrence's schedule. Each occurrence of the series carries the same `rule`, `time` and
@@ -157,7 +163,7 @@ export const PERSONAL_AGENDA = 'personalAgenda';
 export const PERSONAL_AGENDA_FIELDS = [...AGENDA_FIELDS, 'audience'] as const;
 
 /** Maximum lengths, the same as the rules. */
-export const AGENDA_LIMITS = { app: 40, ref: 200, title: 120, detail: 200, url: 2000, who: 60, by: 254 } as const;
+export const AGENDA_LIMITS = { app: 40, ref: 200, title: 120, detail: 200, calendarDetail: 200, url: 2000, who: 60, by: 254 } as const;
 
 /** Limits inside `texts`, the same as the fields they translate. */
 export const AGENDA_TEXT_LIMITS = { title: AGENDA_LIMITS.title, detail: AGENDA_LIMITS.detail } as const;
@@ -214,6 +220,7 @@ export function agendaDoc(app: string, input: AgendaInput, by: string, now = Dat
   const start = Math.round(input.start);
   const end = input.end !== undefined && Number.isFinite(input.end) && Math.round(input.end) > start ? Math.round(input.end) : undefined;
   const detail = clip(input.detail, AGENDA_LIMITS.detail);
+  const calendarDetail = clip(input.calendarDetail, AGENDA_LIMITS.calendarDetail);
   const who = clip(input.who, AGENDA_LIMITS.who);
   const texts = cleanLocalTexts(input.texts, AGENDA_TEXT_LIMITS);
   const series = input.series === undefined ? undefined : cleanSeries(input.series);
@@ -235,6 +242,7 @@ export function agendaDoc(app: string, input: AgendaInput, by: string, now = Dat
     ...(texts ? { texts } : {}),
     ...(series ? { series } : {}),
     ...(edit ? { edit } : {}),
+    ...(calendarDetail ? { calendarDetail } : {}),
     updatedAt: now,
     by: by.trim().toLowerCase(),
   };
@@ -451,6 +459,7 @@ export function toAgendaItem(id: string, data: Record<string, unknown>): AgendaI
     ...(texts ? { texts } : {}),
     ...(series ? { series } : {}),
     ...(edit ? { edit } : {}),
+    ...(str(data.calendarDetail) ? { calendarDetail: str(data.calendarDetail) } : {}),
     updatedAt: num(data.updatedAt) ?? 0,
     by: str(data.by) ?? '',
   };
