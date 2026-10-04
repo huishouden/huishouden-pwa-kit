@@ -13,6 +13,8 @@ export interface MailMessage {
     subject: string;
     text?: string;
     html?: string;
+    /** Sent to a list: it has a List-Unsubscribe header or `Precedence: bulk/list` (newsletters, offers). */
+    bulk?: boolean;
 }
 /** Gmail, or a stand-in for it (sample data, test fixtures). */
 export interface Mailbox {

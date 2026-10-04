@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import fixtures from './fixtures/card-alerts.json';
+import readings from './fixtures/alert-readings.json';
 import { encodeBase64Url, toMailMessage, type GmailApiMessage, type Mailbox, type MailMessage } from '../src/mail-core';
 import {
-  alertId, alertQuery, stableHash, categorise, checkAlerts, dayOf, DEFAULT_RULES, identifyCard, matchesRule, merchantWords, NothingToSearch, parseAlertEmail, planAlerts, planImport, ruleCategory,
-  sameTransaction, similarDescriptions, statementIds, toAlertInbox, transactionDoc, type AlertCard, type Existing,
+  alertId, alertQuery, stableHash, categorise, checkAlerts, dayOf, DEFAULT_RULES, identifyCard, matchesRule, merchantProblem, merchantWords, NothingToSearch, parseAlertEmail, readAlert, writtenDay, planAlerts, planImport, ruleCategory,
+  sameTransaction, similarDescriptions, statementIds, toAlertInbox, transactionDoc, type AlertCard, type Existing, type ParsedAlert,
 } from '../src/spending-core';
 
 // Spending's core, shared by the app and the calendar Worker's mail checker. All cards, senders and
@@ -286,5 +287,63 @@ describe('additions for the mail checker', () => {
     expect(toAlertInbox('ib-1', { address: 'alerts.example@example.com', by: 'bob@example.com', connectedAt: 3, lastAdded: 2, error: '', token: 'x' })).toEqual({
       id: 'ib-1', address: 'alerts.example@example.com', by: 'bob@example.com', connectedAt: 3, lastAdded: 2,
     });
+  });
+});
+
+describe('readAlert: only what a rule reads with confidence becomes a transaction', () => {
+  const two: AlertCard[] = [
+    { name: 'Card One', last4: '1111', alertWords: ['alerts@bank.example.com'] },
+    { name: 'Card Two', last4: '2222', alertWords: ['alerts@bank.example.com'] },
+  ];
+  const sentAt = Date.UTC(2031, 9, 2, 16);
+  for (const f of readings) {
+    test(f.name, () => {
+      const e = f.email as { from: string; subject: string; text?: string; html?: string; bulk?: boolean };
+      expect(readAlert({ id: 'r1', date: sentAt, ...e }, two, DEFAULT_RULES, { timeZone: 'America/New_York' })).toEqual(f.expected as never);
+    });
+  }
+
+  test('parseAlertEmail is the purchase, or null for everything else', () => {
+    for (const f of readings) {
+      const e = f.email as { from: string; subject: string; text?: string; html?: string; bulk?: boolean };
+      const got = parseAlertEmail({ id: 'r1', date: sentAt, ...e }, two, DEFAULT_RULES, { timeZone: 'America/New_York' });
+      expect(got).toEqual(f.expected.kind === 'purchase' ? (f.expected as unknown as { tx: ParsedAlert }).tx : null);
+    }
+  });
+
+  test('merchants: names are trusted, prose and placeholders are not', () => {
+    for (const ok of ['EXAMPLE KIOSK', 'Example Music', 'example.com', 'SHOP #12', '7-ELEVEN 123']) expect(merchantProblem(ok)).toBeNull();
+    for (const bad of ['a reasonable price', 'options', 'Model', 'Card Purchase', 'your card', 'The end of the day', '123', 'x']) expect(merchantProblem(bad)).toBe('generic-merchant');
+  });
+
+  test('written dates', () => {
+    expect(writtenDay('Oct 2, 2031')).toBe('2031-10-02');
+    expect(writtenDay('September 30 2031')).toBe('2031-09-30');
+    expect(writtenDay('10/02/31')).toBe('2031-10-02');
+    expect(writtenDay('2031-10-02')).toBe('2031-10-02');
+    expect(writtenDay('02/30/2031')).toBeNull();
+  });
+
+  test('List-Unsubscribe or Precedence: bulk marks a Gmail message as sent to a list', () => {
+    const msg = (headers: { name: string; value: string }[]): GmailApiMessage => ({ id: 'x', internalDate: '1', payload: { headers: [{ name: 'Subject', value: 's' }, ...headers] } });
+    expect(toMailMessage(msg([{ name: 'List-Unsubscribe', value: '<mailto:u@example.com>' }])).bulk).toBe(true);
+    expect(toMailMessage(msg([{ name: 'Precedence', value: 'bulk' }])).bulk).toBe(true);
+    expect('bulk' in toMailMessage(msg([]))).toBe(false);
+  });
+
+  test('planAlerts: unreadable emails are listed for review, never written', () => {
+    const msgs: MailMessage[] = [
+      { id: 'p', date: sentAt, from: 'alerts@bank.example.com', subject: 'Alert', text: 'You made a $7.25 transaction with NOODLE BAR on your card ending in 1111' },
+      { id: 'u', date: sentAt - 1000, from: 'alerts@bank.example.com', subject: 'Card purchase', text: 'A charge was made on your card ending in 1111 for $40.03.' },
+      { id: 'n', date: sentAt, from: 'notifications@invest.example.com', subject: 'Trade options at a reasonable price', text: 'Trade options at a reasonable price from $0.03. Unsubscribe', bulk: true },
+    ];
+    const plan = planAlerts(msgs, { cards: two, rules: [], existing: [], timeZone: 'UTC' });
+    expect(plan.create.map((t) => t.id)).toEqual(['al-p']);
+    expect(plan.notPurchases).toBe(1);
+    expect(plan.review).toEqual([{ emailId: 'u', subject: 'Card purchase', sent: sentAt - 1000, date: '2031-10-02', reason: 'no-merchant', amount: 40.03 }]);
+  });
+
+  test('transactionDoc keeps the import id', () => {
+    expect(transactionDoc({ date: '2031-10-02', description: 'X SHOP', amount: 1, category: 'c', card: 'Card One', type: 'Sale', importId: 'im-abc' }, 'alert', 'a@example.com', 1)).toMatchObject({ importId: 'im-abc' });
   });
 });
