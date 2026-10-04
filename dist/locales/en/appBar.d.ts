@@ -4,6 +4,8 @@ declare const _default: {
     readonly 'appBar.signInWithGoogle': "Sign in with Google";
     readonly 'appBar.signIn': "Sign in";
     readonly 'appBar.withGoogle': "with Google";
+    readonly 'appBar.settings': "Settings";
+    readonly 'appBar.appSettings': "{app} settings";
     readonly 'appBar.settingsMenu': "Theme, language and privacy";
     readonly 'appBar.signedInAs': "Signed in as {who}";
     readonly 'appBar.you': "you";

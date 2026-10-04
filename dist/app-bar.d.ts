@@ -7,6 +7,7 @@ export interface AppBarUser {
 }
 export declare const SIGN_IN_EVENT = "hh-sign-in";
 export declare const SIGN_OUT_EVENT = "hh-sign-out";
+export declare const SETTINGS_EVENT = "hh-settings";
 export declare const SUITE_NAME = "Huishouden";
 /** The person's name when known, else their email. */
 export declare function displayNameOf(user: AppBarUser): string;
@@ -47,6 +48,9 @@ export declare class HhAppBar extends Base {
     /** Shown in the account menu, e.g. "1.2.0 (abc1234)". */
     get version(): string;
     set version(value: string | null | undefined);
+    /** The app's own settings in the menu ("Tasks settings"); choosing them dispatches `hh-settings`. Empty: none. */
+    get settings(): string;
+    set settings(value: string | null | undefined);
     /** Disables Sign in and says so while the Google popup is open. */
     get signingIn(): boolean;
     set signingIn(value: boolean);
@@ -64,6 +68,7 @@ declare global {
     interface HTMLElementEventMap {
         'hh-sign-in': CustomEvent<void>;
         'hh-sign-out': CustomEvent<void>;
+        'hh-settings': CustomEvent<void>;
     }
 }
 export {};

@@ -32,7 +32,7 @@ export const GLYPHS = {
 /** Full-bleed square for maskable icons (the launcher crops it); rounded tile otherwise. */
 export function logoSvg(glyph, { maskable = false } = {}) {
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="${maskable ? 0 : 112}" fill="${FOREST_700}"/>
+  <rect class="hh-logo-tile" width="512" height="512" rx="${maskable ? 0 : 112}" fill="${FOREST_700}"/>
   <g transform="translate(256 262) scale(${maskable ? 0.72 : 0.9}) translate(-256 -262)">
     <path d="M256 96 L416 220 V400 a24 24 0 0 1 -24 24 H120 a24 24 0 0 1 -24 -24 V220 Z" fill="${CREAM}"/>
     <path d="M256 96 L416 220 M256 96 L96 220" stroke="${TERRACOTTA}" stroke-width="36" stroke-linecap="round"/>

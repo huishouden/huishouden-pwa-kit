@@ -8,6 +8,10 @@
  * The element never calls Firebase. It dispatches `hh-sign-in` and `hh-sign-out` (bubbling,
  * composed) and the app does the work, so it serves vanilla and React apps alike.
  *
+ * An app with its own settings names them in `settings` ("Tasks settings"): the menu, signed in or
+ * out, then holds them with the theme and language, and choosing them dispatches `hh-settings`. The
+ * app needs no gear of its own beside the bar's.
+ *
  * ```html
  * <hh-app-bar app="Baby" glyph="bottle" portal-url="https://example-portal.web.app" version="1.2.0 (abc1234)">
  *   <nav slot="nav">…</nav>
@@ -21,6 +25,7 @@ import { LANG_CHOICES, LANG_NAMES, getLangChoice, kt, onLangChange, setLangChoic
 import { THEME_MODES, getThemeMode, onThemeChange, setThemeMode, startTheme } from './theme';
 export const SIGN_IN_EVENT = 'hh-sign-in';
 export const SIGN_OUT_EVENT = 'hh-sign-out';
+export const SETTINGS_EVENT = 'hh-settings';
 export const SUITE_NAME = 'Huishouden';
 /** The person's name when known, else their email. */
 export function displayNameOf(user) {
@@ -109,6 +114,8 @@ const STYLE = `
   --primary-hover: var(--hh-primary-hover, #2d6a4f);
   --primary-text: var(--hh-on-primary, #fff);
   --focus: var(--hh-terracotta, #c86d51);
+  --tile: var(--hh-tile, #1b4332);
+  --tile-ring: var(--hh-tile-ring, transparent);
 }
 /* Dark whatever the page says; the page's own .dark (./theme) already turns the bar dark through the variables above. */
 :host([theme='dark']) {
@@ -125,6 +132,8 @@ const STYLE = `
   --primary-bg: var(--hh-forest-400, #74c69d);
   --primary-hover: var(--hh-forest-300, #95d5b2);
   --primary-text: var(--hh-forest-900, #081c15);
+  --tile: var(--hh-forest-600, #2d6a4f);
+  --tile-ring: rgb(116 198 157 / 0.35);
 }
 :host([hidden]) { display: none; }
 *, *::before, *::after { box-sizing: border-box; }
@@ -154,6 +163,9 @@ header {
   text-decoration: none;
 }
 .logo, .logo svg { display: block; width: 44px; height: 44px; flex-shrink: 0; }
+/* A lighter tile with a faint edge in dark, so the logo does not sink into the bar. */
+.logo { border-radius: 9.625px; box-shadow: 0 0 0 1px var(--tile-ring); }
+.logo .hh-logo-tile { fill: var(--tile); }
 .suite { display: block; margin: 0; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--bar-overline); }
 h1 { margin: 0; font-size: 18px; line-height: 1.25; font-weight: 700; letter-spacing: -0.025em; color: var(--bar-title); }
 .nav { order: 3; display: flex; width: 100%; min-width: 0; }
@@ -186,6 +198,12 @@ button { font-family: inherit; }
 .signin:hover { background: var(--primary-hover); }
 /* Phones: "Sign in" alone keeps the button beside a long app name; its label still says Google. */
 @media (max-width: 479px) { .signin .long { display: none; } }
+/* When the row would wrap (a narrow phone, a long app name, "Iniciar sesión"): the sign-in icon alone. */
+.signin .icon { display: none; }
+.signin .icon svg { display: block; width: 22px; height: 22px; }
+:host([compact]) .signin:not(:disabled) { width: 44px; padding: 0; }
+:host([compact]) .signin:not(:disabled) .label { display: none; }
+:host([compact]) .signin:not(:disabled) .icon { display: block; }
 .signin:disabled { opacity: 0.6; cursor: default; }
 .avatar {
   display: inline-flex;
@@ -202,7 +220,7 @@ button { font-family: inherit; }
   font-size: 18px;
   line-height: 1;
   font-weight: 600;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+  box-shadow: 0 0 0 1px var(--tile-ring), 0 1px 3px rgb(0 0 0 / 0.2);
   cursor: pointer;
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
@@ -313,7 +331,7 @@ const TEMPLATE = `
 const Base = (typeof HTMLElement === 'undefined' ? class {
 } : HTMLElement);
 export class HhAppBar extends Base {
-    static observedAttributes = ['app', 'glyph', 'portal-url', 'version', 'signing-in'];
+    static observedAttributes = ['app', 'glyph', 'portal-url', 'version', 'signing-in', 'settings'];
     #user = undefined;
     #open = false;
     #root;
@@ -339,6 +357,9 @@ export class HhAppBar extends Base {
     /** Shown in the account menu, e.g. "1.2.0 (abc1234)". */
     get version() { return this.getAttribute('version') ?? ''; }
     set version(value) { this.#attr('version', value); }
+    /** The app's own settings in the menu ("Tasks settings"); choosing them dispatches `hh-settings`. Empty: none. */
+    get settings() { return this.getAttribute('settings') ?? ''; }
+    set settings(value) { this.#attr('settings', value || null); }
     /** Disables Sign in and says so while the Google popup is open. */
     get signingIn() { return this.hasAttribute('signing-in'); }
     set signingIn(value) { this.toggleAttribute('signing-in', !!value); }
@@ -351,7 +372,7 @@ export class HhAppBar extends Base {
     }
     connectedCallback() {
         // A property set before the element was defined sits on the instance and hides the accessor.
-        for (const key of ['user', 'app', 'glyph', 'portalUrl', 'version', 'signingIn']) {
+        for (const key of ['user', 'app', 'glyph', 'portalUrl', 'version', 'signingIn', 'settings']) {
             if (Object.prototype.hasOwnProperty.call(this, key)) {
                 const value = this[key];
                 delete this[key];
@@ -369,8 +390,11 @@ export class HhAppBar extends Base {
         this.#renderHome();
         this.#renderAccount();
         this.#syncNav();
+        window.addEventListener('resize', this.#onResize);
+        void document.fonts?.ready.then(() => this.#fit());
     }
     disconnectedCallback() {
+        window.removeEventListener('resize', this.#onResize);
         this.#setOpen(false);
         this.#offTheme?.();
         this.#offTheme = undefined;
@@ -378,7 +402,7 @@ export class HhAppBar extends Base {
         this.#offLang = undefined;
     }
     attributeChangedCallback(name) {
-        if (name === 'signing-in')
+        if (name === 'signing-in' || name === 'settings')
             this.#renderAccount();
         else if (name === 'version' || name === 'portal-url') {
             this.#renderHome();
@@ -406,6 +430,32 @@ export class HhAppBar extends Base {
         const suite = isSuite(this.app);
         this.#root.querySelector('.suite').hidden = suite;
         this.#root.querySelector('h1').textContent = suite ? SUITE_NAME : this.app.trim();
+        this.#fit();
+    }
+    #resizing = 0;
+    #onResize = () => {
+        cancelAnimationFrame(this.#resizing);
+        this.#resizing = requestAnimationFrame(() => this.#fit());
+    };
+    /**
+     * Keeps the logo, the app's name and the account controls on one row: Sign in drops to its icon
+     * only when its words would push it onto a second line. Measured, so it holds for every app name
+     * and language rather than at a guessed width.
+     */
+    #fit() {
+        if (!this.isConnected)
+            return;
+        const home = this.#root.querySelector('.home');
+        const end = this.#root.querySelector('.end');
+        this.removeAttribute('compact');
+        if (!this.#root.querySelector('.signin'))
+            return;
+        const a = home.getBoundingClientRect();
+        const b = end.getBoundingClientRect();
+        const header = this.#root.querySelector('header');
+        const wraps = Math.abs(a.top + a.height / 2 - (b.top + b.height / 2)) > 8 || header.scrollWidth > header.clientWidth;
+        if (wraps)
+            this.setAttribute('compact', '');
     }
     #syncNav() {
         const slot = this.#root.querySelector('slot[name="nav"]');
@@ -438,27 +488,32 @@ export class HhAppBar extends Base {
             else {
                 button.setAttribute('aria-label', kt('appBar.signInWithGoogle'));
                 const label = document.createElement('span');
+                label.className = 'label';
+                const icon = document.createElement('span');
+                icon.className = 'icon';
+                icon.setAttribute('aria-hidden', 'true');
+                icon.innerHTML = SIGN_IN_ICON; // trusted: static markup
                 const long = document.createElement('span');
                 long.className = 'long';
                 long.textContent = `\u00a0${kt('appBar.withGoogle')}`;
                 label.append(kt('appBar.signIn'), long);
-                button.append(label);
+                button.append(icon, label);
             }
             button.addEventListener('click', () => this.#emit(SIGN_IN_EVENT));
-            // Signed out there is no avatar, so the theme, the language and Privacy sit behind a small sliders button. Its name
-            // is not "Settings", which apps use for their own settings button.
+            // Signed out there is no avatar, so the theme, the language, Privacy and the app's own settings sit behind a
+            // small sliders button: "Settings" when the app has some, else what it holds.
             const trigger = document.createElement('button');
             trigger.type = 'button';
             trigger.className = 'menu-button';
             trigger.setAttribute('part', 'menu-button');
-            trigger.setAttribute('aria-label', kt('appBar.settingsMenu'));
+            trigger.setAttribute('aria-label', this.settings ? kt('appBar.settings') : kt('appBar.settingsMenu'));
             trigger.innerHTML = SETTINGS_ICON; // trusted: static markup
             this.#wireTrigger(trigger);
             const menu = this.#menu();
             menu.append(...this.#themeChoice(), ...this.#langChoice());
             const items = document.createElement('div');
             items.className = 'items';
-            items.append(this.#privacyLink());
+            items.append(...this.#appSettings(), this.#privacyLink());
             menu.append(items);
             const version = versionLabel(this.app, this.version);
             if (version)
@@ -470,6 +525,7 @@ export class HhAppBar extends Base {
             if (focused === 'menu-button')
                 trigger.focus();
             refocus();
+            this.#fit();
             return;
         }
         const email = user.email ?? '';
@@ -509,6 +565,7 @@ export class HhAppBar extends Base {
         menu.append(...this.#themeChoice(), ...this.#langChoice());
         const items = document.createElement('div');
         items.className = 'items';
+        items.append(...this.#appSettings());
         // Every app shares the portal's origin (docs/one-site.md), so only the portal itself, by name, lacks the link.
         if (!isSuite(this.app)) {
             const all = document.createElement('a');
@@ -559,8 +616,24 @@ export class HhAppBar extends Base {
         menu.setAttribute('part', 'menu');
         menu.hidden = !this.#open;
         menu.setAttribute('role', 'group');
-        menu.setAttribute('aria-label', this.#user ? kt('appBar.account') : kt('appBar.settingsMenu'));
+        menu.setAttribute('aria-label', this.#user ? kt('appBar.account') : this.settings ? kt('appBar.settings') : kt('appBar.settingsMenu'));
         return menu;
+    }
+    /** The app's own settings, when it names them. */
+    #appSettings() {
+        const label = this.settings.trim();
+        if (!label)
+            return [];
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'item';
+        b.setAttribute('part', 'app-settings');
+        b.textContent = label;
+        b.addEventListener('click', () => {
+            this.#setOpen(false);
+            this.#emit(SETTINGS_EVENT);
+        });
+        return [b];
     }
     #privacyLink() {
         const privacy = document.createElement('a');
@@ -665,6 +738,8 @@ export class HhAppBar extends Base {
 }
 const THEME_KEYS = { auto: 'theme.auto', light: 'theme.light', dark: 'theme.dark' };
 // lucide "settings-2" (two sliders), stroke 2, coloured by the text colour.
+// lucide "log-in", for Sign in on narrow phones.
+const SIGN_IN_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></svg>';
 const SETTINGS_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 17H5"/><path d="M19 7h-9"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>';
 function paragraph(className, text) {
     const p = document.createElement('p');

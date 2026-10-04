@@ -43,7 +43,8 @@
  * (insets), text-ink, text-ink-soft, text-muted (secondary), border-line / divide-line,
  * bg-primary + text-on-primary (hover:bg-primary-hover), text-link, bg-tint / bg-tint-strong
  * (selected, hover), text-positive, text-attention (readable terracotta) / bg-attention-fill (icons, dots) / bg-attention-tint, text-error /
- * bg-error-tint.
+ * bg-error-tint, bg-tile + ring-1 ring-tile-ring (initial and icon avatars, logo tiles: an edge in dark
+ * only), bg-toast + ring-toast-ring.
  */
 @theme inline {
   --color-page: var(--hh-page);
@@ -65,6 +66,10 @@
   --color-attention-tint: var(--hh-attention-tint);
   --color-error: var(--hh-error);
   --color-error-tint: var(--hh-error-tint);
+  --color-tile: var(--hh-tile);
+  --color-tile-ring: var(--hh-tile-ring);
+  --color-toast: var(--hh-toast);
+  --color-toast-ring: var(--hh-toast-ring);
 }
 
 @layer base {
