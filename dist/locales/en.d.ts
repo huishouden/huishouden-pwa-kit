@@ -408,6 +408,7 @@ declare const _default: {
     readonly 'appBar.you': "you";
     readonly 'appBar.account': "Account";
     readonly 'appBar.allApps': "All apps";
+    readonly 'appBar.calendar': "In your own calendar";
     readonly 'appBar.assistant': "Use with your AI assistant";
     readonly 'appBar.privacy': "Privacy";
     readonly 'appBar.signOut': "Sign out";

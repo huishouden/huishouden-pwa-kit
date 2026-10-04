@@ -26,10 +26,18 @@ const gis = {
       },
     }),
     hasGrantedAllScopes: () => true,
+    initCodeClient: (cfg: { client_id: string; scope: string; ux_mode: string; login_hint?: string; callback: (r: Record<string, unknown>) => void; error_callback?: (e: { type: string }) => void }) => ({
+      requestCode() {
+        codeRequests.push({ clientId: cfg.client_id, scope: cfg.scope, mode: cfg.ux_mode, hint: cfg.login_hint });
+        codeAnswer(cfg);
+      },
+    }),
   },
 };
+const codeRequests: { clientId: string; scope: string; mode: string; hint?: string }[] = [];
+let codeAnswer: (cfg: { scope: string; callback: (r: Record<string, unknown>) => void; error_callback?: (e: { type: string }) => void }) => void = (cfg) => cfg.callback({ code: 'one-time-code', scope: cfg.scope });
 
-const { cachedGoogleToken, configureGoogleTokens, forgetGoogleToken, googleAccessToken, googleFetch, GoogleApiError, GoogleTokenError } = await import('../src/google-token');
+const { cachedGoogleToken, configureGoogleTokens, forgetGoogleToken, googleAccessToken, googleAuthCode, googleFetch, GoogleApiError, GoogleTokenError } = await import('../src/google-token');
 const { requestGmailToken, storedGmailToken, gmailMailbox, gmailError, GMAIL_READONLY_SCOPE } = await import('../src/gmail');
 const { popupBlocked, popupCancelled } = await import('../src/feedback');
 
@@ -235,5 +243,23 @@ describe('calendar search with series starts', () => {
     } finally {
       globalThis.fetch = original;
     }
+  });
+});
+
+describe('googleAuthCode', () => {
+  test('a one-time code from the code client in a popup, hinted with the member', async () => {
+    codeRequests.length = 0;
+    codeAnswer = (cfg) => cfg.callback({ code: 'one-time-code', scope: cfg.scope });
+    expect(await googleAuthCode(auth(), [A])).toEqual({ code: 'one-time-code', scope: A });
+    expect(codeRequests).toEqual([{ clientId: 'client-1.apps.googleusercontent.com', scope: A, mode: 'popup', hint: 'u1@example.com' }]);
+  });
+
+  test('a scope left unticked, or the window closed, is an error with its code', async () => {
+    codeAnswer = (cfg) => cfg.callback({ code: 'c', scope: 'openid' });
+    expect(await googleAuthCode(auth(), [A]).catch((e) => e.code)).toBe('access_denied');
+    codeAnswer = (cfg) => cfg.error_callback?.({ type: 'popup_closed' });
+    expect(await googleAuthCode(auth(), [A]).catch((e) => e.code)).toBe('popup_closed');
+    codeAnswer = (cfg) => cfg.callback({ error: 'access_denied' });
+    expect(await googleAuthCode(auth(), [A]).catch((e) => e).then((e: InstanceType<typeof GoogleTokenError>) => e.code)).toBe('access_denied');
   });
 });

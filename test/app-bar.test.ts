@@ -115,6 +115,7 @@ describe('<hh-app-bar>', () => {
     const links = Array.from(menu.querySelectorAll('a.item')).map((a) => [a.textContent, a.getAttribute('href')]);
     expect(links).toEqual([
       ['All apps', 'https://portal.example.com/'],
+      ['In your own calendar', 'https://portal.example.com/my-calendar'],
       ['Use with your AI assistant', 'https://portal.example.com/assistant'],
       ['Privacy', 'https://portal.example.com/privacy'],
     ]);
@@ -224,6 +225,7 @@ describe('<hh-app-bar>', () => {
     const links = Array.from($('.menu')!.querySelectorAll('a.item')).map((a) => [a.textContent, a.getAttribute('href')]);
     expect(links).toEqual([
       ['All apps', '/'],
+      ['In your own calendar', new URL('/my-calendar', location.href).href],
       ['Use with your AI assistant', new URL('/assistant', location.href).href],
       ['Privacy', new URL('/privacy', location.href).href],
     ]);
@@ -233,8 +235,8 @@ describe('<hh-app-bar>', () => {
     const { bar, $ } = mount({ 'portal-url': '/', app: 'Huishouden' });
     bar.user = { email: 'sam@example.com' };
     const links = Array.from($('.menu')!.querySelectorAll('a.item')).map((a) => a.textContent);
-    expect(links).toEqual(['Use with your AI assistant', 'Privacy']);
-    expect($('.menu a.item')!.getAttribute('href')).toBe(new URL('/assistant', location.href).href);
+    expect(links).toEqual(['In your own calendar', 'Use with your AI assistant', 'Privacy']);
+    expect($('.menu a.item')!.getAttribute('href')).toBe(new URL('/my-calendar', location.href).href);
   });
 
   test('section tabs that move to the bottom bar on phones mark the bar', async () => {

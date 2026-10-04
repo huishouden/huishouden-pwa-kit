@@ -44,7 +44,29 @@ export interface GsiClientError {
 export interface GsiTokenClient {
   requestAccessToken(overrides?: { prompt?: string; hint?: string; scope?: string }): void;
 }
+/** What the code client hands back: a one-time code for a server to exchange, or `error`. */
+export interface GsiCodeResponse {
+  code?: string;
+  scope?: string;
+  state?: string;
+  error?: string;
+  error_description?: string;
+}
+export interface GsiCodeClient {
+  requestCode(): void;
+}
 export interface GoogleAccountsOAuth2 {
+  initCodeClient(config: {
+    client_id: string;
+    scope: string;
+    ux_mode: 'popup';
+    include_granted_scopes?: boolean;
+    login_hint?: string;
+    select_account?: boolean;
+    state?: string;
+    callback: (response: GsiCodeResponse) => void;
+    error_callback?: (error: GsiClientError) => void;
+  }): GsiCodeClient;
   initTokenClient(config: {
     client_id: string;
     scope: string;
