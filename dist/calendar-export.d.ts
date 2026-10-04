@@ -80,7 +80,15 @@ export interface ExportInput {
     /** IANA zone the calendar is in. */
     timeZone: string;
     settings: CalendarSettings;
+    /**
+     * The household's home address (`households/{id}.home.address`): the LOCATION of things that
+     * happen at home (`AT_HOME_APPS`: a lawn visit, the plumber, garbage day), so a calendar can map
+     * them and a sitter knows where.
+     */
+    home?: string;
 }
+/** Apps whose agenda items happen at the household's home. */
+export declare const AT_HOME_APPS: readonly string[];
 export interface ExportSeries {
     rule: EventRule;
     time?: Hhmm;
@@ -101,6 +109,8 @@ export interface ExportEvent {
     title: string;
     description: string;
     url: string;
+    /** Where it happens: the home's address for things at home. */
+    location?: string;
     allDay: boolean;
     /** All day: the first day and the day after the last. */
     startDate?: Ymd;

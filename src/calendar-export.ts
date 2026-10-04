@@ -92,7 +92,18 @@ export interface ExportInput {
   /** IANA zone the calendar is in. */
   timeZone: string;
   settings: CalendarSettings;
+  /**
+   * The household's home address (`households/{id}.home.address`): the LOCATION of things that
+   * happen at home (`AT_HOME_APPS`: a lawn visit, the plumber, garbage day), so a calendar can map
+   * them and a sitter knows where.
+   */
+  home?: string;
 }
+
+/** Apps whose agenda items happen at the household's home. */
+export const AT_HOME_APPS: readonly string[] = ['home'];
+
+const locationOf = (app: string, input: Pick<ExportInput, 'home'>) => (input.home?.trim() && AT_HOME_APPS.includes(app) ? { location: input.home.trim() } : {});
 
 export interface ExportSeries {
   rule: EventRule;
@@ -115,6 +126,8 @@ export interface ExportEvent {
   title: string;
   description: string;
   url: string;
+  /** Where it happens: the home's address for things at home. */
+  location?: string;
   allDay: boolean;
   /** All day: the first day and the day after the last. */
   startDate?: Ymd;
@@ -196,7 +209,7 @@ function times(item: Pick<AgendaItem, 'start' | 'end' | 'allDay' | 'kind'>, time
 }
 
 const hashOf = (e: Omit<ExportEvent, 'hash' | 'items' | 'todo' | 'updatedAt'>) =>
-  contentHash(JSON.stringify([e.title, e.description, e.url, e.allDay, e.startDate, e.endDate, e.start, e.end, e.alarmMinutes ?? null, e.series ? [e.series.rule, e.series.time ?? null, e.series.minutes, e.series.first, e.series.exdates, e.series.overrides.map((o) => o.hash)] : null, e.original ?? null]));
+  contentHash(JSON.stringify([e.title, e.description, e.url, e.allDay, e.startDate, e.endDate, e.start, e.end, e.alarmMinutes ?? null, e.series ? [e.series.rule, e.series.time ?? null, e.series.minutes, e.series.first, e.series.exdates, e.series.overrides.map((o) => o.hash)] : null, e.original ?? null, ...(e.location ? [e.location] : [])]));
 
 function single(item: AgendaItem, key: string, input: ExportInput): ExportEvent {
   const { title, description } = words(item, input);
@@ -210,6 +223,7 @@ function single(item: AgendaItem, key: string, input: ExportInput): ExportEvent 
     title,
     description,
     url: item.url,
+    ...locationOf(item.app, input),
     ...when,
     ...(item.status ? { status: item.status } : {}),
     ...(alarmMinutes !== undefined ? { alarmMinutes } : {}),
@@ -266,6 +280,7 @@ function seriesEvent(items: AgendaItem[], key: string, input: ExportInput): Expo
     title,
     description,
     url: latest.url,
+    ...locationOf(latest.app, input),
     allDay: !s.time,
     ...(s.time ? {} : { startDate: first, endDate: addDays(first, 1) }),
     start,
@@ -368,6 +383,7 @@ export function toIcsEvents(events: readonly ExportEvent[], { householdId, timeZ
         summary: x.title,
         description: x.description,
         url: x.url,
+        ...(x.location ? { location: x.location } : {}),
         ...icsWhen(x),
         sequence: sequenceOf(x.updatedAt),
         lastModified: x.updatedAt,

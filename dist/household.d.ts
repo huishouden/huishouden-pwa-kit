@@ -1,5 +1,6 @@
 import { type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { type Role } from './roles.js';
+import { type HomeCandidate, type HouseholdHome } from './home.js';
 /**
  * A household shared by every app in the family: one document per household in
  * `households/{householdId}`, with members identified by lowercase email. Apps keep their own data
@@ -7,7 +8,7 @@ import { type Role } from './roles.js';
  * access to members of the parent document — so adding someone here gives them every app at once.
  *
  * Shape matches the rules every app shares:
- *   { name: string, members: string[], joined?: string[], roles?: { [email]: Role }, currency?: string, createdAt: number }
+ *   { name: string, members: string[], joined?: string[], roles?: { [email]: Role }, currency?: string, home?: HouseholdHome, createdAt: number }
  */
 export interface Household {
     id: string;
@@ -20,6 +21,8 @@ export interface Household {
     roles?: Record<string, Role>;
     /** ISO 4217 code amounts are shown in ("USD", "EUR"); unset means US dollars. Admins and members set it. */
     currency?: string;
+    /** Where the household lives (`./home`): every member reads it; admins and members set it. */
+    home?: HouseholdHome;
     createdAt: number;
 }
 export type HouseholdState = {
@@ -54,6 +57,16 @@ export declare function findHousehold(db: Firestore, email: string): Promise<Hou
 export declare function toHousehold(id: string, data: Record<string, unknown>): Household;
 /** Sets the currency the household's amounts are shown in (admins and members; the rules check). */
 export declare function setHouseholdCurrency(db: Firestore, householdId: string, currency: string): Promise<void>;
+/**
+ * Sets where the household lives (admins and members; the rules check): a found address, a
+ * position, or with `approximate` only the neighbourhood. The zone is this browser's.
+ */
+export declare function setHouseholdHome(db: Firestore, householdId: string, home: HomeCandidate, by: string, options?: {
+    timeZone?: string;
+    now?: number;
+}): Promise<HouseholdHome>;
+/** Forgets where the household lives. */
+export declare function clearHouseholdHome(db: Firestore, householdId: string): Promise<void>;
 /** Starts a household with only its creator, its admin; others are invited from inside. */
 export declare function createHousehold(db: Firestore, email: string, name: string): Promise<string>;
 type People = Pick<Household, 'id' | 'members' | 'roles'>;

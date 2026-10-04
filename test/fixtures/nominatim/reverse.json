@@ -1,0 +1,18 @@
+{
+  "place_id": 1001,
+  "osm_type": "way",
+  "osm_id": 424242,
+  "lat": "39.78171",
+  "lon": "-89.65012",
+  "place_rank": 30,
+  "display_name": "12, Example Lane, Riverside, Springfield, Sangamon County, Illinois, 62701, United States",
+  "address": {
+    "house_number": "12",
+    "road": "Example Lane",
+    "suburb": "Riverside",
+    "city": "Springfield",
+    "state": "Illinois",
+    "postcode": "62701",
+    "country": "United States"
+  }
+}
