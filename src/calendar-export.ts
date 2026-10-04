@@ -230,11 +230,13 @@ function seriesEvent(items: AgendaItem[], key: string, input: ExportInput): Expo
   const tz = input.timeZone;
   const byOriginal = new Map<Ymd, AgendaItem>();
   for (const i of items) if (i.series && isYmd(i.series.original)) byOriginal.set(i.series.original, i);
-  const known = [...byOriginal.keys()].sort();
   const through = s.through;
-  // Days the app published through, with no item: skipped. Before the first item it published,
-  // nothing is known, so those days stand as the schedule says.
-  const exdates = known.length ? ruleOccurrences(rule, known[0], through).filter((d) => !byOriginal.has(d)) : [];
+  // Days the app published through, with no item: skipped. The window starts at the earliest day an
+  // item happens on (an occurrence moved from a past day to a later one still names its past day,
+  // which says nothing about the days between); before it nothing is known, so those days stand as
+  // the schedule says.
+  const firstShown = items.map((i) => occursAt(i, input.timeZone).date).sort()[0];
+  const exdates = firstShown ? ruleOccurrences(rule, firstShown, through).filter((d) => !byOriginal.has(d)) : [];
   const plain = items.find((i) => {
     const at = occursAt(i, tz);
     return at.date === i.series!.original && (at.time ?? '') === (s.time ?? '');
