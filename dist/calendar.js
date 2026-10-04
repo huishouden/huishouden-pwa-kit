@@ -1,7 +1,8 @@
 import { googleAccessMessage, popupBlocked, popupCancelled } from './feedback';
 import { cachedGoogleToken, googleAccessToken, googleFetch } from './google-token';
 import { fitsRule, inferRule } from './schedule';
-import { addDays, formatDayShort, formatTime, startOfDay, toHhmm, toYmd } from './time';
+import { addDays, formatDayShort, formatTime, startOfDay, toHhmm, toYmd, weekdayShort } from './time';
+import { capitalize, kt } from './i18n.js';
 import { dismissId, dismissedIds } from './suggestions';
 /**
  * Finds Google Calendar events that match a piece of household data (a task, an appointment), so
@@ -41,7 +42,7 @@ export function searchPhrases(text) {
  * (`cachedCalendarToken`) without asking again.
  */
 export function calendarAccessToken(auth) {
-    return googleAccessToken(auth, CALENDAR_SCOPES, { persist: true, deniedMessage: 'Google did not grant calendar access.' });
+    return googleAccessToken(auth, CALENDAR_SCOPES, { persist: true, deniedMessage: kt('calendar.denied') });
 }
 /**
  * The calendar token this device already has, without asking anyone; null when there is none.
@@ -62,7 +63,7 @@ export function toMatch(e, calendarName, calendarId) {
     const end = e.end?.dateTime ? Date.parse(e.end.dateTime) : e.end?.date ? localDay(e.end.date) : undefined;
     return {
         id: e.id,
-        title: e.summary ?? '(no title)',
+        title: e.summary ?? kt('calendar.noTitle'),
         start,
         end,
         allDay,
@@ -185,13 +186,13 @@ export function notImported(matches, records) {
 /** A readable reason for a failed calendar search; every case offers Try again. */
 export function calendarError(e) {
     if (popupCancelled(e))
-        return 'Calendar access was not allowed. Try again when you are ready.';
+        return kt('calendar.notAllowed');
     if (popupBlocked(e))
-        return 'The browser blocked the Google window. Allow pop-ups for this site and try again.';
+        return kt('calendar.popupBlocked');
     const access = googleAccessMessage(e, 'Calendar');
     if (access)
         return access;
-    return "Couldn't search your calendar. Check the connection and try again.";
+    return kt('calendar.searchFailed');
 }
 // ---- Suggestions: new events found when the app opens ----
 export { SUGGESTION_RESCAN_MS } from './suggestions';
@@ -223,10 +224,10 @@ export function newSuggestions(matches, { isImported, dismissed }) {
 export function suggestionWhen(m, now) {
     const days = Math.round((startOfDay(m.start) - startOfDay(now)) / 86_400_000);
     const thisWeek = days >= 0 && days < 7;
-    const day = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : thisWeek ? new Date(m.start).toLocaleDateString(undefined, { weekday: 'short' }) : formatDayShort(m.start);
+    const day = capitalize(days === 0 ? kt('time.today') : days === 1 ? kt('time.tomorrow') : thisWeek ? weekdayShort(m.start) : formatDayShort(m.start));
     if (m.allDay)
-        return thisWeek ? `${day}, all day` : day;
-    return thisWeek ? `${day} ${formatTime(m.start)}` : `${day}, ${formatTime(m.start)}`;
+        return thisWeek ? kt('calendar.whenAllDayWeek', { day }) : day;
+    return kt(thisWeek ? 'calendar.whenWeek' : 'calendar.whenLater', { day, time: formatTime(m.start) });
 }
 const seriesKey = (m) => m.recurringEventId ?? `title:${m.title.trim().toLowerCase().replace(/\s+/g, ' ')}`;
 /**

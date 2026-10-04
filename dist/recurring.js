@@ -9,13 +9,20 @@
  * calls its own (category names, merchants it never wants suggested) is passed in as options.
  */
 import { addDays, addMonths, daysBetween, isYmd, toYmd, ymdParts } from './time';
+import { kt } from './i18n.js';
 export const CADENCES = {
     weekly: { days: 7, tolerance: 2, min: 3, perMonth: 52 / 12, next: (d) => addDays(d, 7) },
     monthly: { days: 30.44, tolerance: 5, min: 3, perMonth: 1, next: (d, day) => addMonths(d, 1, day) },
     quarterly: { days: 91.3, tolerance: 10, min: 3, perMonth: 1 / 3, next: (d, day) => addMonths(d, 3, day) },
     yearly: { days: 365, tolerance: 10, min: 2, perMonth: 1 / 12, next: (d, day) => addMonths(d, 12, day) },
 };
-export const CADENCE_LABELS = { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly' };
+/** What each cadence is called, in the active language ("Monthly", "Mensual", "Maandelijks"). */
+export const CADENCE_LABELS = {
+    get weekly() { return kt('recurring.weekly'); },
+    get monthly() { return kt('recurring.monthly'); },
+    get quarterly() { return kt('recurring.quarterly'); },
+    get yearly() { return kt('recurring.yearly'); },
+};
 /** An amount per `cadence` as an amount per month, rounded to cents. */
 export const monthlyEquivalent = (amount, cadence) => round2(amount * CADENCES[cadence].perMonth);
 export const DEFAULT_NOT_BILL_CATEGORIES = ['grocer', 'dining', 'restaurant', 'food', 'gas', 'fuel', 'transport', 'shopping', 'retail', 'travel', 'lodging', 'entertainment'];

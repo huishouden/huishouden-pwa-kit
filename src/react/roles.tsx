@@ -5,7 +5,8 @@
  */
 import { useMemo } from 'react';
 import type { Household } from '../household';
-import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES, can, householdRole, isRestricted, refusal, type Role, type RoleAction } from '../roles';
+import { ROLES, can, householdRole, isRestricted, refusal, roleDescription, roleLabel, type Role, type RoleAction } from '../roles';
+import { useI18nVersion, useKitT } from './i18n';
 import { Checkbox, selectClass } from './ui';
 
 export interface RoleState {
@@ -29,16 +30,18 @@ export function useRole(household: Pick<Household, 'members' | 'roles'> | null |
 
 /** "Only admins and members can change settings." where a control is left out for this role. */
 export function RoleNote({ action, className = '' }: { action: RoleAction; className?: string }) {
+  useI18nVersion();
   return <p className={`text-sm text-muted ${className}`}>{refusal(action)}</p>;
 }
 
 /** A member's role, for admins: a select with the four roles. */
 export function RoleSelect({ value, onChange, label, disabled }: { value: Role; onChange: (role: Role) => void; label: string; disabled?: boolean }) {
+  useI18nVersion();
   return (
     <select className={`${selectClass.replace('w-full', 'w-auto')} shrink-0`} aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value as Role)}>
       {ROLES.map((r) => (
         <option key={r} value={r}>
-          {ROLE_LABELS[r]}
+          {roleLabel(r)}
         </option>
       ))}
     </select>
@@ -47,12 +50,13 @@ export function RoleSelect({ value, onChange, label, disabled }: { value: Role; 
 
 /** Each role in one line, under the household's member list. */
 export function RoleList() {
+  useI18nVersion();
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-muted">
       {ROLES.map((r) => (
         <div key={r} className="contents">
-          <dt className="font-semibold text-ink">{ROLE_LABELS[r]}</dt>
-          <dd>{ROLE_DESCRIPTIONS[r]}</dd>
+          <dt className="font-semibold text-ink">{roleLabel(r)}</dt>
+          <dd>{roleDescription(r)}</dd>
         </div>
       ))}
     </dl>
@@ -70,24 +74,25 @@ export interface GiversValue {
  * email into what the household calls them.
  */
 export function GiversField({ value, onChange, helpers, name = (e) => e }: { value: GiversValue; onChange: (v: GiversValue) => void; helpers: string[]; name?: (email: string) => string }) {
+  const kt = useKitT();
   const toggle = (email: string, on: boolean) =>
     onChange({ ...value, approvedHelpers: on ? [...new Set([...value.approvedHelpers, email])] : value.approvedHelpers.filter((e) => e !== email) });
   return (
     <fieldset>
-      <legend className="mb-1.5 block text-sm font-medium text-ink-soft">Who can give it</legend>
+      <legend className="mb-1.5 block text-sm font-medium text-ink-soft">{kt('roles.whoCanGive')}</legend>
       <div className="flex flex-col">
         <label className="flex min-h-11 cursor-pointer items-center gap-3 px-1 text-base text-ink">
           <input type="radio" name="givers" className="h-5 w-5 accent-primary" checked={value.givers === 'all'} onChange={() => onChange({ ...value, givers: 'all' })} />
-          All helpers
+          {kt('roles.allHelpers')}
         </label>
         <label className="flex min-h-11 cursor-pointer items-center gap-3 px-1 text-base text-ink">
           <input type="radio" name="givers" className="h-5 w-5 accent-primary" checked={value.givers === 'approved'} onChange={() => onChange({ ...value, givers: 'approved' })} />
-          Only approved helpers
+          {kt('roles.onlyApproved')}
         </label>
         {value.givers === 'approved' && (
           <div className="ml-8">
             {helpers.length === 0 ? (
-              <p className="text-sm text-muted">No helpers yet. An admin can make someone a helper in the household settings.</p>
+              <p className="text-sm text-muted">{kt('roles.noHelpers')}</p>
             ) : (
               helpers.map((h) => (
                 <Checkbox key={h} checked={value.approvedHelpers.includes(h)} onChange={(on) => toggle(h, on)}>
@@ -98,7 +103,7 @@ export function GiversField({ value, onChange, helpers, name = (e) => e }: { val
           </div>
         )}
       </div>
-      <p className="mt-1 text-sm text-muted">Admins and members can always give it; kids can’t.</p>
+      <p className="mt-1 text-sm text-muted">{kt('roles.alwaysGive')}</p>
     </fieldset>
   );
 }

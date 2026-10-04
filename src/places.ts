@@ -7,6 +7,7 @@
  * Nominatim's usage policy: at most one search a second, run on an explicit action (a button),
  * never on every keystroke.
  */
+import { formatNumber, getLocale, kt } from './i18n.js';
 
 export interface Place {
   name: string;
@@ -233,7 +234,7 @@ async function searchNominatim(q: string, limit: number, fetchImpl: typeof fetch
 export class PlaceSearchUnavailable extends Error {
   /** `cause` is the underlying error, or an `AggregateError` of both when Overpass and Nominatim failed. */
   constructor(cause: unknown) {
-    super('The free map service is busy or unreachable', { cause });
+    super(kt('places.unavailable'), { cause });
     this.name = 'PlaceSearchUnavailable';
   }
 }
@@ -285,17 +286,20 @@ function region(locale: string): string | undefined {
   }
 }
 
-export function usesMiles(locale: string = navigator.language): boolean {
+export function usesMiles(locale: string = getLocale()): boolean {
   return MILES_REGIONS.has(region(locale) ?? '');
 }
 
-/** "0.5 mi", "12 mi" where miles are used; "650 m", "3.1 km" elsewhere. */
-export function formatDistance(km: number, locale: string = navigator.language): string {
+/** "0.5 mi", "12 mi" where miles are used; "650 m", "3.1 km" ("3,1 km") elsewhere. */
+export function formatDistance(km: number, locale: string = getLocale()): string {
+  const unit = (n: number, u: 'mile' | 'kilometer' | 'meter', digits: number) =>
+    formatNumber(n, locale, { style: 'unit', unit: u, unitDisplay: 'short', minimumFractionDigits: digits, maximumFractionDigits: digits }).replace(/[\u202f\u00a0]/g, ' ');
   if (usesMiles(locale)) {
     const mi = km / 1.609344;
-    return `${mi < 10 ? mi.toFixed(1) : Math.round(mi)} mi`;
+    return mi < 10 ? unit(mi, 'mile', 1) : unit(Math.round(mi), 'mile', 0);
   }
-  return km < 1 ? `${Math.round(km * 100) * 10} m` : `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
+  if (km < 1) return unit(Math.round(km * 100) * 10, 'meter', 0);
+  return km < 10 ? unit(km, 'kilometer', 1) : unit(Math.round(km), 'kilometer', 0);
 }
 
 /** `tel:` link for a phone number as people write it. */

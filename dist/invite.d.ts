@@ -3,7 +3,7 @@ import type { Auth } from 'firebase/auth';
  * Tells someone they were invited to the household, the way sharing a Google Sheet does: an email
  * from the inviter's own Gmail. Sending needs Gmail's send permission, which Google asks for once
  * in a popup; the app only ever sends these invitations. `inviteMailto` is the fallback that opens
- * a prefilled draft in the person's own mail app instead.
+ * a prefilled draft in the person's own mail app instead. Written in the inviter's language.
  */
 export declare const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 export interface Invitation {

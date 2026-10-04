@@ -1,5 +1,6 @@
 import { collection, doc, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { addDoc, deleteDoc, deleteField, setDoc, updateDoc, writeBatch } from './firestore.js';
+import { kt } from './i18n.js';
 
 /**
  * The household's contacts: the people and businesses it deals with (a pediatrician, the vet, the
@@ -210,19 +211,20 @@ export interface ContactGroup {
 
 /**
  * Contacts grouped by role: the app's known `roles` first in their order (matched ignoring case),
- * then typed roles A–Z, then contacts without a role as "Other". Names A–Z within each group.
+ * then typed roles A–Z, then contacts without a role as "Other" (in the active language). Names A–Z within each group.
  */
 export function groupContacts(contacts: Contact[], roles: readonly string[]): ContactGroup[] {
+  const other = kt('contacts.other');
   const groups = new Map<string, Contact[]>();
   for (const c of [...contacts].sort((a, b) => a.name.localeCompare(b.name))) {
     const typed = c.role?.trim();
-    const role = (typed && (roles.find((r) => r.toLowerCase() === typed.toLowerCase()) ?? typed)) || 'Other';
+    const role = (typed && (roles.find((r) => r.toLowerCase() === typed.toLowerCase()) ?? typed)) || other;
     groups.set(role, [...(groups.get(role) ?? []), c]);
   }
   const rank = (role: string) => {
     const i = roles.indexOf(role);
     if (i >= 0) return i;
-    return role === 'Other' ? roles.length + 2 : roles.length + 1;
+    return role === other ? roles.length + 2 : roles.length + 1;
   };
   return [...groups.entries()]
     .map(([role, list]) => ({ role, contacts: list }))

@@ -61,7 +61,7 @@ export interface ParsedCourse {
 }
 /** "1 1/2", "1/2", "0.5", "one-half", "two" → number. */
 export declare function parseNumber(text: string): number | undefined;
-/** "0.5 ml", "1 tablet", "2 drops", "1.5 tablets". */
+/** "0.5 ml", "1 tablet", "2 drops", "1.5 tablets" ("2 tabletas", "2 tabletten"), in the active language. `unit` is the parser's singular English unit. */
 export declare function formatDose(amount: number, unit: string): string;
 /**
  * A dose schedule from a label's text or typed directions: "Give 1 tablet by mouth every 12 hours

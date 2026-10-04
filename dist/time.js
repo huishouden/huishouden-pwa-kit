@@ -8,6 +8,7 @@
  *   (no DST or time-zone drift) and month arithmetic clamps to the month's last day.
  * `addDays`, `addMonths` and `daysBetween` take either and give back the same kind.
  */
+import { capitalize, formatNumber, getLocale, kt, numberFormat } from './i18n.js';
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
 export const DAY = 24 * HOUR;
@@ -88,92 +89,118 @@ export function daysBetween(from, to) {
 export const daysUntil = (due, now) => daysBetween(now, due);
 /** 0 = Sunday. */
 export const weekday = (s) => new Date(dayNumber(s) * DAY).getUTCDay();
+/** English month names. Kit text uses `monthName` (the active locale); kept for callers that parse English. */
 export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+/** English weekday names, 0 = Sunday. Kit text uses `weekdayName`. */
 export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-/** "1st", "2nd", "23rd", "31st". */
-export function ordinal(n) {
-    const tens = n % 100;
-    if (tens >= 11 && tens <= 13)
-        return `${n}th`;
-    return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`;
+const dateFormats = new Map();
+/** A cached `Intl.DateTimeFormat` in the active locale (or `locale`). */
+export function dateFormat(options, locale = getLocale()) {
+    // The zone's January and July offsets in the key: a formatter keeps the zone it was made in.
+    const key = `${locale}|${new Date(0).getTimezoneOffset()}|${new Date(15_638_400_000).getTimezoneOffset()}|${JSON.stringify(options)}`;
+    let f = dateFormats.get(key);
+    if (!f)
+        dateFormats.set(key, (f = new Intl.DateTimeFormat(locale, options)));
+    return f;
 }
-const plural = (n, unit) => `${n} ${unit}${n === 1 ? '' : 's'}`;
+// ICU puts a narrow no-break space before AM/PM; plain spaces keep text searchable and tests simple.
+const tidy = (s) => s.replace(/[\u202f\u00a0]/g, ' ');
+/** A day's local noon, so no time zone moves it to the next or previous day. */
+const noonOf = (s) => {
+    const p = ymdParts(s);
+    return new Date(p.y, p.m - 1, p.d, 12);
+};
+/** Month 1-12 in the active locale: "November", "noviembre", "november"; `short`: "Nov", "nov", "nov". */
+export function monthName(m, { short = false, locale = getLocale() } = {}) {
+    return dateFormat({ month: short ? 'short' : 'long' }, locale).format(new Date(2000, m - 1, 15));
+}
+/** Weekday 0-6 (0 = Sunday) in the active locale: "Friday", "viernes", "vrijdag"; `short`: "Fri". */
+export function weekdayName(day, { short = false, locale = getLocale() } = {}) {
+    // 2000-01-02 was a Sunday.
+    return dateFormat({ weekday: short ? 'short' : 'long' }, locale).format(new Date(2000, 0, 2 + day, 12));
+}
+/** "1st", "2nd", "23rd" (English); "1.º" (Spanish); "1e" (Dutch): a day of the month as a rank. */
+export function ordinal(n) {
+    return kt('time.ordinal', { n });
+}
+const unit = (n, u) => tidy(numberFormat({ style: 'unit', unit: u, unitDisplay: 'long' }, getLocale()).format(n));
 // ---- Durations: how long, from a number of milliseconds ----
-/** "35m", "1h", "2h 10m", "1d 3h". Rounds down to the minute; under a minute is "0m". */
+/** "35m", "1h", "2h 10m", "1d 3h" (Spanish "2 h 10 min", Dutch "2 u 10 min"). Rounds down to the minute; under a minute is "0m". */
 export function formatDuration(ms) {
     const totalMin = Math.max(0, Math.floor(ms / MINUTE));
     const d = Math.floor(totalMin / (24 * 60));
     const h = Math.floor((totalMin % (24 * 60)) / 60);
     const m = totalMin % 60;
     if (d > 0)
-        return h ? `${d}d ${h}h` : `${d}d`;
+        return h ? kt('time.durationDH', { d, h }) : kt('time.durationD', { d });
     if (h > 0)
-        return m ? `${h}h ${m}m` : `${h}h`;
-    return `${m}m`;
+        return m ? kt('time.durationHM', { h, m }) : kt('time.durationH', { h });
+    return kt('time.durationM', { m });
 }
 /** "just now" under a minute, otherwise "2h 10m ago". */
 export function formatAgo(at, now) {
     const ms = now - at;
     if (ms < MINUTE)
-        return 'just now';
-    return `${formatDuration(ms)} ago`;
+        return kt('time.justNow');
+    return kt('time.ago', { span: formatDuration(ms) });
 }
-/** Hours with one decimal, for totals: "9.5 h". */
+/** Hours with one decimal, for totals: "9.5 h" ("9,5 h"). */
 export function formatHours(ms) {
     const h = Math.round((ms / HOUR) * 10) / 10;
-    return `${h % 1 === 0 ? h.toFixed(0) : h.toFixed(1)} h`;
+    return kt('time.hoursTotal', { h: formatNumber(h, getLocale(), { maximumFractionDigits: 1 }) });
 }
 /** "just now", "5 minutes ago", "2 hours ago", "3 days ago": the long form, to the nearest unit. */
 export function agoWords(at, now) {
     const ms = Math.max(0, now - at);
     if (ms < MINUTE)
-        return 'just now';
+        return kt('time.justNow');
     if (ms < HOUR)
-        return `${plural(Math.round(ms / MINUTE), 'minute')} ago`;
+        return kt('time.ago', { span: unit(Math.round(ms / MINUTE), 'minute') });
     if (ms < DAY)
-        return `${plural(Math.round(ms / HOUR), 'hour')} ago`;
-    return `${plural(Math.round(ms / DAY), 'day')} ago`;
+        return kt('time.ago', { span: unit(Math.round(ms / HOUR), 'hour') });
+    return kt('time.ago', { span: unit(Math.round(ms / DAY), 'day') });
 }
 /**
- * "5 days", "3 weeks", "4 months", "2 years". The sign is ignored: callers say "in" or "ago".
- * Days under two weeks, weeks under two months, months under two years, then whole years.
+ * "5 days", "3 weeks", "4 months", "2 years" in the active locale ("3 semanas", "3 weken"). The
+ * sign is ignored: callers say "in" or "ago". Days under two weeks, weeks under two months, months
+ * under two years, then whole years.
  */
 export function formatSpan(days, { daysUpTo = 13, months = 'down' } = {}) {
     const n = Math.abs(Math.trunc(days));
     if (n <= daysUpTo)
-        return plural(n, 'day');
+        return unit(n, 'day');
     if (n < (months === 'down' ? 61 : 60))
-        return plural(Math.floor(n / 7), 'week');
+        return unit(Math.floor(n / 7), 'week');
     if (n < 730)
-        return plural(months === 'down' ? Math.floor(n / 30.44) : Math.max(2, Math.round(n / 30.44)), 'month');
-    return plural(Math.floor(n / 365.25), 'year');
+        return unit(months === 'down' ? Math.floor(n / 30.44) : Math.max(2, Math.round(n / 30.44)), 'month');
+    return unit(Math.floor(n / 365.25), 'year');
 }
 /** "today", "tomorrow", "in 12 days", "in 3 weeks". */
 export function inDays(days, options) {
     if (days === 0)
-        return 'today';
+        return kt('time.today');
     if (days === 1)
-        return 'tomorrow';
-    return `in ${formatSpan(days, options)}`;
+        return kt('time.tomorrow');
+    return kt('time.inSpan', { span: formatSpan(days, options) });
 }
 /** "today", "yesterday", "4 days ago", "2 months ago". */
 export function daysAgo(days, options) {
     if (days === 0)
-        return 'today';
+        return kt('time.today');
     if (days === 1)
-        return 'yesterday';
-    return `${formatSpan(days, options)} ago`;
+        return kt('time.yesterday');
+    return kt('time.ago', { span: formatSpan(days, options) });
 }
 /** "Today", "Tomorrow", "In 5 days", "Yesterday", "12 days ago", by calendar day. */
 export function relativeDay(t, now) {
     const d = daysBetween(now, t);
     if (d === 0)
-        return 'Today';
+        return capitalize(kt('time.today'));
     if (d === 1)
-        return 'Tomorrow';
+        return capitalize(kt('time.tomorrow'));
     if (d === -1)
-        return 'Yesterday';
-    return d > 0 ? `In ${d} days` : `${-d} days ago`;
+        return capitalize(kt('time.yesterday'));
+    return capitalize(d > 0 ? kt('time.inSpan', { span: unit(d, 'day') }) : kt('time.ago', { span: unit(-d, 'day') }));
 }
 /** Within this many days something counts as "due soon" unless the caller says otherwise. */
 export const SOON_DAYS = 14;
@@ -190,12 +217,12 @@ export function dueState(due, today, soonDays = SOON_DAYS) {
 export function dueText(due, today, options) {
     const days = daysBetween(today, due);
     if (days < 0)
-        return `Overdue by ${formatSpan(days, options)}`;
+        return kt('time.overdueBy', { span: formatSpan(days, options) });
     if (days === 0)
-        return 'Due today';
+        return kt('time.dueToday');
     if (days === 1)
-        return 'Due tomorrow';
-    return `Due in ${formatSpan(days, options)}`;
+        return kt('time.dueTomorrow');
+    return kt('time.dueIn', { span: formatSpan(days, options) });
 }
 /** A title used mid-sentence: "Gutter cleaning" becomes "gutter cleaning"; "HVAC filter" and names that start "McX" stay. */
 export function midSentence(title) {
@@ -209,53 +236,64 @@ export function dueHeadline(title, due, today, options) {
     const days = daysBetween(today, due);
     const t = title.trim();
     if (days < 0)
-        return `Overdue: ${midSentence(t)}`;
+        return kt('time.headlineOverdue', { title: midSentence(t) });
     if (days === 0)
-        return `${t} due today`;
+        return kt('time.headlineToday', { title: t });
     if (days === 1)
-        return `${t} due tomorrow`;
-    return `${t} due in ${formatSpan(days, options)}`;
+        return kt('time.headlineTomorrow', { title: t });
+    return kt('time.headlineIn', { title: t, span: formatSpan(days, options) });
 }
-// ---- Dates as words. English, as every Huishouden screen is ----
-const WEEKDAY = new Intl.DateTimeFormat('en-US', { weekday: 'long' });
-/** "Nov 4", with the year when it isn't today's year (or `today` isn't given): "Dec 2, 2030". */
+// ---- Dates as words, in the active locale ----
+/** "Nov 4" ("4 nov"), with the year when it isn't today's year (or `today` isn't given): "Dec 2, 2030". */
 export function shortDate(s, today) {
     const p = ymdParts(s);
-    const base = `${MONTHS[p.m - 1].slice(0, 3)} ${p.d}`;
-    return today && ymdParts(today)?.y === p.y ? base : `${base}, ${p.y}`;
+    const sameYear = !!today && ymdParts(today)?.y === p.y;
+    return tidy(dateFormat(sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }).format(noonOf(s)));
 }
-/** "Tuesday, November 4", with the year when it isn't today's year: "Sunday, February 1, 2032". */
+/** "Tuesday, November 4" ("martes, 4 de noviembre"), with the year when it isn't today's year: "Sunday, February 1, 2032". */
 export function longDate(s, today) {
     const p = ymdParts(s);
-    const base = `${WEEKDAYS[weekday(s)]}, ${MONTHS[p.m - 1]} ${p.d}`;
-    return today && ymdParts(today)?.y === p.y ? base : `${base}, ${p.y}`;
+    const sameYear = !!today && ymdParts(today)?.y === p.y;
+    const options = { weekday: 'long', month: 'long', day: 'numeric' };
+    return tidy(dateFormat(sameYear ? options : { ...options, year: 'numeric' }).format(noonOf(s)));
 }
-/** "November 2033". */
+/** "November 2033" ("noviembre de 2033"). */
 export function monthYear(s) {
-    const p = ymdParts(s);
-    return `${MONTHS[p.m - 1]} ${p.y}`;
+    return tidy(dateFormat({ month: 'long', year: 'numeric' }).format(noonOf(s)));
 }
-/** A due day as a list shows it: "Today", "Tomorrow", "Yesterday", "Friday" (this week), "May 30", "Jan 4, 2032". */
-export function dueWords(due, today) {
+/**
+ * A due day as a list shows it: "Today", "Tomorrow", "Yesterday", "Friday" (this week), "May 30",
+ * "Jan 4, 2032". `inline` for mid-sentence: "today", "tomorrow", and weekdays as the language writes
+ * them ("Friday", "viernes", "vrijdag").
+ */
+export function dueWords(due, today, { inline = false } = {}) {
     const n = daysBetween(today, due);
+    const cap = inline ? (s) => s : capitalize;
     if (n === 0)
-        return 'Today';
+        return cap(kt('time.today'));
     if (n === 1)
-        return 'Tomorrow';
+        return cap(kt('time.tomorrow'));
     if (n === -1)
-        return 'Yesterday';
+        return cap(kt('time.yesterday'));
     if (n > 1 && n < 7)
-        return WEEKDAY.format(ymdToTime(due));
+        return cap(weekdayName(weekday(due)));
     return shortDate(due, today);
 }
-// ---- Moments in the device's locale, and form inputs ----
-export const formatTime = (t) => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-export const formatDayLong = (t) => new Date(t).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
-export const formatDateLong = (t) => new Date(t).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-export const formatDayShort = (t) => new Date(t).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
-export const monthShort = (t) => new Date(t).toLocaleDateString(undefined, { month: 'short' });
-/** A calendar day in the device's locale: "22 Apr 2031" or "Apr 22, 2031". */
-export const formatYmd = (s, options = { day: 'numeric', month: 'short', year: 'numeric' }) => new Date(ymdToTime(s)).toLocaleDateString(undefined, options);
+// ---- Moments in the active locale, and form inputs ----
+/** "7:30 PM" ("7:30 p.m.", "19:30"): 12 or 24 hours as the locale says. */
+export const formatTime = (t, locale = getLocale()) => tidy(dateFormat({ hour: 'numeric', minute: '2-digit' }, locale).format(t));
+/** "Tuesday, November 4". */
+export const formatDayLong = (t, locale = getLocale()) => tidy(dateFormat({ weekday: 'long', day: 'numeric', month: 'long' }, locale).format(t));
+/** "Tuesday, November 4, 2031". */
+export const formatDateLong = (t, locale = getLocale()) => tidy(dateFormat({ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }, locale).format(t));
+/** "Tue, Nov 4" ("mar, 4 nov", "di 4 nov"). */
+export const formatDayShort = (t, locale = getLocale()) => tidy(dateFormat({ weekday: 'short', day: 'numeric', month: 'short' }, locale).format(t));
+/** "Nov". */
+export const monthShort = (t, locale = getLocale()) => tidy(dateFormat({ month: 'short' }, locale).format(t));
+/** "Tue" ("mar", "di"). */
+export const weekdayShort = (t, locale = getLocale()) => tidy(dateFormat({ weekday: 'short' }, locale).format(t));
+/** A calendar day in the active locale: "Apr 22, 2031", "22 abr 2031", "22 apr 2031". */
+export const formatYmd = (s, options = { day: 'numeric', month: 'short', year: 'numeric' }, locale = getLocale()) => tidy(dateFormat(options, locale).format(noonOf(s)));
 /** Value for <input type="datetime-local">, in local time. */
 export function toLocalInput(t) {
     const d = new Date(t);
@@ -297,11 +335,26 @@ export function toHhmm(t) {
     const d = new Date(t);
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-/** "7 PM", "7:30 AM", "12 PM" (noon), "12 AM" (midnight): how a time is said on a household screen. */
-export function clockWords(time) {
+/** "at 7 PM", "a las 7 p.m." / "a la 1 p.m.", "om 19:00": a time of day after a verb. */
+export function atClock(time) {
+    const words = clockWords(time);
+    return kt(/^1(?!\d)/.test(words) ? 'time.atClockOne' : 'time.atClock', { time: words });
+}
+/** "by 7 PM", "antes de las 7 p.m." / "antes de la 1 p.m.", "vóór 19:00": a deadline. */
+export function byClock(time) {
+    const words = clockWords(time);
+    return kt(/^1(?!\d)/.test(words) ? 'time.byClockOne' : 'time.byClock', { time: words });
+}
+/**
+ * "7 PM", "7:30 AM", "12 PM" (noon), "12 AM" (midnight) in English; "7 p.m." in Latin-American
+ * Spanish; "19:00" where the locale counts 24 hours (Dutch): how a time is said on a household screen.
+ */
+export function clockWords(time, locale = getLocale()) {
     const min = hhmmMinutes(time);
     const h = Math.floor(min / 60);
     const m = min % 60;
-    const h12 = h % 12 === 0 ? 12 : h % 12;
-    return `${h12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'AM' : 'PM'}`;
+    const at = new Date(2000, 0, 1, h, m);
+    const twelve = dateFormat({ hour: 'numeric' }, locale).resolvedOptions().hourCycle?.startsWith('h1') ?? false;
+    // On a 24-hour clock "19" alone isn't a time; "19:00" is.
+    return tidy(dateFormat(twelve && !m ? { hour: 'numeric' } : { hour: 'numeric', minute: '2-digit' }, locale).format(at));
 }

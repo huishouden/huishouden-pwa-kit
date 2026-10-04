@@ -444,3 +444,82 @@ export async function runPortalTodo(page, title, { action = 'done', path = '/tod
         await page.getByRole('dialog').locator('[data-todo-confirm]').click();
     await expect(row, `"${title}" leaves the To-do list`).toHaveCount(0, { timeout: 15_000 });
 }
+/** English words of the kit's chrome that should never show once a page is in another language. */
+export const ENGLISH_CHROME = [
+    'Sign in',
+    'Sign out',
+    'Sample data',
+    'Nothing is saved',
+    'Overdue',
+    'Due today',
+    'Due tomorrow',
+    'Due in',
+    'Tomorrow',
+    'Yesterday',
+    'Today',
+    'Undo',
+    'Cancel',
+    'Save',
+    'Delete',
+    'Try again',
+    'More',
+    'Theme',
+    'Language',
+    'Privacy',
+    'All apps',
+    'Close',
+];
+/** Makes every page in `page`'s context open in `lang` (the suite's stored choice), from the next load on. */
+export async function useLanguage(target, lang) {
+    await target.addInitScript((value) => {
+        try {
+            localStorage.setItem('hh-lang', value);
+        }
+        catch {
+            // storage blocked: the page stays in the device's language
+        }
+    }, lang);
+}
+/**
+ * Opens `path` in `lang` and checks it took: `<html lang>`, and none of the kit's English chrome
+ * words (plus `words`) in the visible page, app bar included. Data stays as entered, so mark an
+ * element whose text is household data with `translate="no"` (or `data-hh-data`) to leave it out,
+ * or name its words in `allow`. Returns the visible text it read.
+ */
+export async function expectLocalized(page, lang, { path = './', words = [], allow = [] } = {}) {
+    await useLanguage(page, lang);
+    await page.goto(path, { waitUntil: 'networkidle' });
+    await expect(page.locator('html'), '<html lang>').toHaveAttribute('lang', lang);
+    const text = await page.evaluate(() => {
+        const skip = (el) => !!el?.closest('[translate="no"], [data-hh-data], [data-sample-data]');
+        const parts = [];
+        const visit = (root) => {
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    const el = node;
+                    if (el.shadowRoot)
+                        visit(el.shadowRoot);
+                    const label = el.getAttribute('aria-label');
+                    if (label && !skip(el) && el.offsetParent !== null)
+                        parts.push(label);
+                    continue;
+                }
+                const parent = node.parentElement;
+                if (!parent || skip(parent) || parent.closest('script, style, [hidden]'))
+                    continue;
+                if (parent.offsetParent === null && getComputedStyle(parent).position !== 'fixed')
+                    continue;
+                const value = node.textContent?.trim();
+                if (value)
+                    parts.push(value);
+            }
+        };
+        visit(document.body);
+        return parts.join('\n');
+    });
+    const english = [...ENGLISH_CHROME, ...words].filter((w) => !allow.includes(w));
+    const found = english.filter((w) => new RegExp(`(^|[^\\p{L}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(text));
+    expect(found, `English left on the ${lang} page`).toEqual([]);
+    return text;
+}

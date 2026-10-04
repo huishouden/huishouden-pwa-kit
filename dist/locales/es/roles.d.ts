@@ -1,0 +1,25 @@
+declare const _default: {
+    'roles.admin': string;
+    'roles.member': string;
+    'roles.helper': string;
+    'roles.kid': string;
+    'roles.adminDescription': string;
+    'roles.memberDescription': string;
+    'roles.helperDescription': string;
+    'roles.kidDescription': string;
+    'roles.refuseManagePeople': string;
+    'roles.refuseChangeSettings': string;
+    'roles.refuseSeeMoney': string;
+    'roles.refuseSeePrivate': string;
+    'roles.refuseEditOthers': string;
+    'roles.refuseGiveMedicine': string;
+    'roles.refuseAdd': string;
+    'roles.refuseTick': string;
+    'roles.notInHousehold': string;
+    'roles.whoCanGive': string;
+    'roles.allHelpers': string;
+    'roles.onlyApproved': string;
+    'roles.noHelpers': string;
+    'roles.alwaysGive': string;
+};
+export default _default;

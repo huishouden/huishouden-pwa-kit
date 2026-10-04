@@ -1,0 +1,54 @@
+import agenda from './es/agenda.js';
+import appBar from './es/appBar.js';
+import calendar from './es/calendar.js';
+import chart from './es/chart.js';
+import common from './es/common.js';
+import contacts from './es/contacts.js';
+import dose from './es/dose.js';
+import feedback from './es/feedback.js';
+import food from './es/food.js';
+import gmail from './es/gmail.js';
+import googleTasks from './es/googleTasks.js';
+import googleToken from './es/googleToken.js';
+import hours from './es/hours.js';
+import household from './es/household.js';
+import invite from './es/invite.js';
+import people from './es/people.js';
+import photo from './es/photo.js';
+import places from './es/places.js';
+import push from './es/push.js';
+import reminders from './es/reminders.js';
+import roles from './es/roles.js';
+import schedule from './es/schedule.js';
+import suggestions from './es/suggestions.js';
+import time from './es/time.js';
+import todos from './es/todos.js';
+import ui from './es/ui.js';
+export default {
+    ...agenda,
+    ...appBar,
+    ...calendar,
+    ...chart,
+    ...common,
+    ...contacts,
+    ...dose,
+    ...feedback,
+    ...food,
+    ...gmail,
+    ...googleTasks,
+    ...googleToken,
+    ...hours,
+    ...household,
+    ...invite,
+    ...people,
+    ...photo,
+    ...places,
+    ...push,
+    ...reminders,
+    ...roles,
+    ...schedule,
+    ...suggestions,
+    ...time,
+    ...todos,
+    ...ui,
+};

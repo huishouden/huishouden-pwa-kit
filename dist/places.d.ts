@@ -1,12 +1,3 @@
-/**
- * Looks up a business or place (a pediatrician's office, a vet, a lawn service) to fill in its
- * address, phone and website. Uses OpenStreetMap's free Nominatim search: no key and no billing,
- * which Google's Places API would need. Coverage is good for addresses and patchy for phone and
- * website, so apps also offer `mapsSearchUrl` to check Google Maps.
- *
- * Nominatim's usage policy: at most one search a second, run on an explicit action (a button),
- * never on every keystroke.
- */
 export interface Place {
     name: string;
     /**
@@ -83,7 +74,7 @@ export declare class PlaceSearchUnavailable extends Error {
  */
 export declare function searchPlaces(query: string, { limit, near, radiusKm, fetch: fetchImpl }?: SearchPlacesOptions): Promise<Place[]>;
 export declare function usesMiles(locale?: string): boolean;
-/** "0.5 mi", "12 mi" where miles are used; "650 m", "3.1 km" elsewhere. */
+/** "0.5 mi", "12 mi" where miles are used; "650 m", "3.1 km" ("3,1 km") elsewhere. */
 export declare function formatDistance(km: number, locale?: string): string;
 /** `tel:` link for a phone number as people write it. */
 export declare function telHref(phone: string): string;

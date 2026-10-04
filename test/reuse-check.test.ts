@@ -8,17 +8,15 @@ const kit = kitUnits([{ path: 'src/time.ts', source: kitTime }, { path: 'src/pla
   './places': { types: './dist/places.d.ts', default: './dist/places.js' },
 });
 
-const pasted = `import { MINUTE } from './constants';
+const pasted = `import { daysInMonth, YMD } from './dates';
 
 /** Our own copy. */
-export function formatDuration(ms: number): string {
-  const totalMin = Math.max(0, Math.floor(ms / MINUTE));
-  const d = Math.floor(totalMin / (24 * 60));
-  const h = Math.floor((totalMin % (24 * 60)) / 60);
-  const m = totalMin % 60;
-  if (d > 0) return h ? \`\${d}d \${h}h\` : \`\${d}d\`;
-  if (h > 0) return m ? \`\${h}h \${m}m\` : \`\${h}h\`;
-  return \`\${m}m\`;
+export function ymdParts(s: string | undefined | null): { y: number; m: number; d: number } | null {
+  const match = typeof s === 'string' ? YMD.exec(s) : null;
+  if (!match) return null;
+  const [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  if (m < 1 || m > 12 || d < 1 || d > daysInMonth(y, m)) return null;
+  return { y, m, d };
 }
 
 export function petAge(born: number, now: number): string {
@@ -32,12 +30,12 @@ describe('reuse check', () => {
   test('finds a pasted kit function by name and line, and not app code', () => {
     const found = findReuse(pasted, kit);
     expect(found).toHaveLength(1);
-    expect(found[0]).toMatchObject({ line: 4, name: 'formatDuration', kit: { name: 'formatDuration', module: '@huishouden/pwa-kit/time' } });
+    expect(found[0]).toMatchObject({ line: 4, name: 'ymdParts', kit: { name: 'ymdParts', module: '@huishouden/pwa-kit/time' } });
     expect(found[0].similarity).toBeGreaterThan(0.9);
   });
 
   test('a renamed copy is still found; reuse-check:allow keeps one on purpose', () => {
-    expect(findReuse(pasted.replaceAll('totalMin', 'minutes'), kit).map((r) => r.name)).toEqual(['formatDuration']);
+    expect(findReuse(pasted.replaceAll('match', 'found'), kit).map((r) => r.name)).toEqual(['ymdParts']);
     expect(findReuse(pasted.replace('/** Our own copy. */', '// reuse-check:allow the portal rounds up'), kit)).toEqual([]);
   });
 

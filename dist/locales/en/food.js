@@ -1,0 +1,18 @@
+export default {
+    'food.diet.vegan': 'Vegan',
+    'food.diet.vegetarian': 'Vegetarian',
+    'food.diet.pescatarian': 'Pescatarian',
+    'food.diet.glutenFree': 'Gluten-free',
+    'food.diet.dairyFree': 'Dairy-free',
+    'food.diet.nutAllergy': 'Nut allergy',
+    'food.diet.shellfishAllergy': 'Shellfish allergy',
+    'food.diet.gerd': 'GERD (reflux)',
+    'food.diet.pregnant': 'Pregnant',
+    'food.diet.lowSodium': 'Low sodium',
+    'food.diet.halal': 'Halal',
+    'food.diet.kosher': 'Kosher',
+    'food.spice.none': 'No heat',
+    'food.spice.mild': 'A little',
+    'food.spice.medium': 'Medium',
+    'food.spice.hot': 'Loves heat',
+};

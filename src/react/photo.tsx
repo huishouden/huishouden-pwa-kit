@@ -6,6 +6,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Camera } from 'lucide-react';
 import { PhotoError, pickPhoto, squarePhoto, type SquarePhoto, type SquarePhotoOptions } from '../photo';
+import { useKitT } from './i18n';
 import { ghostButton, primaryButton, secondaryButton } from './ui';
 
 export function PhotoPicker({ photo, fallback, label, size = 96, options, onSave, onRemove, pick = pickPhoto }: {
@@ -23,6 +24,7 @@ export function PhotoPicker({ photo, fallback, label, size = 96, options, onSave
   /** How a file is chosen; tests pass their own. */
   pick?: () => Promise<Blob | null>;
 }) {
+  const kt = useKitT();
   const [draft, setDraft] = useState<{ file: Blob; result: SquarePhoto; position: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +38,7 @@ export function PhotoPicker({ photo, fallback, label, size = 96, options, onSave
       const result = await squarePhoto(file, { ...options, position });
       if (id === run.current) setDraft({ file, result, position });
     } catch (e) {
-      if (id === run.current) setError(e instanceof PhotoError ? e.message : "Couldn't read that photo. Try another one.");
+      if (id === run.current) setError(e instanceof PhotoError ? e.message : kt('photo.unreadable'));
     } finally {
       if (id === run.current) setBusy(false);
     }
@@ -56,7 +58,7 @@ export function PhotoPicker({ photo, fallback, label, size = 96, options, onSave
         type="button"
         onClick={() => void choose()}
         disabled={busy}
-        aria-label={photo ? `Change ${label}` : `Add ${label}`}
+        aria-label={photo ? kt('photo.change', { label }) : kt('photo.add', { label })}
         className="relative shrink-0 rounded-full focus-visible:ring-2 focus-visible:ring-forest-500 disabled:opacity-60"
         style={{ width: size, height: size }}
       >
@@ -70,7 +72,7 @@ export function PhotoPicker({ photo, fallback, label, size = 96, options, onSave
           <>
             {slides && (
               <label className="block text-sm font-medium text-ink-soft">
-                Position
+                {kt('photo.position')}
                 <input
                   type="range"
                   min={-1}
@@ -92,21 +94,21 @@ export function PhotoPicker({ photo, fallback, label, size = 96, options, onSave
                   setDraft(null);
                 }}
               >
-                Use photo
+                {kt('photo.use')}
               </button>
               <button type="button" className={ghostButton} onClick={() => setDraft(null)}>
-                Cancel
+                {kt('common.cancel')}
               </button>
             </div>
           </>
         ) : (
           <div className="flex flex-wrap gap-2">
             <button type="button" className={secondaryButton} disabled={busy} onClick={() => void choose()}>
-              {busy ? 'Making it small' : photo ? 'Change photo' : 'Choose photo'}
+              {busy ? kt('photo.making') : photo ? kt('photo.changePhoto') : kt('photo.choosePhoto')}
             </button>
             {photo && onRemove && (
               <button type="button" className={ghostButton} onClick={onRemove}>
-                Remove photo
+                {kt('photo.remove')}
               </button>
             )}
           </div>

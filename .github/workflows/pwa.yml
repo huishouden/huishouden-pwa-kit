@@ -105,6 +105,10 @@ jobs:
       - name: Kit code copied into the app (warnings)
         # Kits before v0.44.0 have no pwa-reuse-check. Warnings only for now: each shows on the PR's files.
         run: if [ -e node_modules/.bin/pwa-reuse-check ]; then bunx pwa-reuse-check; else echo "kit has no pwa-reuse-check"; fi
+      - name: Every language has every key; English left in JSX (docs/i18n.md)
+        # Kits before v0.60.0 have no pwa-i18n-check. An app without src/locales/en.json passes with a
+        # notice until it is translated; untranslated literals warn on the PR's files for now.
+        run: if [ -e node_modules/.bin/pwa-i18n-check ]; then bunx pwa-i18n-check; else echo "kit has no pwa-i18n-check"; fi
       - name: Unit tests
         run: if jq -e '.scripts.test' package.json >/dev/null; then bun run test; else echo "no test script"; fi
       - run: bun run build

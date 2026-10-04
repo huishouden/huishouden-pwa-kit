@@ -6,6 +6,7 @@
  *
  * Nothing is uploaded: cards are read on the device. Photos are skipped.
  */
+import { kt } from './i18n.js';
 import { CONTACT_LIMITS as LIMITS } from './contacts';
 /** Unescapes a 3.0/4.0 text value: "\n", "\,", "\;", "\\". */
 const unescapeText = (s) => s.replace(/\\([nN,;:\\])/g, (_, c) => (c === 'n' || c === 'N' ? '\n' : c));
@@ -135,33 +136,35 @@ function rawValue(p) {
 }
 const text = (p) => unescapeText(rawValue(p)).trim();
 const structured = (p) => splitUnescaped(rawValue(p), ';').map((s) => unescapeText(s).trim());
+// Labels shown beside a number or address, in the active language ("iPhone" is a name).
 const TYPE_LABELS = {
-    cell: 'Mobile',
-    mobile: 'Mobile',
-    iphone: 'iPhone',
-    home: 'Home',
-    work: 'Work',
-    main: 'Main',
-    fax: 'Fax',
-    pager: 'Pager',
-    other: 'Other',
-    text: 'Text',
-    video: 'Video',
+    cell: 'contacts.label.mobile',
+    mobile: 'contacts.label.mobile',
+    iphone: '',
+    home: 'contacts.label.home',
+    work: 'contacts.label.work',
+    main: 'contacts.label.main',
+    fax: 'contacts.label.fax',
+    pager: 'contacts.label.pager',
+    other: 'contacts.label.other',
+    text: 'contacts.label.text',
+    video: 'contacts.label.video',
     internet: '',
     voice: '',
     pref: '',
     x400: '',
 };
+const typeWord = (t) => (t === 'iphone' ? 'iPhone' : TYPE_LABELS[t] ? kt(TYPE_LABELS[t]) : undefined);
 /** Apple writes custom labels as "_$!<Mobile>!$_" for its own and plain text for the person's. */
 const cleanLabel = (s) => s.replace(/^_\$!<(.+)>!\$_$/, '$1').trim();
 function typeLabel(p) {
     const types = (p.params.TYPE ?? []).flatMap((t) => t.split(',')).map((t) => t.toLowerCase());
     // "work fax" reads better than "Fax" alone; "home" alone says little next to "Mobile".
     if (types.includes('fax'))
-        return types.includes('home') ? 'Home fax' : types.includes('work') ? 'Work fax' : 'Fax';
+        return kt(types.includes('home') ? 'contacts.label.homeFax' : types.includes('work') ? 'contacts.label.workFax' : 'contacts.label.fax');
     for (const t of ['cell', 'mobile', 'iphone', 'main', 'work', 'home', 'pager', 'other', 'text', 'video'])
         if (types.includes(t))
-            return TYPE_LABELS[t];
+            return typeWord(t);
     const custom = types.find((t) => t.startsWith('x-'));
     return custom ? custom.slice(2) : undefined;
 }
@@ -300,9 +303,9 @@ export function contactFromCard(card, { role: fillRole = true } = {}) {
     const otherPhones = card.phones.filter((p) => p !== phone);
     const otherEmails = card.emails.filter((e) => e !== email);
     if (otherPhones.length)
-        notes.push(`Other phones: ${otherPhones.map(labelled).join(', ')}`);
+        notes.push(kt('contacts.otherPhones', { list: otherPhones.map(labelled).join(', ') }));
     if (otherEmails.length)
-        notes.push(`Other emails: ${otherEmails.map(labelled).join(', ')}`);
+        notes.push(kt('contacts.otherEmails', { list: otherEmails.map(labelled).join(', ') }));
     if (card.note)
         notes.push(card.note);
     out.notes = cut(notes.join('\n'), LIMITS.notes);

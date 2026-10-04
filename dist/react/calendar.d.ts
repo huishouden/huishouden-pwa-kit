@@ -37,7 +37,7 @@ export declare function useCalendarSearch(auth: Auth, app: string): {
     run: (queries: string | string[], options?: FindEventsOptions) => Promise<void>;
     reset: () => void;
 };
-/** "Sun, Oct 19, 9:00 AM · Family", in the device's locale. */
+/** "Sun, Oct 19, 9:00 AM · Family", in the active locale. */
 export declare function matchWhen(m: CalendarMatch): string;
 /** One line before Google's first permission window, or why the search is off. */
 export declare function CalendarHint({ app, available }: {

@@ -8,7 +8,9 @@
  * ```
  */
 import { lineChart, type ChartPoint } from '../chart.js';
+import { formatNumber, getLocale } from '../i18n.js';
 import { formatDayShort } from '../time.js';
+import { useKitT } from './i18n.js';
 
 const W = 560;
 const H = 150;
@@ -26,6 +28,7 @@ export interface QuantityChartProps {
 }
 
 export function QuantityChart({ label, points, format, target, step }: QuantityChartProps) {
+  const kt = useKitT();
   const g = lineChart(points, { width: W, height: H, pad: PAD, target, step });
   if (!g || g.points.length < 2) return null;
   const first = g.points[0];
@@ -34,15 +37,22 @@ export function QuantityChart({ label, points, format, target, step }: QuantityC
     <figure className="mt-3">
       <div className="flex gap-2">
         <div className="flex w-12 shrink-0 flex-col justify-between py-1 text-right text-xs text-muted tabular-nums" aria-hidden="true">
-          <span>{g.max.toFixed(1)}</span>
-          <span>{g.min.toFixed(1)}</span>
+          <span>{formatNumber(g.max, getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+          <span>{formatNumber(g.min, getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
         </div>
         <svg
           viewBox={`0 0 ${W} ${H}`}
           className="h-36 w-full min-w-0"
           preserveAspectRatio="none"
           role="img"
-          aria-label={`${label} from ${format(first.value)} on ${formatDayShort(first.at)} to ${format(last.value)} on ${formatDayShort(last.at)}${target ? `; target ${format(target)}` : ''}`}
+          aria-label={kt(target ? 'chart.summaryTarget' : 'chart.summary', {
+            label,
+            first: format(first.value),
+            firstDay: formatDayShort(first.at),
+            last: format(last.value),
+            lastDay: formatDayShort(last.at),
+            target: target ? format(target) : undefined,
+          })}
         >
           <line x1="0" x2={W} y1={PAD} y2={PAD} className="stroke-line" strokeWidth="1" vectorEffect="non-scaling-stroke" />
           <line x1="0" x2={W} y1={H - PAD} y2={H - PAD} className="stroke-line" strokeWidth="1" vectorEffect="non-scaling-stroke" />
@@ -66,7 +76,7 @@ export function QuantityChart({ label, points, format, target, step }: QuantityC
       <div className="relative -mt-36 ml-14 h-36" aria-hidden="true">
         {g.targetY !== undefined && target !== undefined && (
           <span className="absolute right-0 -translate-y-full pb-0.5 text-xs font-medium text-muted" style={{ top: `${(g.targetY / H) * 100}%` }}>
-            Target {format(target)}
+            {kt('chart.target', { target: format(target) })}
           </span>
         )}
         {g.points.map((p) => (

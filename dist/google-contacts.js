@@ -1,4 +1,5 @@
 import { googleAccessToken, googleFetch } from './google-token';
+import { kt } from './i18n.js';
 /**
  * Finds people in the member's Google Contacts (read-only, People API), to fill a household
  * contact from one tap: their saved contacts and the "other contacts" Gmail keeps for people they
@@ -19,7 +20,7 @@ export const GOOGLE_CONTACTS_LIMIT = 10;
 export function googleContactsToken(auth) {
     if (typeof window !== 'undefined' && typeof window.__mockGoogleContactsToken === 'string')
         return Promise.resolve(window.__mockGoogleContactsToken);
-    return googleAccessToken(auth, GOOGLE_CONTACTS_SCOPES, { persist: true, deniedMessage: 'Google did not grant access to Google Contacts.' });
+    return googleAccessToken(auth, GOOGLE_CONTACTS_SCOPES, { persist: true, deniedMessage: kt('contacts.googleDenied') });
 }
 /** The Google Contacts search can be offered: a member is signed in (or a test stands in). */
 export function googleContactsAvailable(auth) {

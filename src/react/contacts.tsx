@@ -14,6 +14,8 @@ import { contactFromCard, contactPickerSupported, contactSummary, parseVCard, pi
 import { googleContactsAvailable, googleContactsToken, searchGoogleContacts } from '../google-contacts';
 import { googleAccessMessage, popupCancelled } from '../feedback';
 import { mapsSearchUrl, parsePlaceText, readPlaceScreenshot, searchPlaces, telHref, type ParsedPlace, type Place } from '../places';
+import { capitalize, formatList, kt as kitT, type KitKey } from '../i18n';
+import { useKitT } from './i18n';
 import { Checkbox, Chip, Dialog, ErrorNotice, Field, cardClass, deleteButton, ghostButton, iconButton, inputClass, linkClass, overline, primaryButton, secondaryButton } from './ui';
 
 type PlaceSearch = { status: 'idle' } | { status: 'searching' } | { status: 'done'; places: Place[]; query: string } | { status: 'error' };
@@ -24,13 +26,11 @@ type Fill =
   | { status: 'idle' }
   | { status: 'reading'; progress?: number }
   | { status: 'error' }
-  | { status: 'done'; source: FillSource; place: ParsedPlace; filled: string[] };
+  | { status: 'done'; source: FillSource; place: ParsedPlace; filled: FieldId[] };
 
-const SOURCE_WORDS: Record<FillSource, string> = { screenshot: 'the screenshot', text: 'the pasted text', share: 'what was shared' };
 
 /** Where a contact of the person's own came from. */
 type CardSource = 'picker' | 'card' | 'google' | 'shared';
-const CARD_WORDS: Record<CardSource, string> = { picker: 'your contacts', card: 'the contact card', google: 'Google Contacts', shared: 'the shared contact' };
 
 /** Filling from the person's own contacts: a list to choose from, a Google search, or what was filled. */
 type Own =
@@ -39,9 +39,23 @@ type Own =
   | { status: 'choose'; source: CardSource; cards: ParsedContact[] }
   | { status: 'none'; message: string }
   | { status: 'error'; message: string; retry: () => void }
-  | { status: 'done'; source: CardSource; name: string; filled: string[] };
+  | { status: 'done'; source: CardSource; name: string; filled: FieldId[] };
 
-const listWords = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
+/** A field id the dialog fills, and its name mid-sentence in the active language. */
+type FieldId = 'name' | 'role' | 'phone' | 'email' | 'website' | 'address' | 'notes' | 'hours';
+const FIELD_KEYS: Record<FieldId, KitKey> = {
+  name: 'contacts.field.name',
+  role: 'contacts.field.role',
+  phone: 'contacts.field.phone',
+  email: 'contacts.field.email',
+  website: 'contacts.field.website',
+  address: 'contacts.field.address',
+  notes: 'contacts.field.notes',
+  hours: 'contacts.field.hours',
+};
+
+/** "name, phone, and address" in the active language. */
+const listWords = (fields: FieldId[]) => formatList(fields.map((f) => kitT(FIELD_KEYS[f])));
 
 export interface ContactDialogProps {
   contact: Contact | null;
@@ -89,8 +103,8 @@ export function ContactDialog({
   app,
   roles,
   role: initialRole,
-  title = { add: 'New contact', edit: 'Edit contact' },
-  searchPlaceholder = 'Business name and town',
+  title,
+  searchPlaceholder,
   namePlaceholder,
   prefill,
   sharedContacts,
@@ -101,6 +115,9 @@ export function ContactDialog({
   onDelete,
   onClose,
 }: ContactDialogProps) {
+  const kt = useKitT();
+  title ??= { add: kt('contacts.newContact'), edit: kt('contacts.editContact') };
+  searchPlaceholder ??= kt('contacts.searchPlaceholder');
   const start = contact ? undefined : prefill;
   const card = !contact && sharedContacts?.length === 1 ? contactFromCard(sharedContacts[0], { role: !initialRole }) : undefined;
   const [name, setName] = useState(contact?.name ?? card?.name ?? start?.name?.slice(0, CONTACT_LIMITS.name) ?? '');
@@ -110,7 +127,7 @@ export function ContactDialog({
   const [website, setWebsite] = useState(contact?.website ?? card?.website ?? start?.website ?? '');
   const [address, setAddress] = useState(contact?.address ?? card?.address ?? start?.address?.slice(0, CONTACT_LIMITS.address) ?? '');
   const [mapsUrl, setMapsUrl] = useState(contact?.mapsUrl ?? start?.mapsUrl ?? '');
-  const [notes, setNotes] = useState(contact?.notes ?? card?.notes ?? (start?.hours ? `Hours: ${start.hours}`.slice(0, CONTACT_LIMITS.notes) : ''));
+  const [notes, setNotes] = useState(contact?.notes ?? card?.notes ?? (start?.hours ? kitT('contacts.hoursNote', { hours: start.hours }).slice(0, CONTACT_LIMITS.notes) : ''));
   const [isPrivate, setPrivate] = useState(contact?.private === true);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState<PlaceSearch>({ status: 'idle' });
@@ -127,7 +144,7 @@ export function ContactDialog({
   // Fills right away from one shared card; several wait for the person to choose.
   const [own, setOwn] = useState<Own>(() => {
     if (contact || !sharedContacts) return { status: 'idle' };
-    if (sharedContacts.length === 0) return { status: 'none', message: 'Couldn’t find a contact in what was shared.' };
+    if (sharedContacts.length === 0) return { status: 'none', message: kitT('contacts.sharedNone') };
     if (sharedContacts.length > 1) return { status: 'choose', source: 'shared', cards: sharedContacts };
     return { status: 'done', source: 'shared', name: sharedContacts[0].name, filled: fillFields(contactFromCard(sharedContacts[0], { role: !initialRole })) };
   });
@@ -171,7 +188,7 @@ export function ContactDialog({
     if (p.website) setWebsite(p.website);
     if (p.mapsUrl) setMapsUrl(p.mapsUrl);
     else if (p.address) setMapsUrl('');
-    if (p.hours && !notes.trim()) setNotes(`Hours: ${p.hours}`.slice(0, CONTACT_LIMITS.notes));
+    if (p.hours && !notes.trim()) setNotes(kt('contacts.hoursNote', { hours: p.hours }).slice(0, CONTACT_LIMITS.notes));
     setSearch({ status: 'idle' });
     setFill({ status: 'done', source, place: p, filled: filledFields(p, !notes.trim()) });
   };
@@ -207,29 +224,29 @@ export function ContactDialog({
       const chosen = await pickContact();
       if (chosen) fillFromContact(chosen, 'picker');
     } catch {
-      setOwn({ status: 'error', message: 'Couldn’t open your contacts.', retry: () => void pickFromPhone() });
+      setOwn({ status: 'error', message: kt('contacts.pickerFailed'), retry: () => void pickFromPhone() });
     }
   };
 
   const importCard = async (file: File) => {
-    setOwn({ status: 'busy', doing: 'Reading the contact card…' });
+    setOwn({ status: 'busy', doing: kt('contacts.readingCard') });
     try {
-      offer(parseVCard(await file.text()), 'card', 'Couldn’t find a contact in that file. Choose a contact card (.vcf).');
+      offer(parseVCard(await file.text()), 'card', kt('contacts.cardNone'));
     } catch {
-      setOwn({ status: 'error', message: 'Couldn’t read that file.', retry: () => cardInput.current?.click() });
+      setOwn({ status: 'error', message: kt('contacts.cardUnreadable'), retry: () => cardInput.current?.click() });
     }
   };
 
   const findInGoogle = async () => {
     const q = googleQuery.trim();
     if (!q) return;
-    setOwn({ status: 'busy', doing: 'Searching Google Contacts…' });
+    setOwn({ status: 'busy', doing: kt('contacts.searchingGoogle') });
     try {
       const token = await googleContactsToken(auth as Auth);
-      offer(await searchGoogleContacts(token, q), 'google', `No one found for "${q}" in your Google Contacts.`);
+      offer(await searchGoogleContacts(token, q), 'google', kt('contacts.googleNone', { query: q }));
     } catch (e) {
       if (popupCancelled(e)) return setOwn({ status: 'idle' });
-      setOwn({ status: 'error', message: googleAccessMessage(e, 'Google Contacts') ?? 'Couldn’t search Google Contacts. Try again.', retry: () => void findInGoogle() });
+      setOwn({ status: 'error', message: googleAccessMessage(e, 'Google Contacts') ?? kt('contacts.googleFailed'), retry: () => void findInGoogle() });
     }
   };
 
@@ -262,34 +279,34 @@ export function ContactDialog({
                 onClose();
               }}
             >
-              <Trash2 size={18} /> Delete
+              <Trash2 size={18} /> {kt('common.delete')}
             </button>
           )}
           <button type="button" className={ghostButton} onClick={onClose}>
-            Cancel
+            {kt('common.cancel')}
           </button>
           <button type="button" className={primaryButton} disabled={!valid} onClick={save}>
-            Save
+            {kt('common.save')}
           </button>
         </>
       }
     >
       <section className="mb-5 space-y-3 rounded-2xl border border-line p-4" aria-labelledby="own-contacts">
         <p id="own-contacts" className="text-sm font-medium text-ink-soft">
-          Already in your contacts?
+          {kt('contacts.alreadyInContacts')}
         </p>
         <div className="flex flex-wrap gap-2">
           {picker && (
             <button type="button" className={secondaryButton} disabled={own.status === 'busy'} onClick={() => void pickFromPhone()}>
-              <BookUser size={18} aria-hidden="true" /> Pick from my contacts
+              <BookUser size={18} aria-hidden="true" /> {kt('contacts.pickFromMine')}
             </button>
           )}
           <button type="button" className={secondaryButton} disabled={own.status === 'busy'} onClick={() => cardInput.current?.click()}>
-            <FileUp size={18} aria-hidden="true" /> Import a contact card
+            <FileUp size={18} aria-hidden="true" /> {kt('contacts.importCard')}
           </button>
           {google && (
             <button type="button" className={secondaryButton} aria-expanded={googleOpen} onClick={() => setGoogleOpen(!googleOpen)}>
-              <UserSearch size={18} aria-hidden="true" /> Find in my Google Contacts
+              <UserSearch size={18} aria-hidden="true" /> {kt('contacts.findInGoogle')}
             </button>
           )}
           <input
@@ -297,7 +314,7 @@ export function ContactDialog({
             type="file"
             accept=".vcf,.vcard,text/vcard,text/x-vcard"
             hidden
-            aria-label="Contact card file"
+            aria-label={kt('contacts.cardFile')}
             onChange={(e) => {
               const file = e.target.files?.[0];
               e.target.value = '';
@@ -314,15 +331,15 @@ export function ContactDialog({
             }}
           >
             <label htmlFor="google-contacts-query" className="block text-sm font-medium text-ink-soft">
-              Name, email or phone
+              {kt('contacts.googleQuery')}
             </label>
             <div className="flex gap-2">
               <input id="google-contacts-query" className={inputClass} value={googleQuery} onChange={(e) => setGoogleQuery(e.target.value)} autoComplete="off" />
               <button type="submit" className={secondaryButton} disabled={!googleQuery.trim() || own.status === 'busy'}>
-                <Search size={18} aria-hidden="true" /> Search
+                <Search size={18} aria-hidden="true" /> {kt('common.search')}
               </button>
             </div>
-            <p className="text-sm text-muted">If Google says it hasn’t verified this app, choose Advanced, then continue: the app only reads your contacts.</p>
+            <p className="text-sm text-muted">{kt('contacts.unverifiedHint')}</p>
           </form>
         )}
         {own.status === 'busy' && (
@@ -338,8 +355,8 @@ export function ContactDialog({
         {own.status === 'error' && <ErrorNotice message={own.message} onRetry={own.retry} />}
         {own.status === 'choose' && (
           <div className="space-y-1.5">
-            <p className="text-sm text-muted">{own.source === 'google' ? 'Choose who to add.' : `${CARD_WORDS[own.source][0].toUpperCase()}${CARD_WORDS[own.source].slice(1)} has ${own.cards.length} people. Choose one.`}</p>
-            <ul className="grid gap-1.5" aria-label="Contacts to choose from">
+            <p className="text-sm text-muted">{own.source === 'google' ? kt('contacts.chooseWho') : kt('contacts.chooseFrom', { source: own.source, count: own.cards.length })}</p>
+            <ul className="grid gap-1.5" aria-label={kt('contacts.chooseList')}>
               {own.cards.map((c, i) => (
                 <li key={i}>
                   <button
@@ -357,7 +374,7 @@ export function ContactDialog({
         )}
         {own.status === 'done' && (
           <p role="status" className="text-base text-ink-soft">
-            {own.filled.length ? `Filled in the ${listWords(own.filled)} from ${CARD_WORDS[own.source]}. Check them before saving.` : `${own.name} had no details to fill in.`}
+            {own.filled.length ? capitalize(kt('contacts.filledFrom', { fields: listWords(own.filled), source: own.source })) : kt('contacts.noDetails', { name: own.name })}
           </p>
         )}
       </section>
@@ -371,23 +388,23 @@ export function ContactDialog({
           }}
         >
           <label htmlFor="place-query" className="block text-sm font-medium text-ink-soft">
-            Find a business
+            {kt('contacts.findBusiness')}
           </label>
           <div className="flex gap-2">
             <input id="place-query" className={inputClass} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={searchPlaceholder} autoComplete="off" />
             <button type="submit" className={secondaryButton} disabled={!query.trim() || search.status === 'searching'}>
-              <Search size={18} /> {search.status === 'searching' ? 'Searching' : 'Search'}
+              <Search size={18} /> {search.status === 'searching' ? kt('contacts.searching') : kt('common.search')}
             </button>
           </div>
         </form>
-        {search.status === 'error' && <ErrorNotice message="Couldn't reach OpenStreetMap. Check the connection." onRetry={() => void find()} />}
+        {search.status === 'error' && <ErrorNotice message={kt('contacts.osmUnreachable')} onRetry={() => void find()} />}
         {search.status === 'done' && search.places.length === 0 && (
           <p role="status" className="text-base text-muted">
-            No places found for "{search.query}".
+            {kt('contacts.noPlaces', { query: search.query })}
           </p>
         )}
         {search.status === 'done' && search.places.length > 0 && (
-          <ul className="grid gap-1.5" aria-label="Places">
+          <ul className="grid gap-1.5" aria-label={kt('contacts.places')}>
             {search.places.slice(0, 5).map((p) => (
               <li key={p.osmUrl}>
                 <button type="button" onClick={() => pick(p)} className="w-full rounded-xl border border-line px-3 py-2 text-left hover:border-forest-500 hover:bg-tint">
@@ -402,28 +419,28 @@ export function ContactDialog({
           </ul>
         )}
         <div className="flex flex-wrap items-center gap-x-3 text-sm text-muted">
-          <span>Results from OpenStreetMap. Missing a phone number? Check Google Maps.</span>
+          <span>{kt('contacts.osmNote')}</span>
           {mapsQuery && (
             <a className={`${linkClass} text-sm`} href={mapsSearchUrl(mapsQuery)} target="_blank" rel="noopener noreferrer">
-              <ExternalLink size={16} aria-hidden="true" /> Search Google Maps
+              <ExternalLink size={16} aria-hidden="true" /> {kt('contacts.searchMaps')}
             </a>
           )}
         </div>
         <div className="space-y-2 border-t border-line pt-3">
-          <p className="text-sm text-muted">Not listed? Take a screenshot of the business in Google Maps, then choose it here.</p>
+          <p className="text-sm text-muted">{kt('contacts.notListed')}</p>
           <div className="flex flex-wrap gap-2">
             <button type="button" className={secondaryButton} disabled={fill.status === 'reading'} onClick={() => fileInput.current?.click()}>
-              <ImageUp size={18} aria-hidden="true" /> Fill from a screenshot
+              <ImageUp size={18} aria-hidden="true" /> {kt('contacts.fromScreenshot')}
             </button>
             <button type="button" className={secondaryButton} aria-expanded={pasting} onClick={() => setPasting(!pasting)}>
-              <ClipboardPaste size={18} aria-hidden="true" /> Paste listing text
+              <ClipboardPaste size={18} aria-hidden="true" /> {kt('contacts.pasteListing')}
             </button>
             <input
               ref={fileInput}
               type="file"
               accept="image/*"
               hidden
-              aria-label="Screenshot of the business"
+              aria-label={kt('contacts.screenshotFile')}
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 e.target.value = '';
@@ -437,8 +454,8 @@ export function ContactDialog({
                 className={`${inputClass} min-h-28`}
                 value={pasted}
                 onChange={(e) => setPasted(e.target.value)}
-                aria-label="Listing text"
-                placeholder="Copy the business's name, address and phone number from Google Maps, Apple Maps or Yelp and paste them here."
+                aria-label={kt('contacts.listingText')}
+                placeholder={kt('contacts.listingPlaceholder')}
               />
               <button
                 type="button"
@@ -450,18 +467,18 @@ export function ContactDialog({
                   setPasted('');
                 }}
               >
-                Fill in
+                {kt('contacts.fillIn')}
               </button>
             </div>
           )}
           {fill.status === 'reading' && (
             <p role="status" className="text-base text-muted">
-              {fill.progress === undefined ? 'Getting the text reader ready…' : `Reading the screenshot… ${Math.round(fill.progress * 100)}%`}
+              {fill.progress === undefined ? kt('contacts.readerLoading') : kt('contacts.readingScreenshot', { percent: Math.round(fill.progress * 100) })}
             </p>
           )}
           {fill.status === 'error' && (
             <ErrorNotice
-              message="Couldn't read the screenshot. The text reader needs a connection the first time."
+              message={kt('contacts.screenshotFailed')}
               onRetry={() => lastImage.current && void readImage(lastImage.current)}
             />
           )}
@@ -476,11 +493,11 @@ export function ContactDialog({
           save();
         }}
       >
-        <Field label="Name">
+        <Field label={kt('contacts.name')}>
           <input className={inputClass} value={name} maxLength={CONTACT_LIMITS.name} onChange={(e) => setName(e.target.value)} placeholder={namePlaceholder} />
         </Field>
         <fieldset>
-          <legend className="mb-1.5 block text-sm font-medium text-ink-soft">Role</legend>
+          <legend className="mb-1.5 block text-sm font-medium text-ink-soft">{kt('contacts.role')}</legend>
           <div className="mb-2 flex flex-wrap gap-2">
             {roles.map((r) => (
               <Chip key={r} active={role.trim().toLowerCase() === r.toLowerCase()} onClick={() => setRole(r)}>
@@ -488,20 +505,20 @@ export function ContactDialog({
               </Chip>
             ))}
           </div>
-          <input className={inputClass} value={role} maxLength={CONTACT_LIMITS.role} onChange={(e) => setRole(e.target.value)} placeholder="Or type a role" aria-label="Role" />
+          <input className={inputClass} value={role} maxLength={CONTACT_LIMITS.role} onChange={(e) => setRole(e.target.value)} placeholder={kt('contacts.rolePlaceholder')} aria-label={kt('contacts.role')} />
         </fieldset>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Phone">
+          <Field label={kt('contacts.phone')}>
             <input className={inputClass} type="tel" value={phone} maxLength={CONTACT_LIMITS.phone} onChange={(e) => setPhone(e.target.value)} autoComplete="off" />
           </Field>
-          <Field label="Email">
+          <Field label={kt('contacts.email')}>
             <input className={inputClass} type="email" value={email} maxLength={CONTACT_LIMITS.email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
           </Field>
         </div>
-        <Field label="Website">
-          <input className={inputClass} inputMode="url" value={website} maxLength={CONTACT_LIMITS.website} onChange={(e) => setWebsite(e.target.value)} placeholder="example.com" />
+        <Field label={kt('contacts.website')}>
+          <input className={inputClass} inputMode="url" value={website} maxLength={CONTACT_LIMITS.website} onChange={(e) => setWebsite(e.target.value)} placeholder="example.com" /* i18n-ignore */ />
         </Field>
-        <Field label="Address">
+        <Field label={kt('contacts.address')}>
           <input
             className={inputClass}
             value={address}
@@ -513,7 +530,7 @@ export function ContactDialog({
             }}
           />
         </Field>
-        <Field label="Notes">
+        <Field label={kt('contacts.notes')}>
           <textarea className={`${inputClass} min-h-20`} value={notes} maxLength={CONTACT_LIMITS.notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
         {canMarkPrivate && <PrivateCheckbox checked={isPrivate} onChange={setPrivate} />}
@@ -524,41 +541,34 @@ export function ContactDialog({
 }
 
 /** Field names a contact fills in, in the order the form shows them. */
-function fillFields(f: ContactFill): string[] {
-  return [f.name && 'name', f.role && 'role', f.phone && 'phone', f.email && 'email', f.website && 'website', f.address && 'address', f.notes && 'notes'].filter((x): x is string => !!x);
+function fillFields(f: ContactFill): FieldId[] {
+  const ids: (FieldId | false | undefined | '')[] = [f.name && 'name', f.role && 'role', f.phone && 'phone', f.email && 'email', f.website && 'website', f.address && 'address', f.notes && 'notes'];
+  return ids.filter((x): x is FieldId => !!x);
 }
 
 /** Field names a parsed listing fills in, in the order the form shows them. */
-function filledFields(p: ParsedPlace, hoursToNotes = true): string[] {
-  return [
-    p.name && 'name',
-    p.phone && 'phone',
-    p.email && 'email',
-    p.website && 'website',
-    p.address && 'address',
-    p.hours && hoursToNotes && 'hours (in notes)',
-  ].filter((f): f is string => !!f);
+function filledFields(p: ParsedPlace, hoursToNotes = true): FieldId[] {
+  const ids: (FieldId | false | undefined | '')[] = [p.name && 'name', p.phone && 'phone', p.email && 'email', p.website && 'website', p.address && 'address', p.hours && hoursToNotes && 'hours'];
+  return ids.filter((f): f is FieldId => !!f);
 }
 
 /** What was filled in from a listing; the text that wasn't used stays one tap away, collapsed. */
-function FillNote({ source, place, filled }: { source: FillSource; place: ParsedPlace; filled: string[] }) {
-  const from = SOURCE_WORDS[source];
+function FillNote({ source, place, filled }: { source: FillSource; place: ParsedPlace; filled: FieldId[] }) {
+  const kt = useKitT();
   const unparsed = place.unparsed.slice(0, 8);
   return (
     <div role="status" className="space-y-1 text-base text-ink-soft">
       {filled.length ? (
-        <p>
-          Filled in the {listWords(filled)} from {from}. Check them before saving.
-        </p>
+        <p>{capitalize(kt('contacts.filledFrom', { fields: listWords(filled), source }))}</p>
       ) : (
         <p>
-          Couldn't find a business's details in {from}.
-          {source === 'screenshot' ? ' Try a screenshot that shows the name, address and phone number, or paste the text instead.' : ''}
+          {kt('contacts.noBusinessDetails', { source })}
+          {source === 'screenshot' ? ` ${kt('contacts.screenshotTip')}` : ''}
         </p>
       )}
       {unparsed.length > 0 && (
         <details className="text-sm text-muted">
-          <summary className="cursor-pointer select-none py-1">Show the text that wasn't used</summary>
+          <summary className="cursor-pointer select-none py-1">{kt('contacts.showUnused')}</summary>
           <ul className="mt-1 list-disc pl-5">
             {unparsed.map((line, i) => (
               <li key={i} className="[overflow-wrap:anywhere]">
@@ -566,7 +576,7 @@ function FillNote({ source, place, filled }: { source: FillSource; place: Parsed
               </li>
             ))}
           </ul>
-          {place.unparsed.length > unparsed.length && <p>And {place.unparsed.length - unparsed.length} more lines.</p>}
+          {place.unparsed.length > unparsed.length && <p>{kt('contacts.moreLines', { count: place.unparsed.length - unparsed.length })}</p>}
         </details>
       )}
     </div>
@@ -578,21 +588,23 @@ function FillNote({ source, place, filled }: { source: FillSource; place: Parsed
  * one-line explanation. Show it only to those who may set it (`can(role, 'see-private')`).
  */
 export function PrivateCheckbox({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+  const kt = useKitT();
   return (
     <div>
       <Checkbox checked={checked} onChange={onChange}>
-        Only admins and members
+        {kt('contacts.onlyAdmins')}
       </Checkbox>
-      <p className="ml-9 text-sm text-muted">Helpers and kids won’t see it.</p>
+      <p className="ml-9 text-sm text-muted">{kt('contacts.helpersWontSee')}</p>
     </div>
   );
 }
 
 /** The quiet "Private" marker on a record only admins and members see. */
 export function PrivateMark() {
+  const kt = useKitT();
   return (
     <span className="inline-flex items-center gap-1 text-sm font-medium text-muted">
-      <Lock size={14} aria-hidden="true" /> Private
+      <Lock size={14} aria-hidden="true" /> {kt('contacts.private')}
     </span>
   );
 }
@@ -603,6 +615,7 @@ export function PrivateMark() {
  * someone else added).
  */
 export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: Contact; role: string; onEdit?: () => void; onDelete?: () => void }) {
+  const kt = useKitT();
   const maps = c.mapsUrl || (c.address ? mapsSearchUrl(`${c.name}, ${c.address}`) : null);
   return (
     <section className={`${cardClass} p-5`} aria-label={c.name}>
@@ -613,19 +626,19 @@ export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: C
           {c.private && <PrivateMark />}
         </div>
         {onEdit && (
-          <button type="button" className={iconButton} onClick={onEdit} aria-label={`Edit ${c.name}`}>
+          <button type="button" className={iconButton} onClick={onEdit} aria-label={kt('contacts.editName', { name: c.name })}>
             <Pencil size={18} />
           </button>
         )}
         {onDelete && (
-          <button type="button" className={iconButton} onClick={onDelete} aria-label={`Delete ${c.name}`}>
+          <button type="button" className={iconButton} onClick={onDelete} aria-label={kt('contacts.deleteName', { name: c.name })}>
             <Trash2 size={18} />
           </button>
         )}
       </div>
       <div className="mt-2 flex flex-col items-start">
         {c.phone && (
-          <a className={`${linkClass} text-lg tabular-nums`} href={telHref(c.phone)} aria-label={`Call ${c.name}, ${c.phone}`}>
+          <a className={`${linkClass} text-lg tabular-nums`} href={telHref(c.phone)} aria-label={kt('contacts.call', { name: c.name, phone: c.phone })}>
             <Phone size={18} aria-hidden="true" /> {c.phone}
           </a>
         )}
@@ -647,7 +660,7 @@ export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: C
           </p>
           {maps && (
             <a className={linkClass} href={maps} target="_blank" rel="noopener noreferrer">
-              <ExternalLink size={18} aria-hidden="true" /> Open in Google Maps
+              <ExternalLink size={18} aria-hidden="true" /> {kt('contacts.openMaps')}
             </a>
           )}
         </div>
