@@ -2,7 +2,8 @@
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
  * checkbox, section tabs (a bottom bar on phones), member badge, "Sample data" banner every app shows, and
- * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`, and a copy button.
+ * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`, a copy button,
+ * and the note offering to bring back Google's window when it may have opened out of sight.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -188,3 +189,15 @@ export declare function Toast({ toast, onDone }: {
     toast: ToastState | null;
     onDone: () => void;
 }): import("react").JSX.Element;
+/** How long a wait on Google's window lasts before `GoogleWindowWait` offers to bring it back. */
+export declare const GOOGLE_WINDOW_HINT_MS = 4000;
+/**
+ * Under a button that opens Google's window (`googleAuthCode`): when the wait lasts a few seconds,
+ * says the window may be behind this one (desktop browsers, installed apps) and offers to bring it
+ * to the front; `onShow` calls `googleAuthCode` again, which reuses the open window.
+ */
+export declare function GoogleWindowWait({ waiting, onShow, delayMs }: {
+    waiting: boolean;
+    onShow: () => void;
+    delayMs?: number;
+}): import("react").JSX.Element | null;

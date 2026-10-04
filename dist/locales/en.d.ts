@@ -218,6 +218,11 @@ declare const _default: {
     readonly 'feedback.notConfigured': "{service} access is not set up for this app yet.";
     readonly 'feedback.unreachable': "Couldn’t reach Google. Check the connection and try again.";
     readonly 'feedback.signInFirst': "Sign in first.";
+    readonly 'feedback.windowBlocked': "Your browser blocked Google’s window. Allow pop-ups for this site, then try again.";
+    readonly 'feedback.windowClosed': "Google’s window was closed before finishing. Try again when you are ready.";
+    readonly 'feedback.windowFailed': "Google’s window stopped before finishing. Try again.";
+    readonly 'feedback.windowWaiting': "Waiting for Google’s window. Can’t see it? It may be behind this window.";
+    readonly 'feedback.windowShow': "Show Google’s window";
     readonly 'dose.amount': "{unit, select, tablet {{count, plural, one {{n} tablet} other {{n} tablets}}} chew {{count, plural, one {{n} chew} other {{n} chews}}} capsule {{count, plural, one {{n} capsule} other {{n} capsules}}} pill {{count, plural, one {{n} pill} other {{n} pills}}} drop {{count, plural, one {{n} drop} other {{n} drops}}} puff {{count, plural, one {{n} puff} other {{n} puffs}}} spray {{count, plural, one {{n} spray} other {{n} sprays}}} unit {{count, plural, one {{n} unit} other {{n} units}}} teaspoon {{count, plural, one {{n} teaspoon} other {{n} teaspoons}}} tablespoon {{count, plural, one {{n} tablespoon} other {{n} tablespoons}}} scoop {{count, plural, one {{n} scoop} other {{n} scoops}}} packet {{count, plural, one {{n} packet} other {{n} packets}}} patch {{count, plural, one {{n} patch} other {{n} patches}}} other {{n} {unit}}}";
     readonly 'dose.timeOfDay': "{time, select, morning {morning} midday {midday} evening {evening} bedtime {bedtime} other {{time}}}";
     readonly 'dose.assumeMonths': "\"{text}\" read as {days} days";

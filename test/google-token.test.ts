@@ -39,7 +39,7 @@ let codeAnswer: (cfg: { scope: string; callback: (r: Record<string, unknown>) =>
 
 const { cachedGoogleToken, configureGoogleTokens, forgetGoogleToken, googleAccessToken, googleAuthCode, googleFetch, GoogleApiError, GoogleTokenError } = await import('../src/google-token');
 const { requestGmailToken, storedGmailToken, gmailMailbox, gmailError, GMAIL_READONLY_SCOPE } = await import('../src/gmail');
-const { popupBlocked, popupCancelled } = await import('../src/feedback');
+const { googleWindowMessage, popupBlocked, popupCancelled } = await import('../src/feedback');
 
 const store = new Map<string, string>();
 (globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -247,6 +247,47 @@ describe('calendar search with series starts', () => {
 });
 
 describe('googleAuthCode', () => {
+  test('every way Google’s window ends without a code has a message: blocked, closed, unknown', async () => {
+    const ended = async (_why: string) => googleAuthCode(auth(), [A]).catch((e: unknown) => e);
+    codeAnswer = (cfg) => cfg.error_callback?.({ type: 'popup_failed_to_open' });
+    const blocked = await ended('popup_failed_to_open');
+    expect(popupBlocked(blocked)).toBe(true);
+    expect(googleWindowMessage(blocked)).toBe('Your browser blocked Google’s window. Allow pop-ups for this site, then try again.');
+    codeAnswer = (cfg) => cfg.error_callback?.({ type: 'popup_closed' });
+    expect(googleWindowMessage(await ended('popup_closed'))).toBe('Google’s window was closed before finishing. Try again when you are ready.');
+    codeAnswer = (cfg) => cfg.error_callback?.({ type: 'something_new' });
+    expect(googleWindowMessage(await ended('unknown'))).toBe('Google’s window stopped before finishing. Try again.');
+    codeAnswer = (cfg) => cfg.callback({ error: 'access_denied' });
+    expect(googleWindowMessage(await ended('denied'), 'Google Calendar')).toBe('Google Calendar access was not allowed. Try again and allow it on Google’s page.');
+    expect(googleWindowMessage(new Error('[500] calendar worker'))).toBeNull();
+  });
+
+  test('tapping again while Google’s window is open brings it back: one client, one answer', async () => {
+    codeRequests.length = 0;
+    let finish: (() => void) | undefined;
+    codeAnswer = (cfg) => {
+      finish ??= () => cfg.callback({ code: 'the-code', scope: cfg.scope });
+    };
+    const first = googleAuthCode(auth(), [A]);
+    const again = googleAuthCode(auth(), [A]);
+    expect(codeRequests).toHaveLength(2);
+    finish!();
+    expect(await first).toEqual({ code: 'the-code', scope: A });
+    expect(await again).toEqual({ code: 'the-code', scope: A });
+    // Once answered, the next tap starts a new request.
+    codeAnswer = (cfg) => cfg.callback({ code: 'next-code', scope: cfg.scope });
+    expect((await googleAuthCode(auth(), [A])).code).toBe('next-code');
+  });
+
+  test('a code client that throws is an error, not a silent wait', async () => {
+    codeAnswer = () => {
+      throw new Error('boom');
+    };
+    expect(await googleAuthCode(auth(), [A]).catch((e) => e.code)).toBe('unknown');
+    codeAnswer = (cfg) => cfg.callback({ code: 'after', scope: cfg.scope });
+    expect((await googleAuthCode(auth(), [A])).code).toBe('after');
+  });
+
   test('a one-time code from the code client in a popup, hinted with the member', async () => {
     codeRequests.length = 0;
     codeAnswer = (cfg) => cfg.callback({ code: 'one-time-code', scope: cfg.scope });

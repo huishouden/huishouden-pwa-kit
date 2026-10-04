@@ -12,7 +12,7 @@ if (typeof document === 'undefined') GlobalRegistrator.register({ url: 'https://
 afterAll(() => GlobalRegistrator.unregister());
 const { createRoot } = await import('react-dom/client');
 
-const { Chip, CopyButton, Dialog, Field, SampleBanner, SectionTabs, SuggestionChip, Toast, StatusPill, splitTabs, useToast } = await import('../src/react/ui');
+const { Chip, CopyButton, Dialog, GoogleWindowWait, Field, SampleBanner, SectionTabs, SuggestionChip, Toast, StatusPill, splitTabs, useToast } = await import('../src/react/ui');
 const { Clock, History, Home, Phone, Shield, Wrench } = await import('lucide-react');
 const { ClockProvider, useClock } = await import('../src/react/clock');
 const { CalendarImportDialog, CalendarHint } = await import('../src/react/calendar');
@@ -664,5 +664,19 @@ describe('ContactSelect', () => {
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith('a');
+  });
+});
+
+describe('GoogleWindowWait', () => {
+  test('after a few seconds of waiting, says the window may be behind and brings it back', async () => {
+    const onShow = mock(() => {});
+    const { root } = render(<GoogleWindowWait waiting onShow={onShow} delayMs={20} />);
+    expect(document.querySelector('[role="status"]')).toBeNull();
+    await act(() => new Promise((r) => setTimeout(r, 40)));
+    expect(document.querySelector('[role="status"]')?.textContent).toContain('may be behind this window');
+    click(byText('Show Google’s window'));
+    expect(onShow).toHaveBeenCalledTimes(1);
+    act(() => root.render(<GoogleWindowWait waiting={false} onShow={onShow} delayMs={20} />));
+    expect(document.querySelector('[role="status"]')).toBeNull();
   });
 });
