@@ -191,7 +191,8 @@ export async function restoreContact(db, householdId, contact) {
         return setDoc(doc(contactsOf(db, householdId), id), data);
     const batch = writeBatch(db);
     batch.set(doc(contactsOf(db, householdId), id), data);
-    putPay(batch, db, householdId, id, contact.pay, by, updatedAt ?? createdAt);
+    // No `by`: whoever undoes may not be who last wrote them, and the rules take `by` as the writer.
+    batch.set(doc(payOf(db, householdId), id), { ...cleanContactPay(contact.pay), updatedAt: Date.now() });
     await batch.commit();
 }
 /**
