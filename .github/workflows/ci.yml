@@ -21,6 +21,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./actions/leak-scan
+      - uses: ./actions/license-check
 
   build:
     runs-on: ubuntu-latest
@@ -36,5 +37,5 @@ jobs:
         run: git diff --exit-code -- dist
       - name: Workflows and hooks parse
         run: |
-          bash -n templates/githooks/pre-commit infra/bootstrap.sh
+          bash -n templates/githooks/pre-commit infra/bootstrap.sh actions/license-check/check.sh
           for f in .github/workflows/*.yml actions/*/action.yml; do python3 -c "import sys,yaml; yaml.safe_load(open(sys.argv[1]))" "$f"; done

@@ -536,6 +536,19 @@ nothing deployed or tested there can read or write real household data.
   key flows end to end against the real rules; tag `@staging` only what needs the real site or a
   Worker (see Staging).
 
+## License
+
+- Every repo is source available under PolyForm Shield 1.0.0: `LICENSE` is the kit's `LICENSE`
+  byte for byte (the official text from polyformproject.org and the line
+  `Required Notice: Copyright (c) 2026 Caleb Piekstra (https://github.com/huishouden)`), and
+  `package.json` says `"license": "PolyForm-Shield-1.0.0"` and `"private": true` (nothing is
+  published to npm; the kit is installed from its git tags).
+- The README ends with a License section: the terms in one sentence, and that the Huishouden name
+  and logo are the project's brand.
+- CI checks both: `pwa.yml` runs `actions/license-check` in its leak-scan job; the Workers and the
+  rules repo run `huishouden/pwa-kit/actions/license-check@v0` in theirs.
+- Third-party code keeps its own license: a copied file keeps its header, dependencies keep theirs.
+
 ## Leaks
 
 - The scan uses `actions/leak-scan/gitleaks.toml` (gitleaks defaults plus a personal-mailbox
