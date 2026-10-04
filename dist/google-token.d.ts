@@ -34,7 +34,9 @@ export declare function googleAccessToken(auth: Auth, scopes: readonly string[],
  * A one-time authorization code for `scopes`, from Google's code client in a popup, for a server
  * to exchange for lasting (offline) access with the client's secret: huishouden/calendar's Google
  * Calendar sync, Spending's alert inbox. The server exchanges it with `redirect_uri=postmessage`. Call from a tap. Rejects
- * as `googleAccessToken` does when the window is closed, blocked, or a scope is left unticked.
+ * as `googleAccessToken` does when the window is closed, blocked, or a scope is left unticked;
+ * `googleWindowMessage` (`./feedback`) words each. Calling it again while Google's window is still
+ * open brings that window to the front and returns the same answer.
  */
 export interface GoogleAuthCodeOptions extends Pick<GoogleTokenOptions, 'deniedMessage' | 'clientId'> {
     /**

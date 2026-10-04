@@ -23,3 +23,10 @@ export declare function accessDenied(e: unknown): boolean;
  * the error is not about getting Google's permission, so the caller words it.
  */
 export declare function googleAccessMessage(e: unknown, service?: string): string | null;
+/**
+ * Words for a failed `googleAuthCode` (connecting Google Calendar, an alert inbox) or any wait on
+ * Google's window, so no failure is silent: blocked, closed before finishing, refused, or stopped
+ * for another reason (reported, `./observability`). Null only when the error is not about
+ * Google's window or permission, so the caller words it (a server's answer, being offline).
+ */
+export declare function googleWindowMessage(e: unknown, service?: string): string | null;

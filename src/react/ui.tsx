@@ -2,7 +2,8 @@
  * The Huishouden UI primitives for React apps (DESIGN.md "Components"): class strings for buttons,
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
  * checkbox, section tabs (a bottom bar on phones), member badge, "Sample data" banner every app shows, and
- * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`, and a copy button.
+ * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`, a copy button,
+ * and the note offering to bring back Google's window when it may have opened out of sight.
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -603,5 +604,33 @@ export function Toast({ toast, onDone }: { toast: ToastState | null; onDone: () 
         </div>
       )}
     </div>
+  );
+}
+
+/** How long a wait on Google's window lasts before `GoogleWindowWait` offers to bring it back. */
+export const GOOGLE_WINDOW_HINT_MS = 4000;
+
+/**
+ * Under a button that opens Google's window (`googleAuthCode`): when the wait lasts a few seconds,
+ * says the window may be behind this one (desktop browsers, installed apps) and offers to bring it
+ * to the front; `onShow` calls `googleAuthCode` again, which reuses the open window.
+ */
+export function GoogleWindowWait({ waiting, onShow, delayMs = GOOGLE_WINDOW_HINT_MS }: { waiting: boolean; onShow: () => void; delayMs?: number }) {
+  const kt = useKitT();
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    setLate(false);
+    if (!waiting) return;
+    const id = setTimeout(() => setLate(true), delayMs);
+    return () => clearTimeout(id);
+  }, [waiting, delayMs]);
+  if (!waiting || !late) return null;
+  return (
+    <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+      <span>{kt('feedback.windowWaiting')}</span>
+      <button type="button" className={linkClass} onClick={onShow}>
+        {kt('feedback.windowShow')}
+      </button>
+    </p>
   );
 }
