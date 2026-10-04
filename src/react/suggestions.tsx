@@ -175,8 +175,11 @@ export function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead,
     onDismiss(m);
     keepFocus();
   };
+  // The title keeps at least 15rem and takes the row; when the buttons no longer fit beside it (a
+  // phone), they wrap under it to the right instead of squeezing it into a narrow column.
+  const title = 'min-w-0 grow basis-60 text-base break-words';
   const actions = (m: T, as = addAs?.(m)) => (
-    <div className="flex shrink-0 gap-1">
+    <div className="ml-auto flex shrink-0 flex-wrap justify-end gap-1">
       <button type="button" className={ghostButton} onClick={() => dismiss(m)} aria-label={kt('suggestions.notThisOneFor', { title: titleOf(m) })}>
         {kt('suggestions.notThisOne')}
       </button>
@@ -189,7 +192,7 @@ export function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead,
     <section ref={card} tabIndex={-1} className="rounded-2xl border border-line bg-surface px-4 py-2 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-forest-200" aria-label={label}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {icon}
-        <p role="status" className="min-w-0 flex-1 text-base text-ink-soft [overflow-wrap:anywhere]">
+        <p role="status" className={`${title} text-ink-soft`}>
           {lead}: <span className="font-medium text-ink">{titleOf(first)}</span>
           {detailOf(first) && <span className="text-muted"> · {detailOf(first)}</span>}
         </p>
@@ -204,7 +207,7 @@ export function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead,
         <ul id={listId} className="mt-1 divide-y divide-line border-t border-line" aria-label={moreLabel}>
           {rest.map((m) => (
             <li key={idOf(m)} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 pl-8">
-              <p className="min-w-0 flex-1 text-base [overflow-wrap:anywhere]">
+              <p className={title}>
                 <span className="font-medium text-ink">{titleOf(m)}</span>
                 {detailOf(m) && <span className="text-muted"> · {detailOf(m)}</span>}
               </p>
