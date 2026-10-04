@@ -1,0 +1,7 @@
+{
+  "accountId": "1234567",
+  "apps": {
+    "/": { "appId": "1000001", "browserKey": "NRJS-example1111111111" },
+    "/baby/": { "appId": "1000002", "browserKey": "NRJS-example1111111111", "note": "dropped" }
+  }
+}

@@ -1,31 +1,48 @@
 #!/usr/bin/env bun
 /**
- * Sets up New Relic (free tier) for a family of apps: one Browser application per app, the
- * VITE_NEWRELIC_* repo variables, an uptime check per site, alert conditions with an email
- * destination, drop rules that keep geography coarse, and one dashboard. Safe to re-run: everything
- * is found by name and updated rather than duplicated. STANDARD.md "Observability".
+ * Sets up New Relic (free tier) for a family of apps: one Browser application per app, an uptime
+ * check per app, alert conditions with an email destination, drop rules that keep geography coarse,
+ * and one dashboard. Safe to re-run: everything is found by name and updated rather than
+ * duplicated, and uptime checks for addresses no longer in the list are deleted.
+ * docs/observability.md; STANDARD.md "Observability".
  *
- *   NEW_RELIC_API_KEY=… NEW_RELIC_ACCOUNT_ID=… ALERT_EMAIL=… bun infra/newrelic.ts apps.json
+ *   NEW_RELIC_API_KEY=… NEW_RELIC_ACCOUNT_ID=… ALERT_EMAIL=… bun infra/newrelic.ts apps.json [--out observability.json] [--repo-variables]
  *
  * apps.json is the portal's list: [{ "repo": "baby", "site": "huishouden-baby", "path": "/baby/" }, …]. An app
  * with a `path` is checked at that path on the shared site (the portal's, path `/`; docs/one-site.md).
+ *
+ * `--out` writes the browser-agent settings of every app with a path (account id, app id, browser
+ * key: public by design) for the site's `/hh-observability.json`; the portal's monitoring workflow
+ * publishes it and every deploy serves it, so apps need no repo variables. `--repo-variables` sets
+ * the `VITE_NEWRELIC_*` variables on each app's repo instead (apps on sites of their own; needs `gh`
+ * signed in with admin on the repos).
+ *
  * Optional: GITHUB_OWNER (default huishouden), FAMILY (default Huishouden), DRY_RUN=1.
- * Needs a New Relic user key (NRAK-…, never committed) and `gh` signed in with admin on the repos.
+ * The user key (NRAK-…) is read from the environment only and never printed.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
-const KEY = process.env.NEW_RELIC_API_KEY;
+const KEY = process.env.NEW_RELIC_API_KEY?.trim();
 const ACCOUNT = Number(process.env.NEW_RELIC_ACCOUNT_ID);
-const EMAIL = process.env.ALERT_EMAIL;
+const EMAIL = process.env.ALERT_EMAIL?.trim();
 const OWNER = process.env.GITHUB_OWNER ?? 'huishouden';
 const FAMILY = process.env.FAMILY ?? 'Huishouden';
 const DRY = process.env.DRY_RUN === '1';
-const file = process.argv[2];
-if (!KEY || !ACCOUNT || !EMAIL || !file) {
-  console.error('Usage: NEW_RELIC_API_KEY=… NEW_RELIC_ACCOUNT_ID=… ALERT_EMAIL=… bun infra/newrelic.ts apps.json');
+const argv = process.argv.slice(2);
+const outIndex = argv.indexOf('--out');
+const OUT = outIndex >= 0 ? argv[outIndex + 1] : undefined;
+const REPO_VARIABLES = argv.includes('--repo-variables');
+const file = argv.find((a, i) => !a.startsWith('--') && argv[i - 1] !== '--out');
+if (!KEY || !ACCOUNT || !EMAIL || !file || (outIndex >= 0 && !OUT)) {
+  console.error('Usage: NEW_RELIC_API_KEY=… NEW_RELIC_ACCOUNT_ID=… ALERT_EMAIL=… bun infra/newrelic.ts apps.json [--out observability.json] [--repo-variables]');
   process.exit(2);
 }
+
+/** Text with anything that looks like a New Relic key, or the alert address, taken out. */
+const scrub = (text: string) =>
+  [KEY!, EMAIL!].reduce((t, secret) => (secret ? t.split(secret).join('[redacted]') : t), text).replace(/\b(NRAK|NRAA|NRII|NRJS|NRIQ)-[A-Za-z0-9]+/g, '$1-[redacted]');
+const log = (text: string) => console.log(scrub(text));
 
 interface AppEntry {
   repo: string;
@@ -44,28 +61,58 @@ async function gql<T = any>(query: string, variables: Record<string, unknown> = 
     headers: { 'Content-Type': 'application/json', 'API-Key': KEY! },
     body: JSON.stringify({ query, variables }),
   });
-  const body = (await res.json()) as { data?: T; errors?: { message: string }[] };
+  if (res.status === 401 || res.status === 403) throw new Error(`New Relic refused the key (HTTP ${res.status}): is NEW_RELIC_API_KEY a current User key for account ${ACCOUNT}?`);
+  const body = (await res.json().catch(() => ({ errors: [{ message: `HTTP ${res.status}` }] }))) as { data?: T; errors?: { message: string }[] };
   if (body.errors?.length) throw new Error(body.errors.map((e) => e.message).join('; '));
   return body.data as T;
 }
 
 const mutate = async <T = any>(what: string, query: string, variables: Record<string, unknown>): Promise<T | null> => {
-  console.log(`${DRY ? '[dry run] ' : ''}${what}`);
-  return DRY ? null : gql<T>(query, variables);
+  log(`${DRY ? '[dry run] ' : ''}${what}`);
+  if (DRY) return null;
+  const result = await gql<T>(query, variables);
+  // Mutations answer problems in an `errors` field rather than failing.
+  const problems = Object.values((result ?? {}) as Record<string, { errors?: { description: string }[] } | null>)
+    .flatMap((r) => (Array.isArray(r?.errors) ? r.errors : []))
+    .map((e) => e.description);
+  if (problems.length) throw new Error(`${what}: ${problems.join('; ')}`);
+  return result;
 };
 
-async function entities(query: string): Promise<{ guid: string; name: string; applicationId?: number; monitorId?: string }[]> {
-  const d = await gql(
-    `query($q: String!) { actor { entitySearch(query: $q) { results { entities { guid name
-      ... on BrowserApplicationEntityOutline { applicationId }
-      ... on SyntheticMonitorEntityOutline { monitorId } } } } } }`,
-    { q: query },
-  );
-  return d.actor.entitySearch.results.entities;
+interface Entity {
+  guid: string;
+  name: string;
+  applicationId?: number;
+  monitorId?: string;
+  monitorType?: string;
+  monitoredUrl?: string;
 }
 
-// 1. Browser applications and the repo variables the build reads.
-async function browserApps() {
+async function entities(query: string): Promise<Entity[]> {
+  const found: Entity[] = [];
+  let cursor: string | null = null;
+  do {
+    const d: any = await gql(
+      `query($q: String!, $c: String) { actor { entitySearch(query: $q) { results(cursor: $c) { nextCursor entities { guid name
+        ... on BrowserApplicationEntityOutline { applicationId }
+        ... on SyntheticMonitorEntityOutline { monitorId monitorType monitoredUrl } } } } } }`,
+      { q: query, c: cursor },
+    );
+    found.push(...d.actor.entitySearch.results.entities);
+    cursor = d.actor.entitySearch.results.nextCursor;
+  } while (cursor);
+  return found;
+}
+
+// 1. Browser applications, and the settings each app's browser agent needs.
+interface AgentSettings {
+  accountId: string;
+  appId: string;
+  browserKey: string;
+}
+
+async function browserApps(): Promise<Map<AppEntry, AgentSettings>> {
+  const settings = new Map<AppEntry, AgentSettings>();
   const existing = await entities(`domain = 'BROWSER' AND type = 'APPLICATION' AND name LIKE '${FAMILY} %' AND accountId = ${ACCOUNT}`);
   for (const app of apps) {
     let guid = existing.find((e) => e.name === browserName(app))?.guid;
@@ -74,7 +121,7 @@ async function browserApps() {
         `mutation($a: Int!, $n: String!) { agentApplicationCreateBrowser(accountId: $a, name: $n, settings: { cookiesEnabled: true, distributedTracingEnabled: false, loaderType: SPA }) { guid } }`,
         { a: ACCOUNT, n: browserName(app) });
       guid = made?.agentApplicationCreateBrowser.guid;
-    }
+    } else log(`Browser app ${browserName(app)}: exists`);
     if (!guid) continue;
     // A just-created app takes a little while to appear in entity queries; wait for it (up to ~2 minutes).
     let js: { loader_config: { accountID: string; applicationID: string; licenseKey: string } } | undefined;
@@ -85,36 +132,70 @@ async function browserApps() {
     }
     if (!js) throw new Error(`New Relic hasn't indexed ${browserName(app)} yet; re-run in a minute (safe to repeat)`);
     const cfg = js.loader_config;
-    const vars = { VITE_NEWRELIC_ACCOUNT_ID: String(cfg.accountID), VITE_NEWRELIC_APP_ID: String(cfg.applicationID), VITE_NEWRELIC_BROWSER_KEY: cfg.licenseKey };
+    settings.set(app, { accountId: String(cfg.accountID), appId: String(cfg.applicationID), browserKey: cfg.licenseKey });
+  }
+  return settings;
+}
+
+/** The site's `hh-observability.json` source: every app with a path, by path. Values only, never logged. */
+function writeSiteSettings(settings: Map<AppEntry, AgentSettings>, out: string) {
+  const byPath: Record<string, { appId: string; browserKey: string }> = {};
+  let accountId = '';
+  for (const [app, s] of settings) {
+    if (!app.path) continue;
+    accountId ||= s.accountId;
+    if (s.accountId !== accountId) throw new Error(`${browserName(app)} is in another account (${s.accountId})`);
+    byPath[app.path] = { appId: s.appId, browserKey: s.browserKey };
+  }
+  if (!accountId) throw new Error('no app with a path to write settings for');
+  writeFileSync(out, `${JSON.stringify({ accountId, apps: byPath }, null, 2)}\n`);
+  log(`wrote ${out}: ${Object.keys(byPath).sort().join(' ')}`);
+}
+
+function setRepoVariables(settings: Map<AppEntry, AgentSettings>) {
+  for (const [app, s] of settings) {
+    const vars = { VITE_NEWRELIC_ACCOUNT_ID: s.accountId, VITE_NEWRELIC_APP_ID: s.appId, VITE_NEWRELIC_BROWSER_KEY: s.browserKey };
     for (const [name, value] of Object.entries(vars)) {
-      console.log(`${DRY ? '[dry run] ' : ''}gh variable set ${name} --repo ${OWNER}/${app.repo}`);
-      if (!DRY) {
-        const r = spawnSync('gh', ['variable', 'set', name, '--repo', `${OWNER}/${app.repo}`, '--body', value], { stdio: ['ignore', 'ignore', 'inherit'] });
-        if (r.status !== 0) throw new Error(`gh variable set ${name} failed for ${app.repo}`);
-      }
+      log(`${DRY ? '[dry run] ' : ''}gh variable set ${name} --repo ${OWNER}/${app.repo}`);
+      if (DRY) continue;
+      // The value goes in on stdin, so it never appears in a process list or a log.
+      const r = spawnSync('gh', ['variable', 'set', name, '--repo', `${OWNER}/${app.repo}`], { input: value, stdio: ['pipe', 'ignore', 'inherit'] });
+      if (r.status !== 0) throw new Error(`gh variable set ${name} failed for ${app.repo}`);
     }
   }
 }
 
-// 2. Uptime: ping monitors are free and unlimited on every plan (other monitor types count against 500 checks a month).
+// 2. Uptime: ping monitors are free and unlimited on every plan (other monitor types count against
+// 500 checks a month). One per app at its address; a family ping monitor that isn't one of these
+// (an app removed from the list, a duplicate) is deleted. An app with a path is checked there, not at
+// its old per-app address, which only redirects.
+const monitorName = (a: AppEntry) => `${browserName(a)} up`;
+
 async function uptime() {
-  const existing = await entities(`domain = 'SYNTH' AND type = 'MONITOR' AND name LIKE '${FAMILY} %' AND accountId = ${ACCOUNT}`);
+  const existing = (await entities(`domain = 'SYNTH' AND type = 'MONITOR' AND name LIKE '${FAMILY} %' AND accountId = ${ACCOUNT}`))
+    .filter((e) => e.monitorType === undefined || e.monitorType === 'SIMPLE');
+  const kept = new Set<string>();
   for (const app of apps) {
-    const name = `${browserName(app)} up`;
+    const name = monitorName(app);
+    const uri = siteUrl(app);
     const monitor = {
       name,
-      uri: siteUrl(app),
+      uri,
       period: 'EVERY_15_MINUTES',
       status: 'ENABLED',
       locations: { public: ['AWS_US_EAST_1', 'AWS_US_WEST_1'] },
       advancedOptions: { responseValidationText: FAMILY, useTlsValidation: true, redirectIsFailure: false, shouldBypassHeadRequest: true },
     };
-    const found = existing.find((e) => e.name === name);
-    if (found)
-      await mutate(`update monitor ${name}`, `mutation($g: EntityGuid!, $m: SyntheticsUpdateSimpleMonitorInput!) { syntheticsUpdateSimpleMonitor(guid: $g, monitor: $m) { errors { description } } }`, { g: found.guid, m: monitor });
-    else
-      await mutate(`create monitor ${name}`, `mutation($a: Int!, $m: SyntheticsCreateSimpleMonitorInput!) { syntheticsCreateSimpleMonitor(accountId: $a, monitor: $m) { errors { description } } }`, { a: ACCOUNT, m: monitor });
+    const found = existing.find((e) => e.name === name && !kept.has(e.guid));
+    if (found) {
+      kept.add(found.guid);
+      const was = found.monitoredUrl && found.monitoredUrl !== uri ? ` (was ${found.monitoredUrl})` : '';
+      await mutate(`update monitor ${name}: ${uri}${was}`, `mutation($g: EntityGuid!, $m: SyntheticsUpdateSimpleMonitorInput!) { syntheticsUpdateSimpleMonitor(guid: $g, monitor: $m) { errors { description } } }`, { g: found.guid, m: monitor });
+    } else
+      await mutate(`create monitor ${name}: ${uri}`, `mutation($a: Int!, $m: SyntheticsCreateSimpleMonitorInput!) { syntheticsCreateSimpleMonitor(accountId: $a, monitor: $m) { errors { description } } }`, { a: ACCOUNT, m: monitor });
   }
+  for (const e of existing.filter((x) => !kept.has(x.guid) && x.name.endsWith(' up')))
+    await mutate(`delete monitor ${e.name}${e.monitoredUrl ? ` (${e.monitoredUrl})` : ''}: not an app in the list`, `mutation($g: EntityGuid!) { syntheticsDeleteMonitor(guid: $g) { deletedGuid } }`, { g: e.guid });
 }
 
 // 3. New Relic works out the city from the connection; keep only country and region.
@@ -224,7 +305,7 @@ async function alerts(): Promise<string | null> {
     dest = made?.aiNotificationsCreateDestination.destination;
   }
   if (!dest) return policyId;
-  if (dest.status && dest.status !== 'DEFAULT') console.log(`  destination status: ${dest.status} (an address outside the account may need to confirm a verification email)`);
+  if (dest.status && dest.status !== 'DEFAULT') log(`  destination status: ${dest.status} (an address outside the account may need to confirm a verification email)`);
 
   const chName = `${FAMILY} alerts email`;
   const cs = await gql(`query($a: Int!, $n: String!) { actor { account(id: $a) { aiNotifications { channels(filters: { name: $n }) { entities { id name } } } } } }`, { a: ACCOUNT, n: chName });
@@ -333,9 +414,16 @@ async function upsertDashboard() {
   return made?.dashboardCreate.entityResult?.guid ?? null;
 }
 
-await browserApps();
-await uptime();
-await dropRules();
-const policyId = await alerts();
-const dash = await upsertDashboard();
-console.log(`\nAlert policy ${policyId ?? '(dry run)'}; dashboard https://one.newrelic.com/redirect/entity/${dash ?? '(dry run)'}`);
+try {
+  const settings = await browserApps();
+  if (OUT) writeSiteSettings(settings, OUT);
+  if (REPO_VARIABLES) setRepoVariables(settings);
+  await uptime();
+  await dropRules();
+  const policyId = await alerts();
+  const dash = await upsertDashboard();
+  log(`\nAlert policy ${policyId ?? '(dry run)'}; dashboard https://one.newrelic.com/redirect/entity/${dash ?? '(dry run)'}`);
+} catch (e) {
+  console.error(`newrelic: ${scrub(e instanceof Error ? e.message : String(e))}`);
+  process.exit(1);
+}

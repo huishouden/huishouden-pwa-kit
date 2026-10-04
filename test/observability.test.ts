@@ -3,6 +3,9 @@ import {
   AGENT_INIT,
   householdTag,
   newRelicConfigFromEnv,
+  newRelicConfigFromSite,
+  parseSiteObservability,
+  observabilityActive,
   observabilityBlock,
   observeHousehold,
   redact,
@@ -19,6 +22,7 @@ import {
 } from '../src/observability';
 import { readError } from '../src/feedback';
 import samples from './fixtures/observability/redact.json';
+import siteFile from './fixtures/observability/site.json';
 
 const ENV = { VITE_NEWRELIC_ACCOUNT_ID: '1234567', VITE_NEWRELIC_APP_ID: '7654321', VITE_NEWRELIC_BROWSER_KEY: 'NRJS-example0000000000', VITE_APP_VERSION: '1.2.3', VITE_BUILD_SHA: 'abc1234' };
 const config = newRelicConfigFromEnv(ENV);
@@ -223,5 +227,61 @@ describe("sensitive words (medicine and people's names)", () => {
     expect(resent).toHaveLength(1);
     expect(resent[0].message).toBe('TypeError in [redacted] row');
     expect(handler(new Error('Something else broke'))).toBe(false);
+  });
+});
+
+describe("the site's hh-observability.json", () => {
+  test('keeps only account and app ids and browser keys, by path', () => {
+    expect(parseSiteObservability(siteFile)).toEqual({
+      accountId: '1234567',
+      apps: { '/': { appId: '1000001', browserKey: 'NRJS-example1111111111' }, '/baby/': { appId: '1000002', browserKey: 'NRJS-example1111111111' } },
+    });
+    expect(newRelicConfigFromSite(siteFile, '/baby/')).toEqual({ accountId: '1234567', appId: '1000002', browserKey: 'NRJS-example1111111111' });
+    expect(newRelicConfigFromSite(siteFile, '/pet/')).toBeNull();
+  });
+
+  test('refuses anything that is not a browser key, so a user key is never published', () => {
+    const withKey = (browserKey: string) => ({ accountId: '1234567', apps: { '/': { appId: '1', browserKey } } });
+    expect(parseSiteObservability(withKey('NRAK-EXAMPLE0000000000000000'))).toBeNull();
+    expect(parseSiteObservability(withKey('NRJS-<script>'))).toBeNull();
+    expect(parseSiteObservability({ accountId: 'x', apps: {} })).toBeNull();
+    expect(parseSiteObservability({ accountId: '1', apps: { '../': { appId: '1', browserKey: 'NRJS-example1111111111' } } })).toBeNull();
+    expect(parseSiteObservability(null)).toBeNull();
+  });
+
+  test("an app on the site reports with the file's settings for its path, over its build variables", async () => {
+    const { loads, loader } = fakeAgent();
+    const used: unknown[] = [];
+    const recording: AgentLoader = async (o) => (used.push(o.config), loader(o));
+    expect(startObservability({ app: 'baby', env: { ...ENV, BASE_URL: '/baby/' }, loader: recording, siteConfig: async () => siteFile })).toBeNull();
+    await tick();
+    expect(loads).toHaveLength(1);
+    expect(used[0]).toEqual({ accountId: '1234567', appId: '1000002', browserKey: 'NRJS-example1111111111' });
+  });
+
+  test('without an entry, the build variables; with neither, nothing is loaded and the queue is dropped', async () => {
+    const one = fakeAgent();
+    const used: unknown[] = [];
+    startObservability({ app: 'pet', env: { ...ENV, BASE_URL: '/pet/' }, loader: async (o) => (used.push(o.config), one.loader(o)), siteConfig: async () => siteFile });
+    await tick();
+    expect(used[0]).toEqual(config);
+    resetObservability();
+
+    const none = fakeAgent();
+    startObservability({ app: 'pet', env: { BASE_URL: '/pet/' }, loader: none.loader, siteConfig: async () => { throw new Error('offline'); } });
+    reportError(new Error('queued'));
+    await tick();
+    await tick();
+    expect(none.loads).toHaveLength(0);
+    expect(observabilityActive()).toBe(false);
+  });
+
+  test('no file is asked for on a blocked page or without a base and variables', () => {
+    let asked = 0;
+    const siteConfig = async () => (asked++, siteFile);
+    expect(startObservability({ app: 'x', env: {}, siteConfig })).toBe('not-configured');
+    page({ host: 'localhost', protocol: 'http:' });
+    expect(startObservability({ app: 'x', env: { BASE_URL: '/' }, siteConfig })).toBe('host');
+    expect(asked).toBe(0);
   });
 });

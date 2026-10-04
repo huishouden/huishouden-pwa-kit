@@ -18,8 +18,9 @@
 # Caller repo variables: GCP_WIF_PROVIDER, GCP_DEPLOY_SA (deploy is skipped until both are set),
 # VITE_FIREBASE_*, VITE_GOOGLE_CLIENT_ID, VITE_VAPID_PUBLIC_KEY, VITE_CONNECTOR_URL (the portal's AI
 # assistant connector, huishouden/connector; STAGING_VITE_CONNECTOR_URL for staging), VITE_CALENDAR_URL
-# (the calendar feed and Google sync, huishouden/calendar; STAGING_VITE_CALENDAR_URL) and VITE_NEWRELIC_* (passed to the
-# production build; staging builds get no New Relic variables, so staging sends no reports). Optional package.json scripts:
+# (the calendar feed and Google sync, huishouden/calendar; STAGING_VITE_CALENDAR_URL) and VITE_NEWRELIC_* (only for apps
+# without `base`: on the suite's site the deploy serves /hh-observability.json, docs/observability.md;
+# staging gets neither, so staging sends no reports). Optional package.json scripts:
 # test (unit), e2e (Playwright smoke tests against site-url after each deploy), screenshots
 # (Playwright, writes docs/screenshots/*.png; committed back to main when they change, which needs
 # contents: write from the caller).
