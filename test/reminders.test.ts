@@ -79,7 +79,7 @@ describe('remindersForCourse', () => {
     const reminders = remindersForCourse(course, options);
     expect(reminders.map((r) => r.at)).toEqual([at(14, 20), at(15, 8), at(15, 20), at(16, 8), at(16, 20)]);
     expect(reminders[0]).toEqual({
-      id: `pet_course_c1-${at(14, 20)}`, app: 'pet', title: 'Biscuit: Carprofen 75 mg', body: '1 tablet at 20:00, with food',
+      id: `pet_course_c1-${at(14, 20)}`, app: 'pet', title: 'Biscuit: Carprofen 75 mg', body: '1 tablet at 8 PM, with food',
       at: at(14, 20), url: options.url, recipients: 'all', ref: 'pet:course:c1',
     });
     expect(remindersForCourse(course, options)).toEqual(reminders);
@@ -232,10 +232,10 @@ describe('reminders in every language', () => {
   test('course reminders carry texts in en, es and nl; title and body stay in the page language', async () => {
     const list = await remindersForCourseInEveryLang(course, options);
     expect(list[0].title).toBe('Biscuit: Carprofen 75 mg');
-    expect(list[0].body).toBe('1 tablet at 20:00, with food');
+    expect(list[0].body).toBe('1 tablet at 8 PM, with food');
     expect(list[0].texts).toEqual({
-      en: { title: 'Biscuit: Carprofen 75 mg', body: '1 tablet at 20:00, with food' },
-      es: { title: 'Biscuit: Carprofen 75 mg', body: '1 tablet a las 20:00, con comida' },
+      en: { title: 'Biscuit: Carprofen 75 mg', body: '1 tablet at 8 PM, with food' },
+      es: { title: 'Biscuit: Carprofen 75 mg', body: '1 tablet a las 8 p.m., con comida' },
       nl: { title: 'Biscuit: Carprofen 75 mg', body: '1 tablet om 20:00, bij het eten' },
     });
   });
