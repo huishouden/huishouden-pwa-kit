@@ -212,13 +212,17 @@ export interface ContactGroup {
 /**
  * Contacts grouped by role: the app's known `roles` first in their order (matched ignoring case),
  * then typed roles A–Z, then contacts without a role as "Other" (in the active language). Names A–Z within each group.
+ * With `roleLabel` (as on `ContactDialog`), a role typed as a known role's label ("Plomero") joins
+ * that role's group; a group's `role` is still the stored one, shown with `roleLabel`.
  */
-export function groupContacts(contacts: Contact[], roles: readonly string[]): ContactGroup[] {
+export function groupContacts(contacts: Contact[], roles: readonly string[], roleLabel?: (role: string) => string): ContactGroup[] {
   const other = kt('contacts.other');
   const groups = new Map<string, Contact[]>();
+  const known = (typed: string) =>
+    roles.find((r) => r.toLowerCase() === typed.toLowerCase()) ?? (roleLabel ? roles.find((r) => roleLabel(r).toLowerCase() === typed.toLowerCase()) : undefined);
   for (const c of [...contacts].sort((a, b) => a.name.localeCompare(b.name))) {
     const typed = c.role?.trim();
-    const role = (typed && (roles.find((r) => r.toLowerCase() === typed.toLowerCase()) ?? typed)) || other;
+    const role = (typed && (known(typed) ?? typed)) || other;
     groups.set(role, [...(groups.get(role) ?? []), c]);
   }
   const rank = (role: string) => {

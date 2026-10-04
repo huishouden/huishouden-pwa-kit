@@ -323,5 +323,12 @@ describe('a series the household already has', () => {
     expect(similarTitles('The recycling pickup', 'Recycling pickup')).toBe(true);
     expect(similarTitles('Garbage pickup', 'Garbage out for Monday Pickup')).toBe(false);
     expect(similarTitles('Lawn service', 'Pool service')).toBe(false);
+    expect(looksLikePrep({ title: 'Sacar la basura', time: '07:00' })).toBe(true);
+    expect(looksLikePrep({ title: 'Container buiten zetten', time: '07:00' })).toBe(true);
+    expect(looksLikePrep({ title: 'Recolección de basura', time: '07:00' })).toBe(false);
+    expect(looksLikePrep({ title: 'Afval ophalen', time: '07:00' })).toBe(false);
+    expect(similarTitles('Recolección de basura', 'recolección de la basura')).toBe(true);
+    expect(similarTitles('Recolección de basura', 'Recolección de reciclaje')).toBe(false);
+    expect(similarTitles('Oud papier ophalen', 'oud papier  ophalen')).toBe(true);
   });
 });
