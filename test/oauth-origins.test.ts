@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { missingOriginMessage, originProbeUrl, originStatus } from '../src/oauth-origins';
+import { missingOriginMessage, originProbeUrl, originStatus, signInOrigins } from '../src/oauth-origins';
 
 const respond = (status: number, location?: string) =>
   (async () => new Response(null, { status, headers: location ? { location } : {} })) as unknown as typeof fetch;
@@ -18,5 +18,8 @@ describe('oauth origin check', () => {
   });
   test('the message names the origins and the console page', () => {
     expect(missingOriginMessage(['https://a.example'], 'demo')).toContain('https://console.cloud.google.com/auth/clients?project=demo');
+  });
+  test('a project needs only its suite site and its auth handler domain', () => {
+    expect(signInOrigins('demo-staging')).toEqual(['https://demo-staging.web.app', 'https://demo-staging.firebaseapp.com']);
   });
 });

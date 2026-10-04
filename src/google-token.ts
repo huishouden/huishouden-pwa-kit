@@ -17,7 +17,7 @@ import { kt } from './i18n.js';
  *
  * Setup, once when the app starts: `configureGoogleTokens({ clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID })`
  * with the OAuth web client (the one Firebase created for Google sign-in, whose Authorized
- * JavaScript origins list the app). It also loads Google's script early, so a tap can open the
+ * JavaScript origins list the suite's site). It also loads Google's script early, so a tap can open the
  * window straight away (Safari blocks a window opened after waiting on a download).
  *
  * Kept in memory by default. `persist: true` keeps it in localStorage until it ends, so reopening

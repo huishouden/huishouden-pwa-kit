@@ -124,7 +124,40 @@ Same shape, staging builds: a pull request's `staging` job assembles the PR's bu
 (`huishouden-staging-<app>.web.app`, the portal's is `huishouden-staging.web.app`). The signed-in
 tests run at `https://<staging site>/<app>/`. Each app keeps its own staging site so two repos' PRs
 never overwrite each other mid-test; every staging site is a full mirror (portal at `/`, all apps
-under their paths), so cross-app checks (one sign-in, tiles) work on any of them.
+under their paths), so cross-app checks (one sign-in, tiles) work on any of them. Only
+`huishouden-staging.web.app` is an origin of the staging OAuth client ("Sign-in origins"), so
+Google's prompt and Google API tokens work there and not on the per-app staging sites.
+
+## Sign-in origins
+
+Two lists decide where Google sign-in works, and they are kept to what the one site needs.
+
+| List | Where | Production (`huishouden-piekstra`) | Staging (`huishouden-staging`) |
+|---|---|---|---|
+| Authorized JavaScript origins of the OAuth web client | Google Cloud console only (no API) | `https://huishouden-piekstra.web.app`, `https://huishouden-piekstra.firebaseapp.com` | `https://huishouden-staging.web.app`, `https://huishouden-staging.firebaseapp.com` |
+| Firebase Auth authorized domains | Identity Toolkit API (the bootstrap) | `huishouden-piekstra.web.app`, `huishouden-piekstra.firebaseapp.com` | those two for staging, every `huishouden-staging-<app>.web.app`, `localhost` |
+
+The OAuth client's origins are what Chrome's sign-in prompt (One Tap, `signInSilently`) and Google
+API tokens (`google-token`) check. Google allows an OAuth app that has not been through verification
+at most 10 authorized domains, and every `*.web.app` site counts as its own domain (they are on the
+public suffix list), so one origin per app does not fit: production would need 10 sites plus
+firebaseapp.com, staging 11. It does not need to: every app runs on the suite's site, the old
+per-app sites only redirect, and the per-app staging sites exist for pull requests' tests, which
+sign in with custom tokens and never show Google's prompt. Trying an app by hand on staging, with
+Google, is done on the staging portal's site, `https://huishouden-staging.web.app/<app>/`; on a
+per-app staging site the popup sign-in still works (Firebase Auth's list has it), One Tap and
+Google API tokens do not.
+
+The suite's site is the project's default Hosting site (`<project>.web.app`), so `signInOrigins(project)`
+from `./oauth-origins` derives both entries from the project id. The production `smoke` job, the
+staging job (allowed to fail: nothing automated needs it) and the bootstrap check exactly those and
+say what to add; an origin a check reports missing is added in the console under Google Auth
+Platform > Clients > "Web client (auto created by Google Service)".
+
+Firebase Auth's authorized domains have no such limit, but the bootstrap still adds only what is
+used: production gets nothing per app (a new app adds nothing), staging gets each app's staging site
+(its pull requests sign in there) and `localhost` (local runs against staging). Anything else on the
+list is printed as not needed; `bootstrap.sh --prune-domains` removes it.
 
 ## Old addresses
 
@@ -151,4 +184,5 @@ Reinstalling the portal once per device fixes that; the old icons can then be re
    Its old site is no longer deployed and keeps serving the last build until step 5.
 4. Verify every path: sign-in popup, Firestore, Google tokens, push worker.
 5. Portal: tiles become paths, `apps.json` marks the old sites `redirect`, the old sites redirect.
-6. Registry, uptime checks, authorized domains and docs follow the paths.
+6. Registry, uptime checks, sign-in origins and authorized domains ("Sign-in origins") and docs
+   follow the paths.
