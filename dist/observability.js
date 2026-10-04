@@ -12,7 +12,8 @@
  * the agent's obfuscation rules run over every message, stack trace and URL).
  *
  * Nothing at all is sent from automated browsers (Playwright, CI), local builds, hosts other than
- * the apps' own, or builds without the New Relic variables. The portal's /privacy page says this in
+ * the apps' own, or apps the site's `hh-observability.json` (or the New Relic variables) don't
+ * configure. The portal's /privacy page says this in
  * plain words.
  */
 /** `VITE_NEWRELIC_ACCOUNT_ID`, `VITE_NEWRELIC_APP_ID`, `VITE_NEWRELIC_BROWSER_KEY`; null when any is missing. */
@@ -23,20 +24,64 @@ export function newRelicConfigFromEnv(env) {
     const browserKey = get('VITE_NEWRELIC_BROWSER_KEY');
     return accountId && appId && browserKey ? { accountId, appId, browserKey } : null;
 }
+/**
+ * Served at the root of the suite's one site: the browser-agent settings for every app on it, by the
+ * app's path. Written by the deploy from the portal's `observability` release asset, which the
+ * portal's monitoring workflow publishes (docs/observability.md), so no app needs repo variables
+ * and a new app reports from its first deploy. Every value in it is public by design.
+ */
+export const SITE_OBSERVABILITY = 'hh-observability.json';
+const DIGITS = /^\d{1,20}$/;
+const BROWSER_KEY = /^NRJS-[A-Za-z0-9]{10,64}$/;
+/**
+ * Checks a `hh-observability.json` and returns it with nothing but the expected fields, or null when
+ * anything in it is not an account id, app id or browser key (`NRJS-…`). The check is what keeps a
+ * user key (`NRAK-…`) or anything else from ever being published to the site.
+ */
+export function parseSiteObservability(value) {
+    const v = value;
+    if (!v || typeof v !== 'object' || typeof v.accountId !== 'string' || !DIGITS.test(v.accountId))
+        return null;
+    if (!v.apps || typeof v.apps !== 'object' || Array.isArray(v.apps))
+        return null;
+    const apps = {};
+    for (const [path, entry] of Object.entries(v.apps)) {
+        const e = entry;
+        if (!/^\/(?:[a-z0-9-]+\/)?$/.test(path))
+            return null;
+        if (!e || typeof e.appId !== 'string' || !DIGITS.test(e.appId) || typeof e.browserKey !== 'string' || !BROWSER_KEY.test(e.browserKey))
+            return null;
+        apps[path] = { appId: e.appId, browserKey: e.browserKey };
+    }
+    return { accountId: v.accountId, apps };
+}
+/** This app's settings from the site's `hh-observability.json`, by its base (`import.meta.env.BASE_URL`). */
+export function newRelicConfigFromSite(file, base) {
+    const parsed = parseSiteObservability(file);
+    const entry = parsed?.apps[base];
+    return parsed && entry ? { accountId: parsed.accountId, appId: entry.appId, browserKey: entry.browserKey } : null;
+}
 /** Hosting sites the apps are served from. Anything else (localhost, previews) sends nothing. */
 export const DEFAULT_HOSTS = /(^|\.)(web\.app|firebaseapp\.com)$/;
 const env = () => globalThis;
 /** Why nothing would be sent from this page, or null when errors and performance would be. */
 export function observabilityBlock(config, hosts = DEFAULT_HOSTS) {
-    const { navigator: nav, location: loc } = env();
     if (!config)
         return 'not-configured';
+    return pageBlock(hosts);
+}
+function pageBlock(hosts) {
+    const { navigator: nav, location: loc } = env();
     if (nav?.webdriver)
         return 'automation';
     if (!loc || loc.protocol !== 'https:' || !hosts.test(loc.hostname))
         return 'host';
     return null;
 }
+const fetchSiteObservability = async () => {
+    const res = await fetch(`/${SITE_OBSERVABILITY}`, { cache: 'no-cache', credentials: 'omit' });
+    return res.ok ? res.json() : null;
+};
 /** Whether usage counts may be sent: not when the browser sends Global Privacy Control or Do Not Track. */
 export function usageAllowed() {
     const nav = env().navigator;
@@ -167,14 +212,19 @@ function deliver(item) {
 const IGNORED_ERRORS = [/ResizeObserver loop/, /^Script error\.?$/, /chrome-extension:|moz-extension:|safari-extension:/];
 /**
  * Starts reporting for this app, once, as early as possible (in `firebase.ts` or `main.tsx`, before
- * rendering). Does nothing when `observabilityBlock` gives a reason; the agent is downloaded only
- * when it will be used.
+ * rendering). Does nothing on pages `observabilityBlock` rules out (automated browsers, other
+ * hosts). Otherwise the settings come from the site's `hh-observability.json` (the entry for
+ * `env.BASE_URL`), else from the `VITE_NEWRELIC_*` variables; with neither, nothing is sent and
+ * anything queued meanwhile is dropped. The agent is downloaded only when it will be used.
  */
 export function startObservability(options) {
     if (state)
         return null;
-    const config = newRelicConfigFromEnv(options.env);
-    const block = observabilityBlock(config, options.hosts);
+    const fromEnv = newRelicConfigFromEnv(options.env);
+    const base = typeof options.env.BASE_URL === 'string' && options.env.BASE_URL.startsWith('/') ? options.env.BASE_URL : '';
+    if (!fromEnv && !base)
+        return 'not-configured';
+    const block = pageBlock(options.hosts ?? DEFAULT_HOSTS);
     if (block)
         return block;
     const usage = usageAllowed();
@@ -186,11 +236,21 @@ export function startObservability(options) {
     w.addEventListener?.('unhandledrejection', early);
     const version = typeof options.env.VITE_APP_VERSION === 'string' ? options.env.VITE_APP_VERSION : null;
     const sha = typeof options.env.VITE_BUILD_SHA === 'string' ? options.env.VITE_BUILD_SHA : '';
-    (options.loader ?? loadNewRelic)({ config: config, init: AGENT_INIT, usage })
+    const started = state;
+    const siteConfig = base ? (options.siteConfig ?? fetchSiteObservability)().catch(() => null) : Promise.resolve(null);
+    siteConfig
+        .then((file) => {
+        const config = (file ? newRelicConfigFromSite(file, base) : null) ?? fromEnv;
+        if (!config)
+            throw new Error('not configured');
+        if (state !== started)
+            throw new Error('reset');
+        return (options.loader ?? loadNewRelic)({ config, init: AGENT_INIT, usage });
+    })
         .then((agent) => {
         w.removeEventListener?.('error', early);
         w.removeEventListener?.('unhandledrejection', early);
-        if (!state)
+        if (state !== started || !state)
             return;
         agent.setApplicationVersion(version);
         agent.setCustomAttribute('app', options.app);
@@ -216,8 +276,11 @@ export function startObservability(options) {
         queued.forEach(deliver);
     })
         .catch(() => {
-        // An ad blocker or no network: the app works the same without reports.
-        state = null;
+        // Not configured, an ad blocker or no network: the app works the same without reports.
+        w.removeEventListener?.('error', early);
+        w.removeEventListener?.('unhandledrejection', early);
+        if (state === started)
+            state = null;
     });
     return null;
 }

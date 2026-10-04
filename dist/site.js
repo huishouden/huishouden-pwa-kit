@@ -7,6 +7,7 @@
  * In an app, only `appUrl` is for the browser.
  */
 import { APP_PATHS_REGEX, permissionsPolicy, securityHeaders } from './security-headers.js';
+import { SITE_OBSERVABILITY } from './observability.js';
 /** `pet`, `/pet` or `/pet/` as `/pet/`; empty as `/`. */
 export function normalizePath(path) {
     const trimmed = path.replace(/^\/+|\/+$/g, '');
@@ -92,7 +93,7 @@ export function siteConfig(site, entries, publicDir = 'public') {
             ...bases.map((p) => ({ source: `${p}@(${FRESH_FILES.join('|')})`, headers: NO_CACHE })),
             // The page itself at each app's address (`/pet/` serves /pet/index.html).
             { regex: `^(?:${bases.join('|')})$`, headers: NO_CACHE },
-            { source: `/${SITE_MANIFEST}`, headers: NO_CACHE },
+            { source: `/@(${SITE_MANIFEST}|${SITE_OBSERVABILITY})`, headers: NO_CACHE },
             ...bases.map((p) => ({ source: `${p}assets/**`, headers: IMMUTABLE })),
         ],
     };
@@ -143,4 +144,8 @@ export function staleApps(manifest, latest) {
     return Object.entries(latest)
         .filter(([path, asset]) => asset !== null && manifest?.apps[path]?.asset !== asset)
         .map(([path]) => path);
+}
+/** Whether the published observability settings (`latest`, an asset id) differ from what `manifest` holds. */
+export function staleObservability(manifest, latest) {
+    return latest !== null && (manifest?.observability ?? null) !== latest;
 }
