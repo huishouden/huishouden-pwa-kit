@@ -19,6 +19,9 @@ export interface Contact {
   email?: string;
   website?: string;
   address?: string;
+  /** Where the address is, when a map search found it: for "2.3 mi from home" (`./home`). */
+  lat?: number;
+  lng?: number;
   mapsUrl?: string;
   notes?: string;
   /**
@@ -144,6 +147,12 @@ export function cleanContact(input: ContactInput): ContactInput {
   return out as ContactInput;
 }
 
+/** `lat` and `lng` when both are on the map; undefined otherwise. */
+export function coordinates(d: { lat?: unknown; lng?: unknown } | undefined): { lat: number; lng: number } | undefined {
+  const ok = (n: unknown, max: number): n is number => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= max;
+  return d && ok(d.lat, 90) && ok(d.lng, 180) ? { lat: d.lat, lng: d.lng } : undefined;
+}
+
 /** A contact document as a Contact. Pay details are read from `contactPay`, never from here. */
 export function toContact(id: string, data: Record<string, unknown>): Contact {
   const str = (k: string) => (typeof data[k] === 'string' ? (data[k] as string) : undefined);
@@ -157,6 +166,7 @@ export function toContact(id: string, data: Record<string, unknown>): Contact {
     address: str('address'),
     mapsUrl: str('mapsUrl'),
     notes: str('notes'),
+    ...(coordinates(data) ?? {}),
     apps: Array.isArray(data.apps) ? data.apps.map(String) : [],
     ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
     createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
@@ -228,6 +238,8 @@ export function contactInput(fields: Omit<ContactInput, 'apps'>, apps: string[],
     website: cut(normalizeWebsite(fields.website), CONTACT_LIMITS.website),
     address: cut(fields.address, CONTACT_LIMITS.address),
     mapsUrl: fields.mapsUrl?.trim() || undefined,
+    // A position only with the address it belongs to.
+    ...(fields.address?.trim() && coordinates(fields) ? coordinates(fields) : {}),
     notes: cut(fields.notes, CONTACT_LIMITS.notes),
     ...('pay' in fields ? { pay: cleanContactPay(fields.pay) ?? {} } : {}),
     apps: apps.includes(app) ? apps : [...apps, app],

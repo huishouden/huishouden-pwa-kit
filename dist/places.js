@@ -8,6 +8,7 @@
  * never on every keystroke.
  */
 import { formatNumber, getLocale, kt } from './i18n.js';
+import { homePoint } from './home.js';
 /** Great-circle distance in kilometres. */
 export function distanceKm(a, b) {
     const rad = (d) => (d * Math.PI) / 180;
@@ -40,7 +41,23 @@ export function toPlace(r) {
         mapsUrl: mapsSearchUrl(`${name} ${address}`),
     };
 }
-let lastSearch = 0;
+// When the next request may go: one a second, booked as callers arrive.
+let nextSlot = 0;
+/**
+ * Waits for this page's next turn at Nominatim: at most one request a second, shared by every
+ * Nominatim caller in the kit (`./home` too), even when several start at once.
+ */
+export function nominatimTurn() {
+    const now = Date.now();
+    // A clock that jumped back (or a test's) must not stall searches for its difference.
+    if (nextSlot > now + 60_000)
+        nextSlot = now;
+    const slot = Math.max(now, nextSlot);
+    nextSlot = slot + 1000;
+    return slot > now ? new Promise((r) => setTimeout(r, slot - now)) : Promise.resolve();
+}
+// Answers kept for the session, as Nominatim's policy asks: the same search twice asks once.
+const answers = new Map();
 export const PLACE_KINDS = Object.freeze([
     { words: /dry\s*clean/i, tags: ['shop=dry_cleaning'] },
     { words: /laundr|laundromat/i, tags: ['shop=laundry', 'shop=dry_cleaning'] },
@@ -131,26 +148,35 @@ async function searchOverpass(text, near, radiusKm, fetchImpl) {
     }
     throw failure;
 }
-async function searchNominatim(q, limit, fetchImpl, near, radiusKm = 15) {
-    const wait = lastSearch + 1000 - Date.now();
-    if (wait > 0)
-        await new Promise((r) => setTimeout(r, wait));
-    lastSearch = Date.now();
+async function searchNominatim(q, limit, fetchImpl, near, radiusKm = 15, bounded = true) {
     const url = new URL('https://nominatim.openstreetmap.org/search');
     const params = { q, format: 'jsonv2', extratags: '1', limit: String(limit) };
     if (near)
-        Object.assign(params, { viewbox: viewbox(near, radiusKm), bounded: '1' });
+        Object.assign(params, { viewbox: viewbox(near, radiusKm), bounded: bounded ? '1' : '0' });
     url.search = new URLSearchParams(params).toString();
+    const known = answers.get(url.href);
+    if (known)
+        return known;
+    await nominatimTurn();
     try {
         const res = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
         if (!res.ok)
             throw new Error(`[${res.status}] Place search failed`);
         // A rate-limit or captive-portal page can arrive as 200 with HTML: treat it as busy too.
-        return (await res.json()).map(toPlace);
+        const places = (await res.json()).map(toPlace);
+        answers.set(url.href, places);
+        if (answers.size > 100)
+            answers.delete(answers.keys().next().value);
+        return places;
     }
     catch (e) {
         throw new PlaceSearchUnavailable(e);
     }
+}
+/** For tests: forgets cached answers and the last request's time. */
+export function resetPlaceSearch() {
+    answers.clear();
+    nextSlot = 0;
 }
 /**
  * The free map service is busy or unreachable (rate limits, timeouts, server errors), so apps can
@@ -166,14 +192,17 @@ export class PlaceSearchUnavailable extends Error {
 }
 /**
  * Up to `limit` (default 5) places matching the text, e.g. "Riverside Pediatrics Springfield", or
- * with `near`, "dry cleaner" nearest first.
+ * with `near`, "dry cleaner" nearest first. A name search prefers places around `from` (the
+ * household's home by default) and says how far each is.
  */
-export async function searchPlaces(query, { limit = 5, near, radiusKm = 10, fetch: fetchImpl = fetch } = {}) {
+export async function searchPlaces(query, { limit = 5, near, radiusKm = 10, from = homePoint(), fetch: fetchImpl = fetch } = {}) {
     const q = query.trim();
     if (!q)
         return [];
-    if (!near)
-        return searchNominatim(q, limit, fetchImpl);
+    if (!near) {
+        const found = await searchNominatim(q, limit, fetchImpl, from ?? undefined, 50, false);
+        return from ? found.map((p) => ({ ...p, distanceKm: distanceKm(from, p) })) : found;
+    }
     // Overpass down or finding nothing: a bounded name search, which still finds named places.
     let overpassError = null;
     let places = await searchOverpass(q, near, radiusKm, fetchImpl).catch((e) => {

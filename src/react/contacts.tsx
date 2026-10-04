@@ -13,7 +13,10 @@ import { CONTACT_LIMITS, CONTACT_PAY_KINDS, CONTACT_PAY_LIMITS, contactInput, di
 import { contactFromCard, contactPickerSupported, contactSummary, parseVCard, pickContact, type ContactFill, type ParsedContact } from '../vcard';
 import { googleContactsAvailable, googleContactsToken, searchGoogleContacts } from '../google-contacts';
 import { googleAccessMessage, popupCancelled } from '../feedback';
-import { mapsSearchUrl, parsePlaceText, readPlaceScreenshot, searchPlaces, telHref, type ParsedPlace, type Place } from '../places';
+import { formatDistance, mapsSearchUrl, parsePlaceText, readPlaceScreenshot, searchPlaces, telHref, type ParsedPlace, type Place } from '../places';
+import { formatFromHome, geocodeAddress, getHome } from '../home';
+import { coordinates } from '../contact-core';
+import { useHome } from './home';
 import { capitalize, formatList, kt as kitT, type KitKey } from '../i18n';
 import { useKitT } from './i18n';
 import { Checkbox, Chip, Dialog, ErrorNotice, Field, cardClass, deleteButton, ghostButton, iconButton, inputClass, linkClass, overline, primaryButton, secondaryButton, selectClass } from './ui';
@@ -153,6 +156,9 @@ export function ContactDialog({
   const [website, setWebsite] = useState(contact?.website ?? card?.website ?? start?.website ?? '');
   const [address, setAddress] = useState(contact?.address ?? card?.address ?? start?.address?.slice(0, CONTACT_LIMITS.address) ?? '');
   const [mapsUrl, setMapsUrl] = useState(contact?.mapsUrl ?? start?.mapsUrl ?? '');
+  // Where the address is, from a map search (or found on save), for "2.3 mi from home".
+  const [point, setPoint] = useState(() => coordinates(contact ?? undefined));
+  const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState(contact?.notes ?? card?.notes ?? (start?.hours ? kitT('contacts.hoursNote', { hours: start.hours }).slice(0, CONTACT_LIMITS.notes) : ''));
   const [isPrivate, setPrivate] = useState(contact?.private === true);
   const [pay, setPay] = useState<ContactPay>(contact?.pay ?? {});
@@ -181,9 +187,17 @@ export function ContactDialog({
   const filledNotes = useRef(card?.notes ?? '');
   const valid = name.trim().length > 0;
 
-  const save = () => {
-    if (!valid) return;
-    const fields = { name, role, phone, email, website, address, mapsUrl, notes, private: canMarkPrivate && isPrivate };
+  const save = async () => {
+    if (!valid || saving) return;
+    // A typed address is looked up once on save, only when the household has a home to measure from.
+    let at = point;
+    if (!at && address.trim() && getHome()) {
+      setSaving(true);
+      const found = await Promise.race([geocodeAddress(address).catch(() => []), new Promise<[]>((r) => setTimeout(() => r([]), 5000))]);
+      at = found[0] ? { lat: found[0].lat, lng: found[0].lng } : undefined;
+      setSaving(false);
+    }
+    const fields = { name, role, phone, email, website, address, mapsUrl, ...(at ?? {}), notes, private: canMarkPrivate && isPrivate };
     // Pay details go in only where they were shown, so saving elsewhere keeps them as they are.
     onSave(contactInput(showPay ? { ...fields, pay: { ...pay, portal: normalizeWebsite(pay.portal) } } : fields, contact?.apps ?? [app], app));
     onClose();
@@ -207,13 +221,17 @@ export function ContactDialog({
     if (p.phone) setPhone(p.phone);
     if (p.website) setWebsite(p.website);
     setMapsUrl(p.mapsUrl);
+    setPoint(p.address ? { lat: p.lat, lng: p.lon } : point);
     setSearch({ status: 'idle' });
   };
 
   // Fills what the listing had, keeps what was typed for anything it lacked, and says which.
   const fillFrom = (p: ParsedPlace, source: FillSource) => {
     if (p.name) setName(p.name.slice(0, CONTACT_LIMITS.name));
-    if (p.address) setAddress(p.address.slice(0, CONTACT_LIMITS.address));
+    if (p.address) {
+      setAddress(p.address.slice(0, CONTACT_LIMITS.address));
+      setPoint(undefined);
+    }
     if (p.phone) setPhone(p.phone);
     if (p.email) setEmail(p.email);
     if (p.website) setWebsite(p.website);
@@ -235,6 +253,7 @@ export function ContactDialog({
     if (f.address) {
       setAddress(f.address);
       setMapsUrl('');
+      setPoint(undefined);
     }
     if (f.notes) {
       const kept = notes.trim() === filledNotes.current.trim() ? '' : notes.trim();
@@ -316,7 +335,7 @@ export function ContactDialog({
           <button type="button" className={ghostButton} onClick={onClose}>
             {kt('common.cancel')}
           </button>
-          <button type="button" className={primaryButton} disabled={!valid} onClick={save}>
+          <button type="button" className={primaryButton} disabled={!valid || saving} onClick={() => void save()}>
             {kt('common.save')}
           </button>
         </>
@@ -441,6 +460,7 @@ export function ContactDialog({
                 <button type="button" onClick={() => pick(p)} className="w-full rounded-xl border border-line px-3 py-2 text-left hover:border-forest-500 hover:bg-tint">
                   <span className="block font-medium text-ink [overflow-wrap:anywhere]">{p.name}</span>
                   {p.address && <span className="block text-sm text-muted [overflow-wrap:anywhere]">{p.address}</span>}
+                  {p.distanceKm !== undefined && <span className="block text-sm text-muted">{kt('home.fromHome', { distance: formatDistance(p.distanceKm) })}</span>}
                   {(p.phone || p.website) && (
                     <span className="block text-sm text-muted [overflow-wrap:anywhere]">{[p.phone, p.website?.replace(/^https?:\/\//, '')].filter(Boolean).join(' · ')}</span>
                   )}
@@ -521,7 +541,7 @@ export function ContactDialog({
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
-          save();
+          void save();
         }}
       >
         <Field label={kt('contacts.name')}>
@@ -565,6 +585,7 @@ export function ContactDialog({
               setAddress(e.target.value);
               // A typed address no longer matches the place the map link pointed at.
               setMapsUrl('');
+              setPoint(undefined);
             }}
           />
         </Field>
@@ -707,6 +728,8 @@ export function PrivateMark() {
 export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: Contact; role: string; onEdit?: () => void; onDelete?: () => void }) {
   const kt = useKitT();
   const maps = c.mapsUrl || (c.address ? mapsSearchUrl(`${c.name}, ${c.address}`) : null);
+  const home = useHome();
+  const away = formatFromHome(coordinates(c), { home });
   return (
     <section className={`${cardClass} p-5`} aria-label={c.name}>
       <div className="flex items-start gap-2">
@@ -748,6 +771,7 @@ export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: C
           <p className="flex items-start gap-1.5">
             <MapPin size={18} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" /> <span className="[overflow-wrap:anywhere]">{c.address}</span>
           </p>
+          {away && <p className="ml-6 text-sm text-muted">{away}</p>}
           {maps && (
             <a className={linkClass} href={maps} target="_blank" rel="noopener noreferrer">
               <ExternalLink size={18} aria-hidden="true" /> {kt('contacts.openMaps')}

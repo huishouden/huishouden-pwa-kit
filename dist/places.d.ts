@@ -35,6 +35,11 @@ interface NominatimResult {
 }
 export declare function mapsSearchUrl(query: string): string;
 export declare function toPlace(r: NominatimResult): Place;
+/**
+ * Waits for this page's next turn at Nominatim: at most one request a second, shared by every
+ * Nominatim caller in the kit (`./home` too), even when several start at once.
+ */
+export declare function nominatimTurn(): Promise<void>;
 export interface SearchPlacesOptions {
     limit?: number;
     /** For tests: stands in for the network. */
@@ -46,6 +51,11 @@ export interface SearchPlacesOptions {
      */
     near?: NearPoint;
     radiusKm?: number;
+    /**
+     * A name search (no `near`) prefers places around this point and gives each its `distanceKm`
+     * from it. The household's home by default (`./home`); `null` searches the whole map evenly.
+     */
+    from?: NearPoint | null;
 }
 /**
  * Everyday words for kinds of place, as OpenStreetMap tags them. Matched against the search text,
@@ -59,6 +69,8 @@ export interface PlaceKind {
 export declare const PLACE_KINDS: readonly PlaceKind[];
 /** The OpenStreetMap tags the text asks for, from `PLACE_KINDS`. */
 export declare function placeKinds(text: string): string[];
+/** For tests: forgets cached answers and the last request's time. */
+export declare function resetPlaceSearch(): void;
 /**
  * The free map service is busy or unreachable (rate limits, timeouts, server errors), so apps can
  * say so instead of "nothing nearby". A `near` search throws it when every Overpass server failed
@@ -70,9 +82,10 @@ export declare class PlaceSearchUnavailable extends Error {
 }
 /**
  * Up to `limit` (default 5) places matching the text, e.g. "Riverside Pediatrics Springfield", or
- * with `near`, "dry cleaner" nearest first.
+ * with `near`, "dry cleaner" nearest first. A name search prefers places around `from` (the
+ * household's home by default) and says how far each is.
  */
-export declare function searchPlaces(query: string, { limit, near, radiusKm, fetch: fetchImpl }?: SearchPlacesOptions): Promise<Place[]>;
+export declare function searchPlaces(query: string, { limit, near, radiusKm, from, fetch: fetchImpl }?: SearchPlacesOptions): Promise<Place[]>;
 export declare function usesMiles(locale?: string): boolean;
 /** "0.5 mi", "12 mi" where miles are used; "650 m", "3.1 km" ("3,1 km") elsewhere. */
 export declare function formatDistance(km: number, locale?: string): string;

@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.83.0",
+  "version": "0.84.0",
   "private": true,
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "PolyForm-Shield-1.0.0",
@@ -106,6 +106,10 @@
       "types": "./dist/household.d.ts",
       "default": "./dist/household.js"
     },
+    "./home": {
+      "types": "./dist/home.d.ts",
+      "default": "./dist/home.js"
+    },
     "./hours": {
       "types": "./dist/hours.d.ts",
       "default": "./dist/hours.js"
@@ -185,6 +189,10 @@
     "./react/clock": {
       "types": "./dist/react/clock.d.ts",
       "default": "./dist/react/clock.js"
+    },
+    "./react/home": {
+      "types": "./dist/react/home.d.ts",
+      "default": "./dist/react/home.js"
     },
     "./react/contacts": {
       "types": "./dist/react/contacts.d.ts",
@@ -329,7 +337,7 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "lint": "tsc --noEmit",
-    "test": "bun test test && bun test ./test/sdk/firestore.sdk.ts && bun test ./test/isolated/app.mocked.ts"
+    "test": "bun test test && bun test ./test/sdk/firestore.sdk.ts && bun test ./test/isolated/app.mocked.ts && bun test ./test/isolated/home.mocked.ts"
   },
   "peerDependencies": {
     "@playwright/test": ">=1.45",

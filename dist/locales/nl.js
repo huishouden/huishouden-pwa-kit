@@ -11,6 +11,7 @@ import food from './nl/food.js';
 import gmail from './nl/gmail.js';
 import googleTasks from './nl/googleTasks.js';
 import googleToken from './nl/googleToken.js';
+import home from './nl/home.js';
 import hours from './nl/hours.js';
 import household from './nl/household.js';
 import invite from './nl/invite.js';
@@ -39,6 +40,7 @@ export default {
     ...gmail,
     ...googleTasks,
     ...googleToken,
+    ...home,
     ...hours,
     ...household,
     ...invite,
