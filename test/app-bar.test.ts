@@ -211,6 +211,45 @@ describe('<hh-app-bar>', () => {
     }
   });
 
+  test("the app's own settings sit in the menu, signed out and in, and raise hh-settings", () => {
+    const { bar, $ } = mount({ settings: 'Baby settings' });
+    const calls: string[] = [];
+    bar.addEventListener('hh-settings', () => calls.push('settings'));
+    bar.user = null;
+    const trigger = $('.menu-button') as HTMLButtonElement;
+    expect(trigger.getAttribute('aria-label')).toBe('Settings');
+    trigger.click();
+    const items = () => Array.from($('.menu')!.querySelectorAll('.item')).map((b) => b.textContent);
+    expect(items()).toEqual(['Baby settings', 'Privacy']);
+    ($('.menu [part="app-settings"]') as HTMLButtonElement).click();
+    expect(calls).toEqual(['settings']);
+    expect($('.menu')!.hidden).toBe(true);
+
+    bar.user = { email: 'sam@example.com' };
+    expect(items()).toEqual(['Baby settings', 'All apps', 'In your own calendar', 'Use with your AI assistant', 'Privacy', 'Sign out']);
+    bar.settings = '';
+    expect(items()).toEqual(['All apps', 'In your own calendar', 'Use with your AI assistant', 'Privacy', 'Sign out']);
+    bar.user = null;
+    expect($('.menu-button')!.getAttribute('aria-label')).toBe('Theme, language and privacy');
+  });
+
+  test('the logo tile and the initial avatar take the theme\'s tile colours', () => {
+    const { bar, $ } = mount();
+    bar.user = { email: 'sam@example.com' };
+    expect($('.logo svg .hh-logo-tile')).not.toBeNull();
+    const css = bar.shadowRoot!.querySelector('style')!.textContent!;
+    expect(css).toContain('.logo .hh-logo-tile { fill: var(--tile); }');
+    expect(css).toMatch(/\.avatar \{[^}]*box-shadow: 0 0 0 1px var\(--tile-ring\)/);
+  });
+
+  test('Sign in has an icon for narrow phones and keeps its full name', () => {
+    const { bar, $ } = mount();
+    bar.user = null;
+    expect($('.signin .icon svg')).not.toBeNull();
+    expect($('.signin .label')!.textContent).toBe('Sign in\u00a0with Google');
+    expect($('.signin')!.getAttribute('aria-label')).toBe('Sign in with Google');
+  });
+
   test('the photo carries no referrer', () => {
     const { bar, $ } = mount();
     bar.user = { email: 'sam@example.com', photoURL: 'https://photos.example.com/sam.png' };
@@ -277,6 +316,7 @@ describe('AppBar (React)', () => {
               user,
               onSignIn: () => calls.push('in'),
               onSignOut: () => calls.push('out'),
+              onSettings: () => calls.push('settings'),
             },
             createElement('nav', { slot: 'nav' }, 'March'),
           ),
@@ -290,12 +330,14 @@ describe('AppBar (React)', () => {
     expect(bar.querySelector('nav[slot="nav"]')!.textContent).toBe('March');
     expect(bar.user).toBeNull();
     bar.shadowRoot!.querySelector<HTMLButtonElement>('.signin')!.click();
+    expect(bar.getAttribute('settings')).toBe('Spending settings');
+    bar.shadowRoot!.querySelector<HTMLButtonElement>('[part="app-settings"]')!.click();
 
     await render({ email: 'sam@example.com' });
     expect(bar.user).toEqual({ email: 'sam@example.com' });
     bar.shadowRoot!.querySelector<HTMLButtonElement>('.avatar')!.click();
     Array.from(bar.shadowRoot!.querySelectorAll<HTMLButtonElement>('button.item')).find((b) => b.textContent === 'Sign out')!.click();
-    expect(calls).toEqual(['in', 'out']);
+    expect(calls).toEqual(['in', 'settings', 'out']);
     await act(() => root.unmount());
   });
 });

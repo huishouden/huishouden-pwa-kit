@@ -47,6 +47,12 @@
   --hh-attention-tint: var(--hh-terracotta-light);
   --hh-error: #b91c1c;
   --hh-error-tint: #fef2f2;
+  /* App logo tiles and initial/icon avatars: their fill and the edge that keeps them off a dark page. */
+  --hh-tile: var(--hh-forest-700);
+  --hh-tile-ring: transparent;
+  /* The toast: a dark bar in light, a lifted forest one in dark. */
+  --hh-toast: #292524;
+  --hh-toast-ring: transparent;
 }
 
 /* Dark (DESIGN.md "Dark"): the forest scale, not grey. Every text pair here is at least 4.5:1. */
@@ -70,6 +76,10 @@
   --hh-attention-tint: var(--hh-terracotta-dark);
   --hh-error: #fca5a5;
   --hh-error-tint: var(--hh-forest-800);
+  --hh-tile: var(--hh-forest-600);
+  --hh-tile-ring: rgb(116 198 157 / 0.35);
+  --hh-toast: var(--hh-forest-700);
+  --hh-toast-ring: rgb(116 198 157 / 0.35);
   color-scheme: dark;
 }
 
@@ -125,11 +135,19 @@
   background: var(--hh-forest-600);
   color: #fff;
   font: 600 1.125rem/1 var(--hh-font);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+  box-shadow: 0 0 0 1px var(--hh-tile-ring), 0 1px 3px rgb(0 0 0 / 0.2);
   cursor: pointer;
 }
+:root.dark .hh-avatar { border-color: var(--hh-surface); }
 .hh-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .hh-avatar:focus-visible { outline: 3px solid var(--hh-terracotta); outline-offset: 2px; }
+
+/*
+ * An app's logo (logoSvg) on the page: lighter tile and a faint forest-400 edge in dark, so the tile
+ * does not sink into a forest-900 page. Put `hh-logo` on the element holding the <svg>.
+ */
+.hh-logo { border-radius: 21.875%; box-shadow: 0 0 0 1px var(--hh-tile-ring); }
+.hh-logo-tile { fill: var(--hh-tile); }
 
 /* <hh-app-bar> before its script runs: hold its height (one 44px row plus padding) so nothing jumps. */
 hh-app-bar:not(:defined) {

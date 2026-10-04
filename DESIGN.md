@@ -83,8 +83,12 @@ forest-600. Only the glyph changes between apps: portal `home` (a door), Tasks `
   row on phones; section tabs move to the bottom bar on phones, below), app buttons in the `actions` slot, and on the right "Sign in with Google" or the
   signed-in profile photo (`.hh-avatar`) opening the account menu: name, email, Theme (Automatic,
   Light, Dark), Language (Automatic, English, Español, Nederlands; each language named in itself),
-  All apps, Privacy, Sign out, and the running version; signed out, a "Theme, language and privacy"
-  button (sliders) beside Sign in opens them. The bar follows the suite's theme by itself. Sticky, cream, a stone-200 rule below,
+  the app's own settings ("Tasks settings", `onSettings`), All apps, Privacy, Sign out, and the
+  running version; signed out, a sliders button beside Sign in opens the theme, language, the app's
+  settings and Privacy ("Settings" when the app has some, else "Theme, language and privacy"). An
+  app's settings live in that menu, never in a gear of its own beside it. When its words would push
+  it onto a second row (a narrow phone, a long name, Spanish), Sign in shows its icon alone (still
+  named "Sign in with Google"), so the logo, the app's name and the account controls stay on one row (`expectAppBarOneRow`). The bar follows the suite's theme by itself. Sticky, cream, a stone-200 rule below,
   content width 1200px.
 - Sections: `SectionTabs` from `/react/ui`, never hand-built. From 640px they are a segmented
   control in the app bar. On phones they are a bar fixed to the bottom edge (no sideways-scrolling
@@ -162,12 +166,14 @@ rather than copying the class strings; the shapes are:
 - **Suggestion chip** (`SuggestionChip`): something the app learned, offered back to add with a tap; forest-50 pill with a plus. Every learned suggestion can be removed: long press or right-click opens "Don't suggest …", and an Edit link by the shelf's heading shows an × on each (a long press is never the only way in). Removing offers Undo.
 - **Input:** white, stone-200 border, `rounded-xl px-3 py-2.5`, focus forest-500 border + forest-200 ring.
 - **Dialog:** white `rounded-3xl`, black/40 scrim; bottom sheet on phones, centred on tablets;
-  title + close (X) row; Escape closes. On a touch screen no field takes focus on open (the keyboard
+  title + close (X) row; Escape closes. A label never breaks inside a footer button: on a narrow
+  phone the buttons share rows and grow to fill them (Dutch and Spanish labels run long). On a touch screen no field takes focus on open (the keyboard
   opens when a field is tapped), and nothing moves focus or scroll while the person fills it in.
 - **List row:** full-width, 44px+ tall, stone-200 divider, primary text stone-800, meta stone-600.
 - **Card:** white, `rounded-2xl`, stone-200 border or `shadow-sm`, 20–24px padding, one heading.
 - **Icons:** lucide-react, stroke 2–2.2, 16/20/24px, coloured by text colour; no emoji as icons.
-- **Toast:** one at a time at the bottom, stone-800 (red-700 for errors), with Undo for anything
+- **Toast:** one at a time at the bottom, stone-800 (forest-700 with a faint forest-400 edge in
+  dark; red-700 for errors), with Undo for anything
   cheap to reverse; 6 seconds, 9 for errors (`Toast`, `useToast`).
 - **Due wording:** "Due in 3 weeks", "Overdue by 5 days", "Overdue: gutter cleaning" from
   `@huishouden/pwa-kit/time`, so every app says the same distance the same way.
@@ -227,6 +233,11 @@ read it with `useTheme()` (`/react/theme`) when they need to know, e.g. for a ch
 - **Status colours.** Overdue and over-budget keep terracotta; positive and done are forest-300;
   the amber pending dot stays amber; person colours keep their white initial. A status never
   relies on colour alone.
+- **Tiles and avatars.** App logos and initial or icon avatars would sink into a forest-900 page,
+  so in dark the logo tile is forest-600 and both carry a 1px forest-400 edge at 35%:
+  `hh-logo` on the element holding a `logoSvg` (the app bar's logo has it), `ring-1 ring-tile-ring`
+  on an avatar fallback (`PersonBadge` has it). Light shows no edge.
+- **Toasts.** forest-700 with the same edge and white text (11:1); Undo in forest-200.
 - **Celebrations in dark.** The card is forest-800 with a forest-600 border, the title forest-300,
   the terracotta badge unchanged and the confetti in the dark chart colours.
 - **Images and charts.** Photos are shown as they are, on a surface, never on a white box; line
