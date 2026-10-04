@@ -7,9 +7,10 @@
  * and a hash of the household id (`householdTag`), skipped silently when the browser sends Global
  * Privacy Control or Do Not Track. Nothing is stored on the device: the agent runs with session
  * tracking off (no cookies, no localStorage id), so every count is per visit and nothing links one
- * visit to the next. Device and browser type and the country and region come from the request; no
- * names, emails, household ids, entries, query strings or precise location are sent (`redact` and
- * the agent's obfuscation rules run over every message, stack trace and URL).
+ * visit to the next. Device and browser type come from the request, and New Relic places it by its
+ * network address (country, region, city: docs/observability.md "Geography"); no names, emails,
+ * household ids, entries, query strings or device location are sent (`redact` and the agent's
+ * obfuscation rules run over every message, stack trace and URL).
  *
  * Nothing at all is sent from automated browsers (Playwright, CI), local builds, hosts other than
  * the apps' own, or apps the site's `hh-observability.json` (or the New Relic variables) don't
