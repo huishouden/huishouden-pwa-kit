@@ -180,7 +180,7 @@ export type AlertReading = {
     date: string;
     amount?: number;
 };
-export type NotPurchaseReason = 'payment' | 'declined' | 'statement' | 'security' | 'bulk' | 'no-amount';
+export type NotPurchaseReason = 'payment' | 'declined' | 'statement' | 'security' | 'account' | 'bulk' | 'no-purchase' | 'no-amount';
 export type UnreadableReason = 'no-merchant' | 'generic-merchant';
 interface PurchaseRule {
     name: string;
@@ -208,6 +208,8 @@ export declare function writtenDay(token: string): string | null;
  * the day the email was sent, in the household's time zone.
  */
 export declare function alertDay(text: string, sentence: string, sent: number, timeZone?: string): string;
+/** Markup where plain text should be: tags or style attributes. */
+export declare const looksLikeHtml: (s: string) => boolean;
 /** One email, read as a card alert (see `AlertReading`). */
 export declare function readAlert(msg: MailMessage, cards: AlertCard[], rules: CategoryRule[], options?: ParseOptions): AlertReading;
 /** One alert email as a transaction, or null when it isn't one it can trust (`readAlert` says why). */
