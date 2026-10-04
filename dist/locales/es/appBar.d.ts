@@ -9,6 +9,7 @@ declare const _default: {
     'appBar.you': string;
     'appBar.account': string;
     'appBar.allApps': string;
+    'appBar.assistant': string;
     'appBar.privacy': string;
     'appBar.signOut': string;
     'appBar.theme': string;
