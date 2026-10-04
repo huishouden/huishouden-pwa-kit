@@ -28,6 +28,9 @@ export class Increment {
   constructor(readonly by: number) {}
 }
 
+/** `deleteField()` in a merge: the field is removed, as the SDK's FieldValue. */
+export class FieldDelete {}
+
 export type Code = 'permission-denied' | 'not-found' | 'already-exists' | 'failed-precondition' | 'invalid-argument' | 'unauthenticated' | 'unavailable' | 'unknown';
 
 export class FirestoreError extends Error {
@@ -63,7 +66,7 @@ export function encode(v: unknown): Value {
 /** Fields of a document, leaving out `undefined` (as JSON does) and increments (written as transforms). */
 export function encodeFields(data: Record<string, unknown>): Record<string, Value> {
   const out: Record<string, Value> = {};
-  for (const [k, v] of Object.entries(data)) if (v !== undefined && !(v instanceof Increment)) out[k] = encode(v);
+  for (const [k, v] of Object.entries(data)) if (v !== undefined && !(v instanceof Increment) && !(v instanceof FieldDelete)) out[k] = encode(v);
   return out;
 }
 
@@ -86,9 +89,9 @@ export function decodeFields(fields: Record<string, Value> = {}): Record<string,
 /** A field path segment, quoted when it isn't a simple name ("2031-01-05" in a map of days). */
 const segment = (k: string) => (/^[A-Za-z_][A-Za-z0-9_]*$/.test(k) ? k : `\`${k.replace(/\\/g, '\\\\').replace(/`/g, '\\`')}\``);
 
-const isPlainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Increment);
+const isPlainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Increment) && !(v instanceof FieldDelete);
 
-/** Leaf field paths of a merge, as the SDK's `set(…, { merge: true })` writes them (nested maps merge too). */
+/** Leaf field paths of a merge, as the SDK's `set(…, { merge: true })` writes them (nested maps merge too); a `FieldDelete` is in the mask but not the values, so it goes. */
 export function mergePaths(data: Record<string, unknown>, prefix = ''): string[] {
   return Object.entries(data).flatMap(([k, v]) => {
     if (v === undefined || v instanceof Increment) return [];
@@ -203,6 +206,26 @@ export class FirestoreRest {
     const url = parent ? `${this.root}/${parent}:runQuery` : `${this.root}:runQuery`;
     const rows = await this.call<{ document?: { name: string; fields?: Record<string, Value>; updateTime?: string } }[]>('POST', url, { structuredQuery });
     return rows.filter((r) => r.document).map((r) => this.docOf(r.document!));
+  }
+
+  /**
+   * How many documents of `collection` under `parent` match, and the sum of each of `sum`'s
+   * fields over them, in one request (Firestore bills one read per 1000 index entries). Cheap
+   * enough to ask every few minutes whether anything changed: any write that changes `updatedAt`,
+   * adds or removes a document moves the count or the sum.
+   */
+  async aggregate(parent: string, collection: string, { where = [] }: Pick<QueryOptions, 'where'> = {}, sum: string[] = []): Promise<{ count: number; sums: Record<string, number> }> {
+    const filters = where.map((f) => ({ fieldFilter: { field: { fieldPath: f.field }, op: f.op, value: encode(f.value) } }));
+    const structuredQuery = {
+      from: [{ collectionId: collection }],
+      ...(filters.length === 1 ? { where: filters[0] } : filters.length > 1 ? { where: { compositeFilter: { op: 'AND', filters } } } : {}),
+    };
+    const aggregations = [{ alias: 'n', count: {} }, ...sum.map((field, i) => ({ alias: `s${i}`, sum: { field: { fieldPath: field } } }))];
+    const url = parent ? `${this.root}/${parent}:runAggregationQuery` : `${this.root}:runAggregationQuery`;
+    const rows = await this.call<{ result?: { aggregateFields?: Record<string, Value> } }[]>('POST', url, { structuredAggregationQuery: { structuredQuery, aggregations } });
+    const fields = rows.find((r) => r.result)?.result?.aggregateFields ?? {};
+    const num = (v: Value | undefined) => (v ? Number(decode(v)) || 0 : 0);
+    return { count: num(fields.n), sums: Object.fromEntries(sum.map((f, i) => [f, num(fields[`s${i}`])])) };
   }
 
   /** Every write at once, or none: the rules check each as if the app had made it. */

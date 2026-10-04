@@ -43,4 +43,11 @@ describe('series and edits on agenda items', () => {
     expect((allDay.data as { exceptions: Record<string, { moved: { time: string } }> }).exceptions['2031-10-02'].moved.time).toBe(DELETE_FIELD);
     expect(() => fillEditOps(reschedule.ops, { title: 'x' })).toThrow();
   });
+
+  test('one series edit serves every occurrence: $original as a key and a value', () => {
+    const skip = [{ col: 'homeEvents', id: 'bins', data: { exceptions: { $original: { skipped: true, note: 'was $original' } }, updatedAt: '$now' }, merge: true }];
+    const [op] = fillEditOps(skip, { original: '2031-10-16' });
+    expect(op.data).toEqual({ exceptions: { '2031-10-16': { skipped: true, note: 'was $original' } }, updatedAt: '$now' });
+    expect(() => fillEditOps(skip, {})).toThrow();
+  });
 });

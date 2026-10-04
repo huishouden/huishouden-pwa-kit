@@ -108,7 +108,9 @@ export const SERIES_DEFAULT_MINUTES = 60;
  *
  * Op data may use the to-do placeholders (`'$now'`, `'$today'`, `'$me'`) and these, filled in from
  * the change: `'$start'` and `'$end'` (ms), `'$date'` (YYYY-MM-DD) and `'$time'` (HH:MM, or the
- * field is removed when the item became all day), `'$title'` and `'$notes'`.
+ * field is removed when the item became all day), `'$title'` and `'$notes'`, and for an occurrence
+ * of a series `'$original'`, its day as the schedule has it, also as a map key, so one edit on the
+ * series serves every occurrence: `{ exceptions: { $original: { skipped: true } } }`.
  */
 export interface AgendaEdit {
   reschedule?: AgendaAction;
@@ -367,6 +369,8 @@ export interface EditValues {
   time?: Hhmm | null;
   title?: string;
   notes?: string;
+  /** YYYY-MM-DD: the day the schedule put the occurrence on, for `'$original'` (a value, or a map key). */
+  original?: Ymd;
 }
 
 /** Sentinel the writer turns into a field delete (Firestore REST: the field left out of a merge's values). */
@@ -387,21 +391,23 @@ function fillValue(v: unknown, values: EditValues): unknown {
         return values.title ?? v;
       case '$notes':
         return values.notes ?? v;
+      case '$original':
+        return values.original ?? v;
       default:
         return v;
     }
   }
   if (Array.isArray(v)) return v.map((x) => fillValue(x, values));
-  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fillValue(x, values)]));
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k === '$original' && values.original ? values.original : k, fillValue(x, values)]));
   return v;
 }
 
-const EDIT_PLACEHOLDER = /^\$(start|end|date|time|title|notes)$/;
+const EDIT_PLACEHOLDER = /^\$(start|end|date|time|title|notes|original)$/;
 
 function hasUnfilled(v: unknown): boolean {
   if (typeof v === 'string') return EDIT_PLACEHOLDER.test(v);
   if (Array.isArray(v)) return v.some(hasUnfilled);
-  if (v && typeof v === 'object') return Object.values(v).some(hasUnfilled);
+  if (v && typeof v === 'object') return Object.entries(v).some(([k, x]) => EDIT_PLACEHOLDER.test(k) || hasUnfilled(x));
   return false;
 }
 

@@ -1,4 +1,4 @@
-import { offsetAt } from './local-clock.js';
+import { offsetAt as zoneOffset } from './local-clock.js';
 import { addDays, daysInMonth, ymdParts, weekday, type Hhmm, type Ymd } from './time.js';
 import { ruleOccurrences, type EventRule } from './schedule.js';
 
@@ -46,6 +46,23 @@ export function foldLine(line: string): string {
 }
 
 const pad = (n: number, w = 2) => String(n).padStart(w, '0');
+
+const offsets = new Map<string, number>();
+
+/**
+ * `./local-clock`'s offset, remembered per zone and quarter hour (zones change offset only on
+ * quarter hours): a feed asks for the same few days hundreds of times, and each `Intl` call costs.
+ */
+function offsetAt(timeZone: string, t: number): number {
+  const key = `${timeZone}|${Math.floor(t / 900_000)}`;
+  let off = offsets.get(key);
+  if (off === undefined) {
+    if (offsets.size > 50_000) offsets.clear();
+    off = zoneOffset(timeZone, Math.floor(t / 900_000) * 900_000);
+    offsets.set(key, off);
+  }
+  return off;
+}
 
 /** "20311105" for a day. */
 export const icsDate = (day: Ymd): string => day.replace(/-/g, '');
@@ -107,14 +124,14 @@ interface Transition {
   to: number;
 }
 
-/** Every offset change in `timeZone` during `year`, found by stepping a day at a time and narrowing to the minute. */
+/** Every offset change in `timeZone` during `year`, found by stepping a week at a time and narrowing to the minute. */
 export function transitionsIn(timeZone: string, year: number): Transition[] {
   const out: Transition[] = [];
   let t = Date.UTC(year, 0, 1) - 14 * HOUR;
   const end = Date.UTC(year + 1, 0, 1) - 14 * HOUR;
   let before = offsetAt(timeZone, t);
   while (t < end) {
-    const next = t + 24 * HOUR;
+    const next = Math.min(t + 7 * 24 * HOUR, end);
     const after = offsetAt(timeZone, next);
     if (after !== before) {
       let lo = t;

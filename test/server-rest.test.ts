@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { decodeFields, encode, FirestoreRest, Increment, mergePaths, FirestoreError } from '../src/firestore-rest';
+import { decodeFields, encode, encodeFields, FieldDelete, FirestoreRest, Increment, mergePaths, FirestoreError } from '../src/firestore-rest';
 import { exchangeRefreshToken, FirebaseAuthError, IdTokenCache, verifyIdToken } from '../src/firebase-auth-rest';
 import { LocalClock, isTimeZone, offsetAt } from '../src/local-clock';
 import { connectUrl, isHandoffRequest, parseConnectParams, storeHandoff, takeHandoff, type HandoffStore } from '../src/signin-handoff';
@@ -65,6 +65,25 @@ describe('firestore-rest', () => {
     const docs = await db.query('households/h1', 'todos', { where: [{ field: 'private', op: 'EQUAL', value: false }] });
     expect(docs).toEqual([{ id: 'a', path: 'households/h1/todos/a', data: { title: 'Bins' }, updateTime: undefined }]);
     expect(JSON.parse(String(calls[0].init!.body)).structuredQuery.where).toEqual({ fieldFilter: { field: { fieldPath: 'private' }, op: 'EQUAL', value: { booleanValue: false } } });
+  });
+});
+
+describe('firestore-rest: aggregation and field deletes', () => {
+  test('a FieldDelete in a merge is in the mask and not in the values', () => {
+    const data = { exceptions: { '2031-01-06': { moved: { date: '2031-01-07', time: new FieldDelete() } } } };
+    expect(mergePaths(data)).toEqual(['exceptions.`2031-01-06`.moved.date', 'exceptions.`2031-01-06`.moved.time']);
+    expect(encodeFields(data)).toEqual({ exceptions: { mapValue: { fields: { '2031-01-06': { mapValue: { fields: { moved: { mapValue: { fields: { date: { stringValue: '2031-01-07' } } } } } } } } } } });
+  });
+
+  test('aggregate asks for a count and sums in one request', async () => {
+    const { calls, fetch } = fake(() => [200, [{ result: { aggregateFields: { n: { integerValue: '3' }, s0: { integerValue: '5847000000000' } } }, readTime: 'x' }]]);
+    const db = new FirestoreRest({ projectId: PROJECT, token: async () => 't', fetch });
+    const out = await db.aggregate('households/h1', 'agenda', { where: [{ field: 'private', op: 'EQUAL', value: false }] }, ['updatedAt']);
+    expect(out).toEqual({ count: 3, sums: { updatedAt: 5847000000000 } });
+    expect(calls[0].url).toEndWith('/documents/households/h1:runAggregationQuery');
+    const body = JSON.parse(String(calls[0].init!.body)).structuredAggregationQuery;
+    expect(body.aggregations).toEqual([{ alias: 'n', count: {} }, { alias: 's0', sum: { field: { fieldPath: 'updatedAt' } } }]);
+    expect(body.structuredQuery.from).toEqual([{ collectionId: 'agenda' }]);
   });
 });
 
