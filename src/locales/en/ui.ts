@@ -14,4 +14,6 @@ export default {
   'ui.loggedBy': 'Logged by {name}',
   'ui.addSuggestion': 'Add {label}',
   'ui.dontSuggest': "Don't suggest {label}",
+  'ui.copy': 'Copy {what}',
+  'ui.copied': 'Copied',
 } as const;

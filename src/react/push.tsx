@@ -11,9 +11,9 @@
 import { useEffect, useState } from 'react';
 import { Bell, BellOff } from 'lucide-react';
 import type { Firestore } from 'firebase/firestore';
-import { disablePush, enablePush, pushEnabled, pushSupport, watchPushLang } from '../push';
+import { disablePush, enablePush, pushEnabled, pushSupport, setAppMuted, watchMutedApps, watchPushLang } from '../push';
 import { useKitT } from './i18n';
-import { cardClass, overline, primaryButton, secondaryButton } from './ui';
+import { Checkbox, cardClass, overline, primaryButton, secondaryButton } from './ui';
 
 type State = 'checking' | 'off' | 'on' | 'working';
 
@@ -31,13 +31,23 @@ export interface NotificationsCardProps {
   onText: string;
   /** Without the card's own border and padding, inside another card or a dialog. */
   plain?: boolean;
+  /**
+   * Offers muting this app's reminders for the signed-in member on all their devices
+   * (`setAppMuted`), in the app's words: "Mute bill reminders for me". The household's own setting
+   * is untouched. Leave out to not offer it.
+   */
+  muteText?: string;
 }
 
-export function NotificationsCard({ db, householdId, user, app, vapidKey, offText, onText, plain }: NotificationsCardProps) {
+export function NotificationsCard({ db, householdId, user, app, vapidKey, offText, onText, plain, muteText }: NotificationsCardProps) {
   const kt = useKitT();
   const support = pushSupport();
   const [state, setState] = useState<State>('checking');
   const [error, setError] = useState<string | null>(null);
+  const [muted, setMuted] = useState<boolean | null>(null);
+  const email = user.email;
+
+  useEffect(() => (muteText && email ? watchMutedApps(db, householdId, email, (apps) => setMuted(apps.includes(app)), () => setMuted(null)) : undefined), [muteText, db, householdId, email, app]);
 
   useEffect(() => {
     let live = true;
@@ -95,6 +105,24 @@ export function NotificationsCard({ db, householdId, user, app, vapidKey, offTex
               <Bell size={18} /> {state === 'working' ? kt('push.asking') : kt('push.turnOn')}
             </button>
           )}
+        </div>
+      )}
+      {muteText && email && muted !== null && (
+        <div className="mt-3">
+          <Checkbox
+            checked={muted}
+            onChange={(on) => {
+              setError(null);
+              setMuted(on);
+              setAppMuted(db, householdId, email, app, on).catch(() => {
+                setMuted(!on);
+                setError(kt('push.couldNotMute'));
+              });
+            }}
+          >
+            {muteText}
+          </Checkbox>
+          <p className="ml-9 text-sm text-muted">{kt('push.muteHint')}</p>
         </div>
       )}
       {error && (

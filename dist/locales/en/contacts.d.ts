@@ -82,5 +82,8 @@ declare const _default: {
     readonly 'contacts.label.video': "Video";
     readonly 'contacts.otherPhones': "Other phones: {list}";
     readonly 'contacts.otherEmails': "Other emails: {list}";
+    readonly 'contacts.noOne': "No one";
+    readonly 'contacts.withRole': "{name} ({role})";
+    readonly 'contacts.removedContact': "A removed contact";
 };
 export default _default;

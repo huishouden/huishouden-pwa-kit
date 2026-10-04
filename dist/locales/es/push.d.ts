@@ -13,5 +13,7 @@ declare const _default: {
     'push.turnOff': string;
     'push.turnOn': string;
     'push.asking': string;
+    'push.muteHint': string;
+    'push.couldNotMute': string;
 };
 export default _default;

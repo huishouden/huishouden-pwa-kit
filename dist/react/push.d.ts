@@ -15,5 +15,11 @@ export interface NotificationsCardProps {
     onText: string;
     /** Without the card's own border and padding, inside another card or a dialog. */
     plain?: boolean;
+    /**
+     * Offers muting this app's reminders for the signed-in member on all their devices
+     * (`setAppMuted`), in the app's words: "Mute bill reminders for me". The household's own setting
+     * is untouched. Leave out to not offer it.
+     */
+    muteText?: string;
 }
-export declare function NotificationsCard({ db, householdId, user, app, vapidKey, offText, onText, plain }: NotificationsCardProps): import("react").JSX.Element;
+export declare function NotificationsCard({ db, householdId, user, app, vapidKey, offText, onText, plain, muteText }: NotificationsCardProps): import("react").JSX.Element;

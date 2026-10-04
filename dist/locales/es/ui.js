@@ -14,4 +14,6 @@ export default {
     'ui.loggedBy': 'Registrado por {name}',
     'ui.addSuggestion': 'Agregar {label}',
     'ui.dontSuggest': 'No sugerir {label}',
+    'ui.copy': 'Copiar {what}',
+    'ui.copied': 'Copiado',
 };
