@@ -4,6 +4,7 @@ import { doseSlots } from './dose.js';
 import { MONEY_APPS } from './roles.js';
 import { cleanAudience, inAudience } from './audience.js';
 import { getLang, inEveryLang, kt, LANGS } from './i18n.js';
+import { atClock } from './time.js';
 export const REMINDER_FIELDS = ['app', 'title', 'body', 'texts', 'at', 'url', 'recipients', 'ref', 'private', 'sent', 'sentAt', 'createdAt', 'by'];
 /** Limits of a stored title and body, also inside `texts` (the rules check the same). */
 export const REMINDER_LIMITS = { title: 120, body: 500 };
@@ -279,13 +280,17 @@ export function remindersForCourse(course, options) {
     const slots = doseSlots({ startDate: course.startDate, days: course.days, times: course.times, everyDays: options.everyDays }, now + lead, Math.min(to, now + 366 * 86_400_000));
     const title = options.forWhom && course.name ? kt('reminders.titleFor', { who: options.forWhom, name: course.name }) : options.forWhom || course.name || kt('reminders.medicine');
     const food = course.withFood === true ? 'with' : course.withFood === false ? 'without' : null;
-    const body = (time) => course.dose && food
-        ? kt('reminders.bodyDoseFood', { dose: course.dose, time, food })
-        : course.dose
-            ? kt('reminders.bodyDose', { dose: course.dose, time })
-            : food
-                ? kt('reminders.bodyFood', { food })
-                : kt('reminders.bodyTime', { time });
+    // The dose's time as said in the reader's language ("at 8 PM", "a las 8 p.m.", "om 20:00"), not 'HH:MM'.
+    const body = (time) => {
+        const at = atClock(time);
+        return course.dose && food
+            ? kt('reminders.bodyDoseFood', { dose: course.dose, at, food })
+            : course.dose
+                ? kt('reminders.bodyDose', { dose: course.dose, at })
+                : food
+                    ? kt('reminders.bodyFood', { food })
+                    : kt('reminders.bodyTime', { at });
+    };
     return slots.map((slot) => ({
         id: reminderId(ref, slot.at - lead),
         app: options.app,
