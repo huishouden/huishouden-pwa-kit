@@ -290,7 +290,7 @@ function resolveValue(v, ctx, today) {
 }
 /** The ops with their placeholders (`'$now'`, `'$today'`, `'$today+3m'`, `'$me'`, `{ $nextDue }`) filled in; throws `TodoActionError` on a malformed `$nextDue`. */
 export function resolveOps(ops, ctx) {
-    const today = toYmd(ctx.now);
+    const today = ctx.today ?? toYmd(ctx.now);
     return ops.map((op) => ({ ...op, data: op.data === null ? null : resolveValue(op.data, ctx, today) }));
 }
 /** The item as stored again (Undo), written by `me`. */
@@ -307,11 +307,11 @@ export class TodoActionError extends Error {
  * The ops an item's `done` or `cancel` writes, placeholders filled in, or a `TodoActionError` when
  * the action is missing or writes outside its app (`todoOpsAllowed`).
  */
-export function todoActionOps(item, which, { me, now }) {
+export function todoActionOps(item, which, ctx) {
     const action = item[which];
     if (!action || !todoOpsAllowed(item.app, action.ops))
         throw new TodoActionError(kt('todos.onlyInApp'));
-    return resolveOps(action.ops, { now, me });
+    return resolveOps(action.ops, ctx);
 }
 /**
  * Plans an item's `done` or `cancel` without any database: `ops` from `todoActionOps`, `before` the

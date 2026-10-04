@@ -73,6 +73,11 @@ describe('planTodo', () => {
     expect(() => todoActionOps(item(), 'cancel', { me: 'a@b.c', now: NOW })).toThrow(TodoActionError);
   });
 
+  test("a server in another time zone passes the person's day for '$today'", () => {
+    const ops = todoActionOps(item(), 'done', { me: 'alex@example.com', now: NOW, today: '2031-01-05' });
+    expect(ops[0].data).toEqual({ lastDone: '2031-01-05', updatedAt: NOW });
+  });
+
   test('a personal item is removed from personalTodos', () => {
     const it = item({ audience: ['alex@example.com'] });
     const ops = todoActionOps(it, 'done', { me: 'alex@example.com', now: NOW });

@@ -171,8 +171,14 @@ export declare function addedText(item: Pick<TodoItem, 'createdAt'>, now: number
 /** Whether `me` with `role` may run the item's `done` or `cancel`: the action exists, is allowed for the app, and names their role, them as owner, or them. */
 export declare function canDo(item: TodoItem, which: 'done' | 'cancel', role: Role | null | undefined, me: string | null | undefined): boolean;
 export interface ResolveContext {
+    /** `'$now'` (ms). */
     now: number;
     me: string;
+    /**
+     * `'$today'` and the days counted from it: default the day `now` falls on here. A server whose
+     * clock is in another zone than the person's passes the person's day.
+     */
+    today?: Ymd;
 }
 /** `{ $nextDue: { schedule, due } }`: the next due date of a job done today. */
 export interface NextDuePlaceholder {
@@ -197,7 +203,7 @@ export interface TodoPlan {
  * The ops an item's `done` or `cancel` writes, placeholders filled in, or a `TodoActionError` when
  * the action is missing or writes outside its app (`todoOpsAllowed`).
  */
-export declare function todoActionOps(item: TodoItem, which: 'done' | 'cancel', { me, now }: ResolveContext): Op[];
+export declare function todoActionOps(item: TodoItem, which: 'done' | 'cancel', ctx: ResolveContext): Op[];
 /**
  * Plans an item's `done` or `cancel` without any database: `ops` from `todoActionOps`, `before` the
  * records they touch as they are now (undefined when missing). Throws `TodoActionError` when a merge

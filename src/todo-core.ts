@@ -357,8 +357,14 @@ export function canDo(item: TodoItem, which: 'done' | 'cancel', role: Role | nul
 // ---- Applying an action ----
 
 export interface ResolveContext {
+  /** `'$now'` (ms). */
   now: number;
   me: string;
+  /**
+   * `'$today'` and the days counted from it: default the day `now` falls on here. A server whose
+   * clock is in another zone than the person's passes the person's day.
+   */
+  today?: Ymd;
 }
 
 const OFFSET = /^\$today([+-]\d{1,4})([dwmy])$/;
@@ -396,7 +402,7 @@ function resolveValue(v: unknown, ctx: ResolveContext, today: Ymd): unknown {
 
 /** The ops with their placeholders (`'$now'`, `'$today'`, `'$today+3m'`, `'$me'`, `{ $nextDue }`) filled in; throws `TodoActionError` on a malformed `$nextDue`. */
 export function resolveOps(ops: readonly Op[], ctx: ResolveContext): Op[] {
-  const today = toYmd(ctx.now);
+  const today = ctx.today ?? toYmd(ctx.now);
   return ops.map((op) => ({ ...op, data: op.data === null ? null : (resolveValue(op.data, ctx, today) as object) }));
 }
 
@@ -424,10 +430,10 @@ export interface TodoPlan {
  * The ops an item's `done` or `cancel` writes, placeholders filled in, or a `TodoActionError` when
  * the action is missing or writes outside its app (`todoOpsAllowed`).
  */
-export function todoActionOps(item: TodoItem, which: 'done' | 'cancel', { me, now }: ResolveContext): Op[] {
+export function todoActionOps(item: TodoItem, which: 'done' | 'cancel', ctx: ResolveContext): Op[] {
   const action = item[which];
   if (!action || !todoOpsAllowed(item.app, action.ops)) throw new TodoActionError(kt('todos.onlyInApp'));
-  return resolveOps(action.ops, { now, me });
+  return resolveOps(action.ops, ctx);
 }
 
 /**
