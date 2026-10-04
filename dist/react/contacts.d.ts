@@ -2,12 +2,22 @@ import type { Auth } from 'firebase/auth';
 import { type Contact, type ContactInput } from '../contacts';
 import { type ParsedContact } from '../vcard';
 import { type ParsedPlace } from '../places';
+/** A role as the field shows it: one of the app's roles in its shown name, anything typed as typed. */
+export declare function shownRole(role: string, roles: readonly string[], roleLabel: (role: string) => string): string;
+/** What to save for the field's text: one of the app's roles when it is that role's shown name, else the text. */
+export declare function storedRole(text: string, roles: readonly string[], roleLabel: (role: string) => string): string;
 export interface ContactDialogProps {
     contact: Contact | null;
     /** The app's id in `apps` ("baby"): a new contact shows there, an edited one keeps showing there. */
     app: string;
     /** Roles offered as one-tap chips; any other role can be typed. */
     roles: readonly string[];
+    /**
+     * How one of `roles` reads in the active language, when the app keeps them in English: "Plumber"
+     * shows as "Plomero" on its chip and in the field, and is still saved as "Plumber" (so contacts
+     * group the same whoever added them). Typing a role's shown name saves the role. Default: as is.
+     */
+    roleLabel?: (role: string) => string;
     /** Prefills the role for a new contact, e.g. from "Choose a pediatrician". */
     role?: string;
     /** Default "New contact" / "Edit contact"; Car says "New shop" / "Edit shop". */
@@ -45,7 +55,7 @@ export interface ContactDialogProps {
     onDelete?: () => void;
     onClose: () => void;
 }
-export declare function ContactDialog({ contact, app, roles, role: initialRole, title, searchPlaceholder, namePlaceholder, prefill, sharedContacts, auth, readScreenshot, canMarkPrivate, onSave, onDelete, onClose, }: ContactDialogProps): import("react").JSX.Element;
+export declare function ContactDialog({ contact, app, roles, roleLabel, role: initialRole, title, searchPlaceholder, namePlaceholder, prefill, sharedContacts, auth, readScreenshot, canMarkPrivate, onSave, onDelete, onClose, }: ContactDialogProps): import("react").JSX.Element;
 /**
  * "Only admins and members": the private flag on a contact or appointment (`./roles`), with its
  * one-line explanation. Show it only to those who may set it (`can(role, 'see-private')`).

@@ -57,12 +57,30 @@ const FIELD_KEYS: Record<FieldId, KitKey> = {
 /** "name, phone, and address" in the active language. */
 const listWords = (fields: FieldId[]) => formatList(fields.map((f) => kitT(FIELD_KEYS[f])));
 
+/** A role as the field shows it: one of the app's roles in its shown name, anything typed as typed. */
+export function shownRole(role: string, roles: readonly string[], roleLabel: (role: string) => string): string {
+  const known = roles.find((r) => r.toLowerCase() === role.trim().toLowerCase());
+  return known ? roleLabel(known) : role;
+}
+
+/** What to save for the field's text: one of the app's roles when it is that role's shown name, else the text. */
+export function storedRole(text: string, roles: readonly string[], roleLabel: (role: string) => string): string {
+  const typed = text.trim().toLowerCase();
+  return (typed && roles.find((r) => roleLabel(r).toLowerCase() === typed)) || text;
+}
+
 export interface ContactDialogProps {
   contact: Contact | null;
   /** The app's id in `apps` ("baby"): a new contact shows there, an edited one keeps showing there. */
   app: string;
   /** Roles offered as one-tap chips; any other role can be typed. */
   roles: readonly string[];
+  /**
+   * How one of `roles` reads in the active language, when the app keeps them in English: "Plumber"
+   * shows as "Plomero" on its chip and in the field, and is still saved as "Plumber" (so contacts
+   * group the same whoever added them). Typing a role's shown name saves the role. Default: as is.
+   */
+  roleLabel?: (role: string) => string;
   /** Prefills the role for a new contact, e.g. from "Choose a pediatrician". */
   role?: string;
   /** Default "New contact" / "Edit contact"; Car says "New shop" / "Edit shop". */
@@ -102,6 +120,7 @@ export function ContactDialog({
   contact,
   app,
   roles,
+  roleLabel = (r) => r,
   role: initialRole,
   title,
   searchPlaceholder,
@@ -501,11 +520,18 @@ export function ContactDialog({
           <div className="mb-2 flex flex-wrap gap-2">
             {roles.map((r) => (
               <Chip key={r} active={role.trim().toLowerCase() === r.toLowerCase()} onClick={() => setRole(r)}>
-                {r}
+                {roleLabel(r)}
               </Chip>
             ))}
           </div>
-          <input className={inputClass} value={role} maxLength={CONTACT_LIMITS.role} onChange={(e) => setRole(e.target.value)} placeholder={kt('contacts.rolePlaceholder')} aria-label={kt('contacts.role')} />
+          <input
+            className={inputClass}
+            value={shownRole(role, roles, roleLabel)}
+            maxLength={CONTACT_LIMITS.role}
+            onChange={(e) => setRole(storedRole(e.target.value, roles, roleLabel))}
+            placeholder={kt('contacts.rolePlaceholder')}
+            aria-label={kt('contacts.role')}
+          />
         </fieldset>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={kt('contacts.phone')}>
