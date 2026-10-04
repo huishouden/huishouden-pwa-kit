@@ -4,6 +4,8 @@ export default {
     'appBar.signInWithGoogle': 'Iniciar sesión con Google',
     'appBar.signIn': 'Iniciar sesión',
     'appBar.withGoogle': 'con Google',
+    'appBar.settings': 'Configuración',
+    'appBar.appSettings': 'Configuración de {app}',
     'appBar.settingsMenu': 'Tema, idioma y privacidad',
     'appBar.signedInAs': 'Sesión iniciada como {who}',
     'appBar.you': 'ti',

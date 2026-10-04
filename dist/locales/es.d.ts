@@ -403,6 +403,8 @@ declare const _default: {
     'appBar.signInWithGoogle': string;
     'appBar.signIn': string;
     'appBar.withGoogle': string;
+    'appBar.settings': string;
+    'appBar.appSettings': string;
     'appBar.settingsMenu': string;
     'appBar.signedInAs': string;
     'appBar.you': string;

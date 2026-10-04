@@ -78,6 +78,17 @@ export interface FrameOptions {
  * logo linking to the portal, the app's name, and the bar set in Inter.
  */
 export declare function expectHuishoudenFrame(page: Page, { app, portalUrl, path }: FrameOptions): Promise<void>;
+/**
+ * Opens the app's own settings from the app bar's menu (the avatar signed in, the sliders button
+ * signed out): the bar holds them since apps dropped their own gear. `name` is the item's text,
+ * e.g. "Tasks settings".
+ */
+export declare function openAppSettings(page: Page, name: string | RegExp): Promise<void>;
+/**
+ * The app bar's logo, name and account controls on one row at the current viewport (a phone's
+ * 360–412px, in a long language): nothing pushed onto a second line. The nav row is not counted.
+ */
+export declare function expectAppBarOneRow(page: Page): Promise<void>;
 export interface ThemeOptions {
     /** Page to load; defaults to the page as it is (reloaded). */
     path?: string;

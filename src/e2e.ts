@@ -251,6 +251,35 @@ export async function expectHuishoudenFrame(page: Page, { app, portalUrl, path }
   expect(font, 'app bar typeface').toMatch(/^["']?Inter\b/);
 }
 
+/**
+ * Opens the app's own settings from the app bar's menu (the avatar signed in, the sliders button
+ * signed out): the bar holds them since apps dropped their own gear. `name` is the item's text,
+ * e.g. "Tasks settings".
+ */
+export async function openAppSettings(page: Page, name: string | RegExp) {
+  const bar = page.locator('hh-app-bar');
+  await bar.locator('[data-trigger]').click();
+  await bar.getByRole('button', { name, exact: typeof name === 'string' }).click();
+}
+
+/**
+ * The app bar's logo, name and account controls on one row at the current viewport (a phone's
+ * 360–412px, in a long language): nothing pushed onto a second line. The nav row is not counted.
+ */
+export async function expectAppBarOneRow(page: Page) {
+  const bar = page.locator('hh-app-bar');
+  await expect(bar.locator('.account > *').first()).toBeVisible();
+  const rows = await bar.evaluate((el) => {
+    const root = el.shadowRoot!;
+    const top = (sel: string) => root.querySelector<HTMLElement>(sel)!.getBoundingClientRect();
+    const home = top('.home');
+    const end = top('.end');
+    return { home: home.top + home.height / 2, end: end.top + end.height / 2, width: root.querySelector('header')!.scrollWidth, view: innerWidth };
+  });
+  expect(Math.abs(rows.home - rows.end), 'account controls on the logo\'s row').toBeLessThan(12);
+  expect(rows.width, 'app bar no wider than the screen').toBeLessThanOrEqual(rows.view);
+}
+
 export interface ThemeOptions {
   /** Page to load; defaults to the page as it is (reloaded). */
   path?: string;

@@ -4,6 +4,8 @@ export default {
   'appBar.signInWithGoogle': 'Sign in with Google',
   'appBar.signIn': 'Sign in',
   'appBar.withGoogle': 'with Google',
+  'appBar.settings': 'Settings',
+  'appBar.appSettings': '{app} settings',
   'appBar.settingsMenu': 'Theme, language and privacy',
   'appBar.signedInAs': 'Signed in as {who}',
   'appBar.you': 'you',

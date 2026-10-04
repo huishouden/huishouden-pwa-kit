@@ -9,7 +9,9 @@
  * ```
  */
 import { createElement, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
-import { HhAppBar, SIGN_IN_EVENT, SIGN_OUT_EVENT, type AppBarUser } from '../app-bar';
+import { HhAppBar, SETTINGS_EVENT, SIGN_IN_EVENT, SIGN_OUT_EVENT, type AppBarUser } from '../app-bar';
+import { kt } from '../i18n';
+import { useI18nVersion } from './i18n';
 import type { Glyph } from '../logo';
 
 export type { AppBarUser } from '../app-bar';
@@ -27,14 +29,23 @@ export interface AppBarProps {
   signingIn?: boolean;
   onSignIn?: () => void;
   onSignOut?: () => void;
+  /**
+   * The app's own settings: the bar's menu (the account menu, or the sliders button signed out)
+   * holds them beside Theme and Language, so the app shows no gear of its own. Leave it out when
+   * there is nothing to set (a helper's view, say).
+   */
+  onSettings?: () => void;
+  /** Their name in the menu; by default "<app> settings" in the page's language. */
+  settingsLabel?: string;
   className?: string;
   children?: ReactNode;
 }
 
-export function AppBar({ app, glyph, portalUrl, version, theme, user, signingIn, onSignIn, onSignOut, className, children }: AppBarProps) {
+export function AppBar({ app, glyph, portalUrl, version, theme, user, signingIn, onSignIn, onSignOut, onSettings, settingsLabel, className, children }: AppBarProps) {
   const ref = useRef<HhAppBar>(null);
-  const handlers = useRef({ onSignIn, onSignOut });
-  handlers.current = { onSignIn, onSignOut };
+  const handlers = useRef({ onSignIn, onSignOut, onSettings });
+  handlers.current = { onSignIn, onSignOut, onSettings };
+  useI18nVersion(); // the default label follows the language
 
   useLayoutEffect(() => {
     if (ref.current) ref.current.user = user;
@@ -45,11 +56,14 @@ export function AppBar({ app, glyph, portalUrl, version, theme, user, signingIn,
     if (!el) return;
     const signIn = () => handlers.current.onSignIn?.();
     const signOut = () => handlers.current.onSignOut?.();
+    const settings = () => handlers.current.onSettings?.();
     el.addEventListener(SIGN_IN_EVENT, signIn);
     el.addEventListener(SIGN_OUT_EVENT, signOut);
+    el.addEventListener(SETTINGS_EVENT, settings);
     return () => {
       el.removeEventListener(SIGN_IN_EVENT, signIn);
       el.removeEventListener(SIGN_OUT_EVENT, signOut);
+      el.removeEventListener(SETTINGS_EVENT, settings);
     };
   }, []);
 
@@ -63,6 +77,7 @@ export function AppBar({ app, glyph, portalUrl, version, theme, user, signingIn,
       version: version || undefined,
       theme: theme === 'dark' ? 'dark' : undefined,
       'signing-in': signingIn ? '' : undefined,
+      settings: onSettings ? settingsLabel || kt('appBar.appSettings', { app }) : undefined,
       className,
     },
     children,

@@ -250,7 +250,8 @@ export function Dialog({ title, onClose, children, footer, wide }: { title: stri
           </button>
         </div>
         {children}
-        {footer && <div className="mt-6 flex flex-wrap items-center justify-end gap-2">{footer}</div>}
+        {/* Labels never break inside a button: on a narrow phone the buttons share rows, growing to fill them. */}
+        {footer && <div className="mt-6 flex flex-wrap items-center justify-end gap-2 [&>*]:whitespace-nowrap max-sm:[&>*]:grow">{footer}</div>}
       </div>
     </div>
   );
@@ -509,7 +510,7 @@ export function PersonBadge({ email, me, members, size = 32 }: { email: string; 
   const name = personName(email, { email: me });
   return (
     <span
-      className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white"
+      className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white ring-1 ring-tile-ring"
       style={{ width: size, height: size, backgroundColor: personColour(email, members), fontSize: size * 0.42 }}
       title={kt('ui.loggedBy', { name })}
       aria-label={kt('ui.loggedBy', { name })}
@@ -549,7 +550,7 @@ export function Toast({ toast, onDone }: { toast: ToastState | null; onDone: () 
       {toast && (
         <div
           className={`pointer-events-auto flex min-h-14 max-w-xl items-center gap-4 rounded-2xl px-5 py-2 text-base font-medium text-white shadow-lg ${
-            toast.tone === 'error' ? 'bg-red-700' : 'bg-stone-800'
+            toast.tone === 'error' ? 'bg-red-700 ring-1 ring-toast-ring' : 'bg-toast ring-1 ring-toast-ring'
           }`}
         >
           <span>{toast.message}</span>

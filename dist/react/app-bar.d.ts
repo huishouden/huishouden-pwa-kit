@@ -25,10 +25,18 @@ export interface AppBarProps {
     signingIn?: boolean;
     onSignIn?: () => void;
     onSignOut?: () => void;
+    /**
+     * The app's own settings: the bar's menu (the account menu, or the sliders button signed out)
+     * holds them beside Theme and Language, so the app shows no gear of its own. Leave it out when
+     * there is nothing to set (a helper's view, say).
+     */
+    onSettings?: () => void;
+    /** Their name in the menu; by default "<app> settings" in the page's language. */
+    settingsLabel?: string;
     className?: string;
     children?: ReactNode;
 }
-export declare function AppBar({ app, glyph, portalUrl, version, theme, user, signingIn, onSignIn, onSignOut, className, children }: AppBarProps): import("react").ReactElement<{
+export declare function AppBar({ app, glyph, portalUrl, version, theme, user, signingIn, onSignIn, onSignOut, onSettings, settingsLabel, className, children }: AppBarProps): import("react").ReactElement<{
     ref: import("react").RefObject<HhAppBar | null>;
     app: string;
     glyph: "home" | "car" | "list" | "check" | "card" | "bottle" | "paw" | "wrench" | "cart" | "pill";
@@ -36,5 +44,6 @@ export declare function AppBar({ app, glyph, portalUrl, version, theme, user, si
     version: string | undefined;
     theme: string | undefined;
     'signing-in': string | undefined;
+    settings: string | undefined;
     className: string | undefined;
 }, string | import("react").JSXElementConstructor<any>>;

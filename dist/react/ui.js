@@ -136,7 +136,7 @@ export function Dialog({ title, onClose, children, footer, wide }) {
             return;
         el.querySelector('input, select, textarea, button:not([data-dialog-close])')?.focus();
     }, []);
-    return (_jsx("div", { className: "fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6", onClick: onClose, children: _jsxs("div", { ref: panel, role: "dialog", "aria-modal": "true", "aria-label": title, tabIndex: -1, className: `safe-bottom outline-none max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-surface p-6 shadow-2xl sm:rounded-3xl ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`, onClick: (e) => e.stopPropagation(), children: [_jsxs("div", { className: "mb-5 flex items-center justify-between gap-4", children: [_jsx("h2", { className: "text-xl font-semibold text-ink", children: title }), _jsx("button", { type: "button", onClick: onClose, className: iconButton, "aria-label": kt('ui.close'), "data-dialog-close": "", children: _jsx(X, { size: 20 }) })] }), children, footer && _jsx("div", { className: "mt-6 flex flex-wrap items-center justify-end gap-2", children: footer })] }) }));
+    return (_jsx("div", { className: "fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6", onClick: onClose, children: _jsxs("div", { ref: panel, role: "dialog", "aria-modal": "true", "aria-label": title, tabIndex: -1, className: `safe-bottom outline-none max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-surface p-6 shadow-2xl sm:rounded-3xl ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`, onClick: (e) => e.stopPropagation(), children: [_jsxs("div", { className: "mb-5 flex items-center justify-between gap-4", children: [_jsx("h2", { className: "text-xl font-semibold text-ink", children: title }), _jsx("button", { type: "button", onClick: onClose, className: iconButton, "aria-label": kt('ui.close'), "data-dialog-close": "", children: _jsx(X, { size: 20 }) })] }), children, footer && _jsx("div", { className: "mt-6 flex flex-wrap items-center justify-end gap-2 [&>*]:whitespace-nowrap max-sm:[&>*]:grow", children: footer })] }) }));
 }
 /** A touch screen, where focusing a text field opens the on-screen keyboard. */
 const touchScreen = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -233,7 +233,7 @@ function BottomNav({ tabs, tab, onTab }) {
 export function PersonBadge({ email, me, members, size = 32 }) {
     const kt = useKitT();
     const name = personName(email, { email: me });
-    return (_jsx("span", { className: "inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white", style: { width: size, height: size, backgroundColor: personColour(email, members), fontSize: size * 0.42 }, title: kt('ui.loggedBy', { name }), "aria-label": kt('ui.loggedBy', { name }), role: "img", children: personInitial(email) }));
+    return (_jsx("span", { className: "inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white ring-1 ring-tile-ring", style: { width: size, height: size, backgroundColor: personColour(email, members), fontSize: size * 0.42 }, title: kt('ui.loggedBy', { name }), "aria-label": kt('ui.loggedBy', { name }), role: "img", children: personInitial(email) }));
 }
 /** One toast at a time: `notify` (with an optional Undo), `fail` (an error), `clear`. Pair with `<Toast>`. */
 export function useToast() {
@@ -252,7 +252,7 @@ export function Toast({ toast, onDone }) {
         const id = setTimeout(onDone, toast.tone === 'error' ? 9000 : 6000);
         return () => clearTimeout(id);
     }, [toast, onDone]);
-    return (_jsx("div", { "aria-live": "polite", className: "pointer-events-none fixed inset-x-0 bottom-(--hh-bottom-nav) z-[60] flex justify-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]", children: toast && (_jsxs("div", { className: `pointer-events-auto flex min-h-14 max-w-xl items-center gap-4 rounded-2xl px-5 py-2 text-base font-medium text-white shadow-lg ${toast.tone === 'error' ? 'bg-red-700' : 'bg-stone-800'}`, children: [_jsx("span", { children: toast.message }), toast.undo && (_jsx("button", { type: "button", onClick: () => {
+    return (_jsx("div", { "aria-live": "polite", className: "pointer-events-none fixed inset-x-0 bottom-(--hh-bottom-nav) z-[60] flex justify-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]", children: toast && (_jsxs("div", { className: `pointer-events-auto flex min-h-14 max-w-xl items-center gap-4 rounded-2xl px-5 py-2 text-base font-medium text-white shadow-lg ${toast.tone === 'error' ? 'bg-red-700 ring-1 ring-toast-ring' : 'bg-toast ring-1 ring-toast-ring'}`, children: [_jsx("span", { children: toast.message }), toast.undo && (_jsx("button", { type: "button", onClick: () => {
                         toast.undo?.();
                         onDone();
                     }, className: "min-h-11 rounded-xl px-3 font-semibold text-forest-200 underline-offset-4 hover:underline", children: kt('ui.undo') }))] })) }));
