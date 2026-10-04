@@ -103,8 +103,10 @@ export interface ContactGroup {
 /**
  * Contacts grouped by role: the app's known `roles` first in their order (matched ignoring case),
  * then typed roles A–Z, then contacts without a role as "Other" (in the active language). Names A–Z within each group.
+ * With `roleLabel` (as on `ContactDialog`), a role typed as a known role's label ("Plomero") joins
+ * that role's group; a group's `role` is still the stored one, shown with `roleLabel`.
  */
-export declare function groupContacts(contacts: Contact[], roles: readonly string[]): ContactGroup[];
+export declare function groupContacts(contacts: Contact[], roles: readonly string[], roleLabel?: (role: string) => string): ContactGroup[];
 /** "example.com" → "https://example.com"; empty stays empty. */
 export declare function normalizeWebsite(url: string | undefined): string | undefined;
 /** "https://www.example.com/kids/" → "example.com/kids", for showing a link compactly. */

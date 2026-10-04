@@ -81,6 +81,9 @@ const y = () => <>Fragment text</>;
 
   test('a file can opt out', () => {
     expect(findJsxLiterals('// i18n-ignore-file: a demo\nconst a = <p>Hello there</p>;')).toEqual([]);
+    // A generic arrow's type parameters are not an element, and the code after them is still code.
+    const generic = "const open =\n  <T extends { by?: string }>(show: (item: T) => void) =>\n  (item: T) => (ok ? show(item) : notify('Not yours'));\nconst b = <p>Left in English</p>;\nconst c = <U,>(u: U) => u;";
+    expect(findJsxLiterals(generic).map((l) => `${l.line} ${l.text}`)).toEqual(['4 Left in English']);
   });
 
   test('toasts and errors given an English literal', () => {

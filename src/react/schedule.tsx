@@ -14,6 +14,9 @@ import { addDays, dateFormat, isHhmm, isYmd, weekday, weekdayName, type Ymd } fr
 import { useKitT } from './i18n';
 import { Checkbox, Chip, Field, inputClass, selectClass } from './ui';
 
+/** Ends a sentence with a period unless it already ends with one ("a las 7 p.m."). */
+const endSentence = (text: string) => (text.endsWith('.') ? text : `${text}.`);
+
 type Mode = 'week' | 'weeks' | 'month' | 'year';
 
 const modeOf = (r: EventRule): Mode => (r.freq === 'week' ? (r.every === 1 ? 'week' : 'weeks') : r.freq);
@@ -193,7 +196,7 @@ export function PrepPicker({ prep, onChange, placeholder, suggestedTitle = '' }:
               />
             </label>
           </div>
-          <p className="text-sm text-muted">{describePrep(prep.offset)}.</p>
+          <p className="text-sm text-muted">{endSentence(describePrep(prep.offset))}</p>
           <Checkbox checked={prep.remind} onChange={(remind) => set({ remind })}>
             {kt('schedule.prepRemind')}
           </Checkbox>

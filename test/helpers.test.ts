@@ -61,6 +61,15 @@ describe('contacts', () => {
     expect(groups[0].contacts.map((c) => c.name)).toEqual(['A Peds', 'C Peds']);
   });
 
+  test('with role labels, a role typed as a label joins that role\'s group', () => {
+    const label = (r: string) => ({ Pediatrician: 'Pediatra', Hospital: 'Hospital' })[r] ?? r;
+    const groups = groupContacts([contact('A Peds', 'pediatra'), contact('B Peds', 'Pediatrician'), contact('Doula', 'Doula')], ROLES, label);
+    expect(groups.map((g) => [g.role, g.contacts.map((c) => c.name)])).toEqual([
+      ['Pediatrician', ['A Peds', 'B Peds']],
+      ['Doula', ['Doula']],
+    ]);
+  });
+
   test('websites get a scheme and display without one', () => {
     expect(normalizeWebsite('pediatrics.example.com')).toBe('https://pediatrics.example.com');
     expect(normalizeWebsite('http://example.com')).toBe('http://example.com');

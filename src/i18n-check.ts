@@ -193,6 +193,8 @@ export function findJsxLiterals(source: string, attributes: readonly string[] = 
     const next = source[i + 1];
     if (!(next === '>' || /[A-Za-z]/.test(next ?? ''))) return false;
     if (/[\w$)\]]/.test(prev) && !['return', 'case', 'default', 'yield', 'await', 'in', 'of', 'else', 'do', '&&', '||', '??'].includes(prevWord)) return false;
+    // A generic arrow function's type parameters in a .tsx file (`<T extends X>(...) =>`, `<T,>(...) =>`), not an element.
+    if (/^<[A-Za-z_$][\w$]*\s*(extends\b|,)/.test(source.slice(i, i + 80))) return false;
     return true;
   };
 

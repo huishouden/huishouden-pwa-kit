@@ -7,6 +7,8 @@ describe('calendar', () => {
   test('search phrases drop chore words, most specific first', () => {
     expect(searchPhrases('Get car seat checked at fire station')).toEqual(['car seat fire station', 'car seat', 'seat fire', 'fire station']);
     expect(searchPhrases('Book the appointment')).toEqual([]);
+    expect(searchPhrases('Cita de fumigación')).toEqual(['fumigación']);
+    expect(searchPhrases('Afspraak met de loodgieter')).toEqual(['loodgieter']);
   });
   test('all-day events start at local midnight; cancelled ones are dropped', () => {
     const m = toMatch({ id: 'e', summary: 'Checkup', htmlLink: 'l', start: { date: '2031-03-04' }, end: { date: '2031-03-05' } }, 'Family')!;
