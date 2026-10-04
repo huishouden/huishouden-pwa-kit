@@ -10,7 +10,8 @@ import { loadGsi, type GoogleAccountsId } from './gsi';
  * Firebase signs in with it. The first visit per app shows a one-tap prompt instead.
  *
  * Requirements: the Google OAuth web client (the one Firebase created for Google sign-in) must list
- * each app's origin under "Authorized JavaScript origins"; Google Cloud has no API for that.
+ * the suite's site under "Authorized JavaScript origins" (`signInOrigins` in `./oauth-origins`;
+ * docs/one-site.md "Sign-in origins"); Google Cloud has no API for that.
  */
 
 export type SilentSignInResult =

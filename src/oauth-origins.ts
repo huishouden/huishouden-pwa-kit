@@ -1,13 +1,24 @@
 /**
  * Checks that a site is an Authorized JavaScript origin of the Google OAuth web client, which
- * Chrome's sign-in prompt (One Tap, `signInSilently`) needs. Google has no API to edit a client's
- * origins, so the bootstrap and smoke tests check instead and say exactly what to add.
+ * Chrome's sign-in prompt (One Tap, `signInSilently`) and Google API tokens need. Google has no API
+ * to edit a client's origins, so the bootstrap and CI check instead and say exactly what to add.
+ *
+ * Only the suite's one site needs to be there (docs/one-site.md "Sign-in origins"): an unverified
+ * OAuth app may list at most 10 authorized domains, and every `*.web.app` site counts as one.
  *
  * Asks Google's sign-in endpoint for a token without prompting (`prompt=none`) as that origin:
  * a registered origin gets the sign-in page (200), an unregistered one is redirected to an error.
  */
 
 export type OriginStatus = 'registered' | 'missing' | 'unknown';
+
+/**
+ * The origins a project's OAuth web client needs: the project's default Hosting site, which serves
+ * the whole suite, and Firebase's auth handler domain (`authDomain`).
+ */
+export function signInOrigins(project: string): string[] {
+  return [`https://${project}.web.app`, `https://${project}.firebaseapp.com`];
+}
 
 export function originProbeUrl(clientId: string, origin: string): string {
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -37,5 +48,6 @@ export function missingOriginMessage(origins: string[], project?: string): strin
     `Google sign-in will fail with origin_mismatch on: ${origins.join(', ')}`,
     `Add them under Authorized JavaScript origins of the "Web client (auto created by Google Service)"`,
     project ? `at ${ORIGINS_CONSOLE_URL(project)} (Google has no API for this).` : '(Google has no API for this).',
+    'List only the suite site and firebaseapp.com: Google allows an unverified app 10 authorized domains.',
   ].join('\n');
 }
