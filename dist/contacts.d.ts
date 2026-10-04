@@ -1,5 +1,5 @@
 import { type Firestore, type Unsubscribe } from 'firebase/firestore';
-import { type Contact, type ContactInput } from './contact-core.js';
+import { type Contact, type ContactInput, type ContactPayKind } from './contact-core.js';
 /**
  * The household's contacts over the Firebase SDK. The data contract and the screen helpers are in
  * `./contact-core` (re-exported here), which servers import without Firebase.
@@ -18,8 +18,16 @@ export interface WatchContactsOptions {
  */
 export declare function watchContacts(db: Firestore, householdId: string, onChange: (contacts: Contact[]) => void, { app, restricted, onError }?: WatchContactsOptions): Unsubscribe;
 export declare function addContact(db: Firestore, householdId: string, input: ContactInput, by: string): Promise<string>;
-/** Replaces the contact's details; fields left empty are removed. */
+/**
+ * Replaces the contact's details; fields left empty are removed. Pay details are replaced only when
+ * `input` has `pay` (`{}` removes them), so an app that doesn't show them never drops them.
+ */
 export declare function updateContact(db: Firestore, householdId: string, id: string, input: ContactInput, by: string): Promise<void>;
+/**
+ * Remembers one pay detail on a contact (the Zelle phone a bill was paid to), keeping the others;
+ * an empty value forgets it. Admins and members only (the rules).
+ */
+export declare function setContactPay(db: Firestore, householdId: string, id: string, kind: ContactPayKind, value: string, by: string): Promise<void>;
 export declare function deleteContact(db: Firestore, householdId: string, id: string): Promise<void>;
 /**
  * What deleting a contact in one app means: it stops showing there, and is only deleted outright

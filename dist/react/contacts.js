@@ -9,7 +9,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
  */
 import { useRef, useState } from 'react';
 import { BookUser, ClipboardPaste, ExternalLink, FileUp, Globe, ImageUp, Lock, Mail, MapPin, Pencil, Phone, Search, Trash2, UserSearch } from 'lucide-react';
-import { CONTACT_LIMITS, contactInput, displayWebsite } from '../contacts';
+import { CONTACT_LIMITS, CONTACT_PAY_KINDS, CONTACT_PAY_LIMITS, contactInput, displayWebsite, normalizeWebsite } from '../contacts';
 import { contactFromCard, contactPickerSupported, contactSummary, parseVCard, pickContact } from '../vcard';
 import { googleContactsAvailable, googleContactsToken, searchGoogleContacts } from '../google-contacts';
 import { googleAccessMessage, popupCancelled } from '../feedback';
@@ -39,7 +39,7 @@ export function storedRole(text, roles, roleLabel) {
     const typed = text.trim().toLowerCase();
     return (typed && roles.find((r) => roleLabel(r).toLowerCase() === typed)) || text;
 }
-export function ContactDialog({ contact, app, roles, roleLabel = (r) => r, role: initialRole, title, searchPlaceholder, namePlaceholder, prefill, sharedContacts, auth, readScreenshot = (image, onProgress) => readPlaceScreenshot(image, { onProgress }), canMarkPrivate = true, onSave, onDelete, onClose, }) {
+export function ContactDialog({ contact, app, roles, roleLabel = (r) => r, role: initialRole, title, searchPlaceholder, namePlaceholder, prefill, sharedContacts, auth, readScreenshot = (image, onProgress) => readPlaceScreenshot(image, { onProgress }), canMarkPrivate = true, payDetails = false, onSave, onDelete, onClose, }) {
     const kt = useKitT();
     title ??= { add: kt('contacts.newContact'), edit: kt('contacts.editContact') };
     searchPlaceholder ??= kt('contacts.searchPlaceholder');
@@ -54,6 +54,9 @@ export function ContactDialog({ contact, app, roles, roleLabel = (r) => r, role:
     const [mapsUrl, setMapsUrl] = useState(contact?.mapsUrl ?? start?.mapsUrl ?? '');
     const [notes, setNotes] = useState(contact?.notes ?? card?.notes ?? (start?.hours ? kitT('contacts.hoursNote', { hours: start.hours }).slice(0, CONTACT_LIMITS.notes) : ''));
     const [isPrivate, setPrivate] = useState(contact?.private === true);
+    const [pay, setPay] = useState(contact?.pay ?? {});
+    const hadPay = !!contact?.pay && Object.keys(contact.pay).length > 0;
+    const showPay = canMarkPrivate && (payDetails || hadPay);
     const [query, setQuery] = useState('');
     const [search, setSearch] = useState({ status: 'idle' });
     const [fill, setFill] = useState(start ? { status: 'done', source: 'share', place: start, filled: filledFields(start) } : { status: 'idle' });
@@ -82,7 +85,9 @@ export function ContactDialog({ contact, app, roles, roleLabel = (r) => r, role:
     const save = () => {
         if (!valid)
             return;
-        onSave(contactInput({ name, role, phone, email, website, address, mapsUrl, notes, private: canMarkPrivate && isPrivate }, contact?.apps ?? [app], app));
+        const fields = { name, role, phone, email, website, address, mapsUrl, notes, private: canMarkPrivate && isPrivate };
+        // Pay details go in only where they were shown, so saving elsewhere keeps them as they are.
+        onSave(contactInput(showPay ? { ...fields, pay: { ...pay, portal: normalizeWebsite(pay.portal) } } : fields, contact?.apps ?? [app], app));
         onClose();
     };
     const find = async () => {
@@ -239,7 +244,34 @@ export function ContactDialog({ contact, app, roles, roleLabel = (r) => r, role:
                                 setAddress(e.target.value);
                                 // A typed address no longer matches the place the map link pointed at.
                                 setMapsUrl('');
-                            } }) }), _jsx(Field, { label: kt('contacts.notes'), children: _jsx("textarea", { className: `${inputClass} min-h-20`, value: notes, maxLength: CONTACT_LIMITS.notes, onChange: (e) => setNotes(e.target.value) }) }), canMarkPrivate && _jsx(PrivateCheckbox, { checked: isPrivate, onChange: setPrivate }), _jsx("button", { type: "submit", hidden: true })] })] }));
+                            } }) }), _jsx(Field, { label: kt('contacts.notes'), children: _jsx("textarea", { className: `${inputClass} min-h-20`, value: notes, maxLength: CONTACT_LIMITS.notes, onChange: (e) => setNotes(e.target.value) }) }), showPay && _jsx(PayFields, { pay: pay, onChange: setPay, open: payDetails || hadPay }), canMarkPrivate && _jsx(PrivateCheckbox, { checked: isPrivate, onChange: setPrivate }), _jsx("button", { type: "submit", hidden: true })] })] }));
+}
+const PAY_LABELS = {
+    zelle: 'contacts.pay.zelle',
+    venmo: 'contacts.pay.venmo',
+    bank: 'contacts.pay.bank',
+    check: 'contacts.pay.check',
+    portal: 'contacts.pay.portal',
+};
+/** On the card, before the detail: "Zelle", "Check to". */
+const PAY_SHORT = {
+    zelle: 'contacts.pay.zelleShort',
+    venmo: 'contacts.pay.venmoShort',
+    bank: 'contacts.pay.bankShort',
+    check: 'contacts.pay.checkShort',
+    portal: 'contacts.pay.portal',
+};
+const PAY_PLACEHOLDERS = {
+    zelle: 'contacts.pay.zellePlaceholder',
+    venmo: 'contacts.pay.venmoPlaceholder',
+    bank: 'contacts.pay.bankPlaceholder',
+    check: 'contacts.pay.checkPlaceholder',
+    portal: 'contacts.pay.portalPlaceholder',
+};
+/** "How to pay them": one field per way of paying, in a section that folds away. */
+function PayFields({ pay, onChange, open }) {
+    const kt = useKitT();
+    return (_jsxs("details", { className: "rounded-xl border border-line p-3", open: open, children: [_jsx("summary", { className: "cursor-pointer select-none text-sm font-medium text-ink-soft", children: kt('contacts.pay.title') }), _jsxs("div", { className: "mt-3 space-y-3", children: [_jsx("p", { className: "text-sm text-muted", children: kt('contacts.pay.hint') }), CONTACT_PAY_KINDS.map((kind) => (_jsx(Field, { label: kt(PAY_LABELS[kind]), children: _jsx("input", { className: inputClass, value: pay[kind] ?? '', maxLength: CONTACT_PAY_LIMITS[kind], inputMode: kind === 'portal' ? 'url' : undefined, autoComplete: "off", placeholder: kt(PAY_PLACEHOLDERS[kind]), onChange: (e) => onChange({ ...pay, [kind]: e.target.value }) }) }, kind)))] })] }));
 }
 /** Field names a contact fills in, in the order the form shows them. */
 function fillFields(f) {
@@ -278,7 +310,15 @@ export function PrivateMark() {
 export function ContactCard({ contact: c, role, onEdit, onDelete }) {
     const kt = useKitT();
     const maps = c.mapsUrl || (c.address ? mapsSearchUrl(`${c.name}, ${c.address}`) : null);
-    return (_jsxs("section", { className: `${cardClass} p-5`, "aria-label": c.name, children: [_jsxs("div", { className: "flex items-start gap-2", children: [_jsxs("div", { className: "min-w-0 flex-1", children: [_jsx("p", { className: overline, children: role }), _jsx("h3", { className: "mt-0.5 text-xl font-semibold text-ink [overflow-wrap:anywhere]", children: c.name }), c.private && _jsx(PrivateMark, {})] }), onEdit && (_jsx("button", { type: "button", className: iconButton, onClick: onEdit, "aria-label": kt('contacts.editName', { name: c.name }), children: _jsx(Pencil, { size: 18 }) })), onDelete && (_jsx("button", { type: "button", className: iconButton, onClick: onDelete, "aria-label": kt('contacts.deleteName', { name: c.name }), children: _jsx(Trash2, { size: 18 }) }))] }), _jsxs("div", { className: "mt-2 flex flex-col items-start", children: [c.phone && (_jsxs("a", { className: `${linkClass} text-lg tabular-nums`, href: telHref(c.phone), "aria-label": kt('contacts.call', { name: c.name, phone: c.phone }), children: [_jsx(Phone, { size: 18, "aria-hidden": "true" }), " ", c.phone] })), c.email && (_jsxs("a", { className: `${linkClass} [overflow-wrap:anywhere]`, href: `mailto:${c.email}`, children: [_jsx(Mail, { size: 18, "aria-hidden": "true" }), " ", c.email] })), c.website && (_jsxs("a", { className: `${linkClass} [overflow-wrap:anywhere]`, href: c.website, target: "_blank", rel: "noopener noreferrer", children: [_jsx(Globe, { size: 18, "aria-hidden": "true" }), " ", displayWebsite(c.website)] }))] }), c.address && (_jsxs("div", { className: "mt-1 text-base text-ink-soft", children: [_jsxs("p", { className: "flex items-start gap-1.5", children: [_jsx(MapPin, { size: 18, className: "mt-0.5 shrink-0 text-muted", "aria-hidden": "true" }), " ", _jsx("span", { className: "[overflow-wrap:anywhere]", children: c.address })] }), maps && (_jsxs("a", { className: linkClass, href: maps, target: "_blank", rel: "noopener noreferrer", children: [_jsx(ExternalLink, { size: 18, "aria-hidden": "true" }), " ", kt('contacts.openMaps')] }))] })), c.notes && _jsx("p", { className: "mt-2 text-base whitespace-pre-line text-muted", children: c.notes })] }));
+    return (_jsxs("section", { className: `${cardClass} p-5`, "aria-label": c.name, children: [_jsxs("div", { className: "flex items-start gap-2", children: [_jsxs("div", { className: "min-w-0 flex-1", children: [_jsx("p", { className: overline, children: role }), _jsx("h3", { className: "mt-0.5 text-xl font-semibold text-ink [overflow-wrap:anywhere]", children: c.name }), c.private && _jsx(PrivateMark, {})] }), onEdit && (_jsx("button", { type: "button", className: iconButton, onClick: onEdit, "aria-label": kt('contacts.editName', { name: c.name }), children: _jsx(Pencil, { size: 18 }) })), onDelete && (_jsx("button", { type: "button", className: iconButton, onClick: onDelete, "aria-label": kt('contacts.deleteName', { name: c.name }), children: _jsx(Trash2, { size: 18 }) }))] }), _jsxs("div", { className: "mt-2 flex flex-col items-start", children: [c.phone && (_jsxs("a", { className: `${linkClass} text-lg tabular-nums`, href: telHref(c.phone), "aria-label": kt('contacts.call', { name: c.name, phone: c.phone }), children: [_jsx(Phone, { size: 18, "aria-hidden": "true" }), " ", c.phone] })), c.email && (_jsxs("a", { className: `${linkClass} [overflow-wrap:anywhere]`, href: `mailto:${c.email}`, children: [_jsx(Mail, { size: 18, "aria-hidden": "true" }), " ", c.email] })), c.website && (_jsxs("a", { className: `${linkClass} [overflow-wrap:anywhere]`, href: c.website, target: "_blank", rel: "noopener noreferrer", children: [_jsx(Globe, { size: 18, "aria-hidden": "true" }), " ", displayWebsite(c.website)] }))] }), c.address && (_jsxs("div", { className: "mt-1 text-base text-ink-soft", children: [_jsxs("p", { className: "flex items-start gap-1.5", children: [_jsx(MapPin, { size: 18, className: "mt-0.5 shrink-0 text-muted", "aria-hidden": "true" }), " ", _jsx("span", { className: "[overflow-wrap:anywhere]", children: c.address })] }), maps && (_jsxs("a", { className: linkClass, href: maps, target: "_blank", rel: "noopener noreferrer", children: [_jsx(ExternalLink, { size: 18, "aria-hidden": "true" }), " ", kt('contacts.openMaps')] }))] })), c.pay && _jsx(PayLines, { pay: c.pay }), c.notes && _jsx("p", { className: "mt-2 text-base whitespace-pre-line text-muted", children: c.notes })] }));
+}
+/** A contact's pay details on its card: "Zelle: (555) 010-2231", the portal as a link. */
+export function PayLines({ pay }) {
+    const kt = useKitT();
+    const kinds = CONTACT_PAY_KINDS.filter((k) => pay[k]);
+    if (!kinds.length)
+        return null;
+    return (_jsxs("div", { className: "mt-2", "aria-label": kt('contacts.pay.title'), role: "group", children: [_jsx("p", { className: overline, children: kt('contacts.pay.title') }), _jsx("ul", { className: "mt-0.5 space-y-0.5 text-base text-ink-soft", children: kinds.map((k) => k === 'portal' ? (_jsx("li", { children: _jsxs("a", { className: `${linkClass} [overflow-wrap:anywhere]`, href: pay.portal, target: "_blank", rel: "noopener noreferrer", children: [_jsx(ExternalLink, { size: 18, "aria-hidden": "true" }), " ", kt('contacts.pay.openPortal', { site: displayWebsite(pay.portal) })] }) }, k)) : (_jsx("li", { className: "[overflow-wrap:anywhere]", children: kt('contacts.pay.line', { way: kt(PAY_SHORT[k]), detail: pay[k] }) }, k))) })] }));
 }
 /**
  * Names one of the household's contacts on a record (who a bill is paid to, who does a job): a

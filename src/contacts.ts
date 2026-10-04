@@ -1,6 +1,6 @@
 import { collection, doc, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { addDoc, deleteDoc, deleteField, setDoc, updateDoc, writeBatch } from './firestore.js';
-import { cleanContact, toContact, type Contact, type ContactInput } from './contact-core.js';
+import { cleanContact, cleanContactPay, toContact, type Contact, type ContactInput, type ContactPayKind } from './contact-core.js';
 
 /**
  * The household's contacts over the Firebase SDK. The data contract and the screen helpers are in
@@ -47,12 +47,25 @@ export async function addContact(db: Firestore, householdId: string, input: Cont
   return ref.id;
 }
 
-/** Replaces the contact's details; fields left empty are removed. */
+/**
+ * Replaces the contact's details; fields left empty are removed. Pay details are replaced only when
+ * `input` has `pay` (`{}` removes them), so an app that doesn't show them never drops them.
+ */
 export async function updateContact(db: Firestore, householdId: string, id: string, input: ContactInput, by: string): Promise<void> {
   const cleaned = cleanContact(input) as Record<string, unknown>;
   const update: Record<string, unknown> = { ...cleaned, updatedAt: Date.now(), by };
   for (const k of ['role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes']) if (!(k in cleaned)) update[k] = deleteField();
+  if ('pay' in input && !('pay' in cleaned)) update.pay = deleteField();
   await updateDoc(doc(contactsOf(db, householdId), id), update);
+}
+
+/**
+ * Remembers one pay detail on a contact (the Zelle phone a bill was paid to), keeping the others;
+ * an empty value forgets it. Admins and members only (the rules).
+ */
+export async function setContactPay(db: Firestore, householdId: string, id: string, kind: ContactPayKind, value: string, by: string): Promise<void> {
+  const v = cleanContactPay({ [kind]: value })?.[kind];
+  await updateDoc(doc(contactsOf(db, householdId), id), { [`pay.${kind}`]: v ?? deleteField(), updatedAt: Date.now(), by });
 }
 
 export async function deleteContact(db: Firestore, householdId: string, id: string): Promise<void> {
@@ -120,7 +133,9 @@ export function sampleContacts(
     save: (id, input) => {
       const existing = id ? read().find((c) => c.id === id) : undefined;
       const t = now();
-      put({ id: id ?? newId(), ...cleanContact(input), createdAt: existing?.createdAt ?? t, ...(existing ? { updatedAt: t } : {}), by });
+      // As updateContact: pay details left out of `input` are kept.
+      const kept = existing?.pay && !('pay' in input) ? { pay: existing.pay } : {};
+      put({ id: id ?? newId(), ...kept, ...cleanContact(input), createdAt: existing?.createdAt ?? t, ...(existing ? { updatedAt: t } : {}), by });
     },
     remove: (contact) => write(read().filter((c) => c.id !== contact.id)),
     restore: put,

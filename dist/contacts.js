@@ -1,6 +1,6 @@
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { addDoc, deleteDoc, deleteField, setDoc, updateDoc, writeBatch } from './firestore.js';
-import { cleanContact, toContact } from './contact-core.js';
+import { cleanContact, cleanContactPay, toContact } from './contact-core.js';
 /**
  * The household's contacts over the Firebase SDK. The data contract and the screen helpers are in
  * `./contact-core` (re-exported here), which servers import without Firebase.
@@ -22,14 +22,27 @@ export async function addContact(db, householdId, input, by) {
     const ref = await addDoc(contactsOf(db, householdId), { ...cleanContact(input), createdAt: Date.now(), by });
     return ref.id;
 }
-/** Replaces the contact's details; fields left empty are removed. */
+/**
+ * Replaces the contact's details; fields left empty are removed. Pay details are replaced only when
+ * `input` has `pay` (`{}` removes them), so an app that doesn't show them never drops them.
+ */
 export async function updateContact(db, householdId, id, input, by) {
     const cleaned = cleanContact(input);
     const update = { ...cleaned, updatedAt: Date.now(), by };
     for (const k of ['role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes'])
         if (!(k in cleaned))
             update[k] = deleteField();
+    if ('pay' in input && !('pay' in cleaned))
+        update.pay = deleteField();
     await updateDoc(doc(contactsOf(db, householdId), id), update);
+}
+/**
+ * Remembers one pay detail on a contact (the Zelle phone a bill was paid to), keeping the others;
+ * an empty value forgets it. Admins and members only (the rules).
+ */
+export async function setContactPay(db, householdId, id, kind, value, by) {
+    const v = cleanContactPay({ [kind]: value })?.[kind];
+    await updateDoc(doc(contactsOf(db, householdId), id), { [`pay.${kind}`]: v ?? deleteField(), updatedAt: Date.now(), by });
 }
 export async function deleteContact(db, householdId, id) {
     await deleteDoc(doc(contactsOf(db, householdId), id));
@@ -81,7 +94,9 @@ export function sampleContacts(read, write, { by, now, newId }) {
         save: (id, input) => {
             const existing = id ? read().find((c) => c.id === id) : undefined;
             const t = now();
-            put({ id: id ?? newId(), ...cleanContact(input), createdAt: existing?.createdAt ?? t, ...(existing ? { updatedAt: t } : {}), by });
+            // As updateContact: pay details left out of `input` are kept.
+            const kept = existing?.pay && !('pay' in input) ? { pay: existing.pay } : {};
+            put({ id: id ?? newId(), ...kept, ...cleanContact(input), createdAt: existing?.createdAt ?? t, ...(existing ? { updatedAt: t } : {}), by });
         },
         remove: (contact) => write(read().filter((c) => c.id !== contact.id)),
         restore: put,

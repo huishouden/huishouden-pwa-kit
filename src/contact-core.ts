@@ -21,6 +21,12 @@ export interface Contact {
   address?: string;
   mapsUrl?: string;
   notes?: string;
+  /**
+   * How the household pays them, by way of paying, remembered from a bill so the next one fills
+   * in: the Zelle phone or email, the Venmo @handle, bank details, the mailing address for a
+   * check, the online portal's link. Only admins and members write it.
+   */
+  pay?: ContactPay;
   /** Apps that show this contact, by short name: ["baby"]. */
   apps: string[];
   /** Only admins and members see it. */
@@ -31,8 +37,34 @@ export interface Contact {
 }
 
 export const CONTACT_FIELDS = [
-  'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'apps', 'private', 'createdAt', 'updatedAt', 'by',
+  'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'pay', 'apps', 'private', 'createdAt', 'updatedAt', 'by',
 ] as const;
+
+/** Ways of paying a contact that carry a detail worth remembering, in the order forms show them. */
+export const CONTACT_PAY_KINDS = ['zelle', 'venmo', 'bank', 'check', 'portal'] as const;
+export type ContactPayKind = (typeof CONTACT_PAY_KINDS)[number];
+
+/** A contact's pay details by way of paying (`Contact.pay`). */
+export type ContactPay = Partial<Record<ContactPayKind, string>>;
+
+/** Lengths the household rules allow for each pay detail; `portal` is an https:// link. */
+export const CONTACT_PAY_LIMITS = { zelle: 120, venmo: 60, bank: 200, check: 300, portal: 500 } as const satisfies Record<ContactPayKind, number>;
+
+/**
+ * Pay details as stored: known ways only, trimmed to their limits, a portal only as an https://
+ * link, empty ones left out. Undefined when nothing is left.
+ */
+export function cleanContactPay(pay: unknown): ContactPay | undefined {
+  if (!pay || typeof pay !== 'object') return undefined;
+  const out: ContactPay = {};
+  for (const kind of CONTACT_PAY_KINDS) {
+    const raw = (pay as Record<string, unknown>)[kind];
+    const v = typeof raw === 'string' ? raw.trim().slice(0, CONTACT_PAY_LIMITS[kind]) : '';
+    if (!v || (kind === 'portal' && !/^https:\/\/./i.test(v))) continue;
+    out[kind] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 
 export type ContactInput = Omit<Contact, 'id' | 'createdAt' | 'updatedAt' | 'by'>;
 
@@ -40,7 +72,10 @@ export type ContactInput = Omit<Contact, 'id' | 'createdAt' | 'updatedAt' | 'by'
 export function cleanContact(input: ContactInput): ContactInput {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(input)) {
-    if (typeof v === 'string') {
+    if (k === 'pay') {
+      const pay = cleanContactPay(v);
+      if (pay) out.pay = pay;
+    } else if (typeof v === 'string') {
       if (v.trim()) out[k] = v.trim();
     } else if (v !== undefined) out[k] = v;
   }
@@ -60,6 +95,7 @@ export function toContact(id: string, data: Record<string, unknown>): Contact {
     address: str('address'),
     mapsUrl: str('mapsUrl'),
     notes: str('notes'),
+    ...(cleanContactPay(data.pay) ? { pay: cleanContactPay(data.pay) } : {}),
     apps: Array.isArray(data.apps) ? data.apps.map(String) : [],
     ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
     createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
@@ -116,7 +152,11 @@ export function displayWebsite(url: string): string {
   return url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '');
 }
 
-/** What a contact dialog saves: trimmed to the rules' limits, the website made a full URL, and shown in `app`. */
+/**
+ * What a contact dialog saves: trimmed to the rules' limits, the website made a full URL, and shown in `app`.
+ * `pay`, when given, is kept even when empty (`{}`), so `updateContact` removes cleared pay details;
+ * left out, a contact's pay details are kept as they are.
+ */
 export function contactInput(fields: Omit<ContactInput, 'apps'>, apps: string[], app: string): ContactInput {
   const cut = (s: string | undefined, max: number) => s?.trim().slice(0, max) || undefined;
   return {
@@ -128,6 +168,7 @@ export function contactInput(fields: Omit<ContactInput, 'apps'>, apps: string[],
     address: cut(fields.address, CONTACT_LIMITS.address),
     mapsUrl: fields.mapsUrl?.trim() || undefined,
     notes: cut(fields.notes, CONTACT_LIMITS.notes),
+    ...('pay' in fields ? { pay: cleanContactPay(fields.pay) ?? {} } : {}),
     apps: apps.includes(app) ? apps : [...apps, app],
     private: fields.private === true,
   };
