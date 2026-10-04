@@ -7,6 +7,7 @@
  * In an app, only `appUrl` is for the browser.
  */
 import { APP_PATHS_REGEX, permissionsPolicy, securityHeaders, type DeviceFeatures } from './security-headers.js';
+import { SITE_OBSERVABILITY } from './observability.js';
 
 /** One entry of the portal's `apps.json`, the suite's list of apps. */
 export interface RegistryEntry {
@@ -120,7 +121,7 @@ export function siteConfig(site: string, entries: SiteEntry[], publicDir = 'publ
       ...bases.map((p) => ({ source: `${p}@(${FRESH_FILES.join('|')})`, headers: NO_CACHE })),
       // The page itself at each app's address (`/pet/` serves /pet/index.html).
       { regex: `^(?:${bases.join('|')})$`, headers: NO_CACHE },
-      { source: `/${SITE_MANIFEST}`, headers: NO_CACHE },
+      { source: `/@(${SITE_MANIFEST}|${SITE_OBSERVABILITY})`, headers: NO_CACHE },
       ...bases.map((p) => ({ source: `${p}assets/**`, headers: IMMUTABLE })),
     ],
   };
@@ -188,6 +189,8 @@ export interface SiteManifest {
   deployedAt: string;
   /** By path: the release asset each app's files came from (`null`: this run's own build). */
   apps: Record<string, { repo: string; asset: number | null; sha?: string; version?: string }>;
+  /** The portal's `observability.json` release asset behind `/hh-observability.json` (production only). */
+  observability?: number | null;
 }
 
 /** Paths whose published build differs from what `manifest` holds (a newer one, or one it lacks). */
@@ -195,4 +198,9 @@ export function staleApps(manifest: SiteManifest | null, latest: Record<string, 
   return Object.entries(latest)
     .filter(([path, asset]) => asset !== null && manifest?.apps[path]?.asset !== asset)
     .map(([path]) => path);
+}
+
+/** Whether the published observability settings (`latest`, an asset id) differ from what `manifest` holds. */
+export function staleObservability(manifest: SiteManifest | null, latest: number | null): boolean {
+  return latest !== null && (manifest?.observability ?? null) !== latest;
 }

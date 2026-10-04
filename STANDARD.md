@@ -388,8 +388,10 @@ errors, speed and anonymous usage counts to one New Relic account on its free ti
 [docs/observability.md](docs/observability.md)).
 
 - **Start it first.** `startObservability({ app: 'baby', env: import.meta.env })` in `firebase.ts`
-  (or `main.tsx`) before rendering. It reads `VITE_NEWRELIC_ACCOUNT_ID`, `VITE_NEWRELIC_APP_ID` and
-  `VITE_NEWRELIC_BROWSER_KEY` (repo variables, public by design: the browser key can only send).
+  (or `main.tsx`) before rendering (`initApp` does it). On the suite's site it reads the app's entry
+  in `/hh-observability.json`, which every production deploy writes from the portal's monitoring
+  workflow; a build served elsewhere reads `VITE_NEWRELIC_ACCOUNT_ID`, `VITE_NEWRELIC_APP_ID` and
+  `VITE_NEWRELIC_BROWSER_KEY` (repo variables). All public by design: the browser key can only send.
   Local builds, previews, staging and automated browsers send nothing.
 - **Errors and performance are always on.** Uncaught errors and Core Web Vitals are automatic;
   `readError` and `googleFetch` report the failures they word or throw (not offline or an expired
@@ -427,8 +429,8 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 | `staging` | same-repo PRs that change more than docs; manual runs with `staging-ref` | Build against the staging project, deploy to the app's staging site, seed, `e2e` and `e2e:signed-in` there (see Staging) |
 
 - Repo variables (not secrets; the Firebase web config is public by design): `GCP_WIF_PROVIDER`,
-  `GCP_DEPLOY_SA`, `VITE_FIREBASE_*` (the bootstrap sets them) and `VITE_NEWRELIC_*`
-  (`infra/newrelic.ts`, see Observability).
+  `GCP_DEPLOY_SA`, `VITE_FIREBASE_*` (the bootstrap sets them). Apps on the suite's site need no
+  `VITE_NEWRELIC_*`: the deploy serves their New Relic settings (see Observability).
 - Deploy waits on `leak-scan` and `build`. `concurrency: cancel-in-progress` on every workflow.
 - `pull_request` ignores `CHANGELOG.md` and `package.json`-only changes (`templates/ci.yml`): release
   PRs are opened by github-actions[bot], and GitHub holds a bot-opened PR's run for approval and

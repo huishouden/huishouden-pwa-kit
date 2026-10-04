@@ -44,8 +44,8 @@ rules strip emails, `households/…` and `profiles/…` path ids, query strings 
 every message, stack trace and URL before it is sent.
 
 Nothing at all is sent when the browser is automated (Playwright, CI), the page is not on
-`*.web.app` / `*.firebaseapp.com` over https, or the build has no `VITE_NEWRELIC_*` variables
-(staging builds get none).
+`*.web.app` / `*.firebaseapp.com` over https, or the app has no settings: no entry in the site's
+`/hh-observability.json` and no `VITE_NEWRELIC_*` variables (staging gets neither).
 
 The portal's `/privacy` page says this for people using the apps; every app's account menu links it.
 
@@ -75,7 +75,7 @@ Policy **Huishouden**, emailed through the workflow **Huishouden alerts** (desti
 | Condition | Fires when |
 |---|---|
 | App errors spike | More than 10 errors in one app within 30 minutes (one incident per app) |
-| Site down | A site's uptime check failed twice within 30 minutes (ping every 15 min from 2 locations) |
+| Site down | An app's uptime check (its path on the suite's site) failed twice within 30 minutes (ping every 15 min from 2 locations) |
 | Notify sender silent | No `NotifyRun` heartbeat from the notify Worker for 20 minutes (it runs every 5) |
 | Notify run crashed | A notify run threw (`NotifyRun.error`) |
 | Push deliveries failing | More than 5 Web Push deliveries failed in an hour |
@@ -90,25 +90,79 @@ hashed active households, error rate, countries and regions, devices, uptime, no
 errors by version and code, LCP/INP/CLS p75 per app, feature use and tabs. Counts are per page
 view or visit; there are no sessions to count, by design.
 
-## Setup (once, by a maintainer)
+## Setup
+
+Provisioning runs in CI, in the portal repo: `.github/workflows/monitoring.yml` (huishouden/portal).
+No New Relic key lives on anyone's machine, and no app repo holds New Relic variables.
+
+```
+portal apps.json ──► monitoring workflow ──► New Relic: Browser apps, ping monitors, alerts, dashboard
+                         │ (infra/newrelic.ts at the kit version the portal pins)
+                         └──► portal release `observability`, asset observability.json
+                                   │
+every production deploy (pwa-site assemble) ──► /hh-observability.json on the site
+                                   │
+each app (startObservability) reads its path's entry at start
+```
+
+The workflow runs when `apps.json` changes on `main`, weekly (repairs drift: a monitor edited or
+deleted by hand), and on demand. It:
+
+1. Creates or updates, by name: a Browser app per app (`Huishouden Baby`, …), a ping monitor per
+   app at its path on the suite's site (`https://<site>.web.app/<app>/`), the drop rules, the alert
+   policy, conditions, email destination, channel and workflow, and the dashboard. A family ping
+   monitor whose name is not one of the apps' (a removed app) is deleted; an existing monitor at an
+   old per-app address is moved to the path.
+2. Writes each app's browser settings (account id, app id, browser key `NRJS-…`; public by design,
+   the browser key can only send data) to `observability.json` and, when it changed, uploads it to
+   the portal's `observability` pre-release and starts the portal's CI, which deploys the site with
+   the new `/hh-observability.json`. (Without that, the portal's 30-minute reconcile notices the new
+   asset and deploys it.) No app rebuilds: the settings are read at run time, so an app added to
+   `apps.json` reports from the next deploy.
+
+The assembler publishes the file only if it holds nothing but digits and `NRJS-` keys, so a user
+key can never reach the site. The script prints no key; failures are scrubbed of anything shaped
+like one.
+
+Without the `NEW_RELIC_API_KEY` secret the workflow skips with a notice and succeeds.
+
+### Once, by a maintainer
 
 1. A New Relic account (free, no card): https://newrelic.com/signup. US data region.
-2. A user key: one.newrelic.com > your name > API keys > Create a key > type User. Keep it out of
-   the repo and shell history.
-3. From this repo, with `gh` signed in as an admin of the app repos:
+2. A user key: one.newrelic.com > your name > API keys > Create a key > type User, named
+   `huishouden-portal-ci`. Paste it straight into the secret (it is never needed anywhere else):
 
    ```sh
-   NEW_RELIC_API_KEY=… NEW_RELIC_ACCOUNT_ID=… ALERT_EMAIL=you@example.com \
-     bun infra/newrelic.ts ../portal/apps.json
+   gh secret set NEW_RELIC_API_KEY -R huishouden/portal   # paste at the prompt
+   gh secret set ALERT_EMAIL -R huishouden/portal         # the address alerts go to
+   gh workflow run monitoring.yml -R huishouden/portal
    ```
 
-   It creates or updates, by name: a Browser app per repo (`Huishouden Baby`, …), the
-   `VITE_NEWRELIC_*` repo variables, a ping monitor per site, the drop rules, the alert policy,
-   conditions, email destination, channel and workflow, and the dashboard. Re-run it after adding
-   an app. `DRY_RUN=1` prints what it would do.
-4. If New Relic sends a verification email to the alert address, confirm it.
-5. Notify heartbeat: put an ingest key in the Worker (huishouden/notify README, "Monitoring").
-6. Push to each app's `main` (or wait for the next merge) so the build picks up the variables.
+   The account id is not secret; it is set in the workflow (`NEW_RELIC_ACCOUNT_ID`).
+3. If New Relic sends a verification email to the alert address, confirm it.
+4. Notify heartbeat: put an ingest key in the Worker (huishouden/notify README, "Monitoring").
+
+### Rotating the key
+
+1. Create a new User key (as above), named with the date.
+2. `gh secret set NEW_RELIC_API_KEY -R huishouden/portal` and paste it.
+3. `gh workflow run monitoring.yml -R huishouden/portal` and check it passes
+   (`gh run watch -R huishouden/portal`).
+4. Delete the old key in one.newrelic.com > API keys.
+
+The browser key and app ids do not change with it, so the apps are unaffected.
+
+### Running it by hand
+
+For a family without the portal's workflow, or to try a change to the script, from this repo:
+
+```sh
+NEW_RELIC_API_KEY=… NEW_RELIC_ACCOUNT_ID=… ALERT_EMAIL=you@example.com \
+  bun infra/newrelic.ts ../portal/apps.json --out observability.json
+```
+
+`DRY_RUN=1` prints what it would do. `--repo-variables` sets the `VITE_NEWRELIC_*` variables on each
+app's repo instead (apps served from a site of their own; needs `gh` with admin on the repos).
 
 ## Free-tier headroom
 
@@ -116,7 +170,7 @@ view or visit; there are no sessions to count, by design.
 |---|---|---|
 | Data ingest | 100 GB/month | Under 0.1 GB: about 2 KB per page view, 288 notify events a day |
 | Full platform users | 1 | 1 |
-| Ping monitors | Unlimited | 8 apps × 2 locations × 4/hour ≈ 46,000 checks/month, not billed |
+| Ping monitors | Unlimited | 10 apps × 2 locations × 4/hour ≈ 58,000 checks/month, not billed |
 | Other synthetic checks | 500/month | 0 |
 | Alerts, dashboards, drop rules | Included | 5 conditions, 1 dashboard |
 
