@@ -1,5 +1,5 @@
 import type { Auth } from 'firebase/auth';
-import { type Contact, type ContactInput } from '../contacts';
+import { type Contact, type ContactInput, type ContactPay } from '../contacts';
 import { type ParsedContact } from '../vcard';
 import { type ParsedPlace } from '../places';
 /** A role as the field shows it: one of the app's roles in its shown name, anything typed as typed. */
@@ -51,11 +51,17 @@ export interface ContactDialogProps {
      * can't mark a contact private, and what they save stays visible to them. Default true.
      */
     canMarkPrivate?: boolean;
+    /**
+     * Shows "How to pay them" (`Contact.pay`: Zelle, Venmo, bank, check, online portal) open, as
+     * Bills does; elsewhere it shows, collapsed, only on a contact that has some. Never for those who
+     * can't mark a contact private (helpers and kids may not write pay details).
+     */
+    payDetails?: boolean;
     onSave: (input: ContactInput) => void;
     onDelete?: () => void;
     onClose: () => void;
 }
-export declare function ContactDialog({ contact, app, roles, roleLabel, role: initialRole, title, searchPlaceholder, namePlaceholder, prefill, sharedContacts, auth, readScreenshot, canMarkPrivate, onSave, onDelete, onClose, }: ContactDialogProps): import("react").JSX.Element;
+export declare function ContactDialog({ contact, app, roles, roleLabel, role: initialRole, title, searchPlaceholder, namePlaceholder, prefill, sharedContacts, auth, readScreenshot, canMarkPrivate, payDetails, onSave, onDelete, onClose, }: ContactDialogProps): import("react").JSX.Element;
 /**
  * "Only admins and members": the private flag on a contact or appointment (`./roles`), with its
  * one-line explanation. Show it only to those who may set it (`can(role, 'see-private')`).
@@ -77,6 +83,10 @@ export declare function ContactCard({ contact: c, role, onEdit, onDelete }: {
     onEdit?: () => void;
     onDelete?: () => void;
 }): import("react").JSX.Element;
+/** A contact's pay details on its card: "Zelle: (555) 010-2231", the portal as a link. */
+export declare function PayLines({ pay }: {
+    pay: ContactPay;
+}): import("react").JSX.Element | null;
 /**
  * Names one of the household's contacts on a record (who a bill is paid to, who does a job): a
  * select of `contacts` with their roles, "No one" (or `empty`) first. A contact that was removed

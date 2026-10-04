@@ -9,7 +9,7 @@
 import { useRef, useState } from 'react';
 import type { Auth } from 'firebase/auth';
 import { BookUser, ClipboardPaste, ExternalLink, FileUp, Globe, ImageUp, Lock, Mail, MapPin, Pencil, Phone, Search, Trash2, UserSearch } from 'lucide-react';
-import { CONTACT_LIMITS, contactInput, displayWebsite, type Contact, type ContactInput } from '../contacts';
+import { CONTACT_LIMITS, CONTACT_PAY_KINDS, CONTACT_PAY_LIMITS, contactInput, displayWebsite, normalizeWebsite, type Contact, type ContactInput, type ContactPay, type ContactPayKind } from '../contacts';
 import { contactFromCard, contactPickerSupported, contactSummary, parseVCard, pickContact, type ContactFill, type ParsedContact } from '../vcard';
 import { googleContactsAvailable, googleContactsToken, searchGoogleContacts } from '../google-contacts';
 import { googleAccessMessage, popupCancelled } from '../feedback';
@@ -111,6 +111,12 @@ export interface ContactDialogProps {
    * can't mark a contact private, and what they save stays visible to them. Default true.
    */
   canMarkPrivate?: boolean;
+  /**
+   * Shows "How to pay them" (`Contact.pay`: Zelle, Venmo, bank, check, online portal) open, as
+   * Bills does; elsewhere it shows, collapsed, only on a contact that has some. Never for those who
+   * can't mark a contact private (helpers and kids may not write pay details).
+   */
+  payDetails?: boolean;
   onSave: (input: ContactInput) => void;
   onDelete?: () => void;
   onClose: () => void;
@@ -130,6 +136,7 @@ export function ContactDialog({
   auth,
   readScreenshot = (image, onProgress) => readPlaceScreenshot(image, { onProgress }),
   canMarkPrivate = true,
+  payDetails = false,
   onSave,
   onDelete,
   onClose,
@@ -148,6 +155,9 @@ export function ContactDialog({
   const [mapsUrl, setMapsUrl] = useState(contact?.mapsUrl ?? start?.mapsUrl ?? '');
   const [notes, setNotes] = useState(contact?.notes ?? card?.notes ?? (start?.hours ? kitT('contacts.hoursNote', { hours: start.hours }).slice(0, CONTACT_LIMITS.notes) : ''));
   const [isPrivate, setPrivate] = useState(contact?.private === true);
+  const [pay, setPay] = useState<ContactPay>(contact?.pay ?? {});
+  const hadPay = !!contact?.pay && Object.keys(contact.pay).length > 0;
+  const showPay = canMarkPrivate && (payDetails || hadPay);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState<PlaceSearch>({ status: 'idle' });
   const [fill, setFill] = useState<Fill>(start ? { status: 'done', source: 'share', place: start, filled: filledFields(start) } : { status: 'idle' });
@@ -173,7 +183,9 @@ export function ContactDialog({
 
   const save = () => {
     if (!valid) return;
-    onSave(contactInput({ name, role, phone, email, website, address, mapsUrl, notes, private: canMarkPrivate && isPrivate }, contact?.apps ?? [app], app));
+    const fields = { name, role, phone, email, website, address, mapsUrl, notes, private: canMarkPrivate && isPrivate };
+    // Pay details go in only where they were shown, so saving elsewhere keeps them as they are.
+    onSave(contactInput(showPay ? { ...fields, pay: { ...pay, portal: normalizeWebsite(pay.portal) } } : fields, contact?.apps ?? [app], app));
     onClose();
   };
 
@@ -559,10 +571,62 @@ export function ContactDialog({
         <Field label={kt('contacts.notes')}>
           <textarea className={`${inputClass} min-h-20`} value={notes} maxLength={CONTACT_LIMITS.notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
+        {showPay && <PayFields pay={pay} onChange={setPay} open={payDetails || hadPay} />}
         {canMarkPrivate && <PrivateCheckbox checked={isPrivate} onChange={setPrivate} />}
         <button type="submit" hidden />
       </form>
     </Dialog>
+  );
+}
+
+const PAY_LABELS: Record<ContactPayKind, KitKey> = {
+  zelle: 'contacts.pay.zelle',
+  venmo: 'contacts.pay.venmo',
+  bank: 'contacts.pay.bank',
+  check: 'contacts.pay.check',
+  portal: 'contacts.pay.portal',
+};
+
+/** On the card, before the detail: "Zelle", "Check to". */
+const PAY_SHORT: Record<ContactPayKind, KitKey> = {
+  zelle: 'contacts.pay.zelleShort',
+  venmo: 'contacts.pay.venmoShort',
+  bank: 'contacts.pay.bankShort',
+  check: 'contacts.pay.checkShort',
+  portal: 'contacts.pay.portal',
+};
+
+const PAY_PLACEHOLDERS: Record<ContactPayKind, KitKey> = {
+  zelle: 'contacts.pay.zellePlaceholder',
+  venmo: 'contacts.pay.venmoPlaceholder',
+  bank: 'contacts.pay.bankPlaceholder',
+  check: 'contacts.pay.checkPlaceholder',
+  portal: 'contacts.pay.portalPlaceholder',
+};
+
+/** "How to pay them": one field per way of paying, in a section that folds away. */
+function PayFields({ pay, onChange, open }: { pay: ContactPay; onChange: (pay: ContactPay) => void; open: boolean }) {
+  const kt = useKitT();
+  return (
+    <details className="rounded-xl border border-line p-3" open={open}>
+      <summary className="cursor-pointer select-none text-sm font-medium text-ink-soft">{kt('contacts.pay.title')}</summary>
+      <div className="mt-3 space-y-3">
+        <p className="text-sm text-muted">{kt('contacts.pay.hint')}</p>
+        {CONTACT_PAY_KINDS.map((kind) => (
+          <Field key={kind} label={kt(PAY_LABELS[kind])}>
+            <input
+              className={inputClass}
+              value={pay[kind] ?? ''}
+              maxLength={CONTACT_PAY_LIMITS[kind]}
+              inputMode={kind === 'portal' ? 'url' : undefined}
+              autoComplete="off"
+              placeholder={kt(PAY_PLACEHOLDERS[kind])}
+              onChange={(e) => onChange({ ...pay, [kind]: e.target.value })}
+            />
+          </Field>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -691,8 +755,36 @@ export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: C
           )}
         </div>
       )}
+      {c.pay && <PayLines pay={c.pay} />}
       {c.notes && <p className="mt-2 text-base whitespace-pre-line text-muted">{c.notes}</p>}
     </section>
+  );
+}
+
+/** A contact's pay details on its card: "Zelle: (555) 010-2231", the portal as a link. */
+export function PayLines({ pay }: { pay: ContactPay }) {
+  const kt = useKitT();
+  const kinds = CONTACT_PAY_KINDS.filter((k) => pay[k]);
+  if (!kinds.length) return null;
+  return (
+    <div className="mt-2" aria-label={kt('contacts.pay.title')} role="group">
+      <p className={overline}>{kt('contacts.pay.title')}</p>
+      <ul className="mt-0.5 space-y-0.5 text-base text-ink-soft">
+        {kinds.map((k) =>
+          k === 'portal' ? (
+            <li key={k}>
+              <a className={`${linkClass} [overflow-wrap:anywhere]`} href={pay.portal} target="_blank" rel="noopener noreferrer">
+                <ExternalLink size={18} aria-hidden="true" /> {kt('contacts.pay.openPortal', { site: displayWebsite(pay.portal!) })}
+              </a>
+            </li>
+          ) : (
+            <li key={k} className="[overflow-wrap:anywhere]">
+              {kt('contacts.pay.line', { way: kt(PAY_SHORT[k]), detail: pay[k]! })}
+            </li>
+          ),
+        )}
+      </ul>
+    </div>
   );
 }
 
