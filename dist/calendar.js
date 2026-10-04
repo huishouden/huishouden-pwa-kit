@@ -13,16 +13,19 @@ export const CALENDAR_SCOPES = [
     'https://www.googleapis.com/auth/calendar.events.readonly',
     'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
 ];
-/** Words that describe the chore rather than the event, so they are dropped from the search. */
+/** Words that describe the chore rather than the event, so they are dropped from the search (English, Spanish, Dutch). */
 const STOPWORDS = new Set([
     'a', 'an', 'the', 'at', 'on', 'in', 'for', 'to', 'of', 'and', 'with', 'my', 'our', 'get', 'got', 'go', 'have', 'make',
     'book', 'schedule', 'scheduled', 'appointment', 'appt', 'call', 'checked', 'check', 'confirm', 'remember', 'do', 'done',
+    'el', 'la', 'los', 'las', 'un', 'una', 'de', 'del', 'al', 'y', 'en', 'para', 'con', 'mi', 'mis', 'nuestro', 'nuestra',
+    'cita', 'llamar', 'agendar', 'reservar', 'confirmar', 'recordar', 'hacer',
+    'het', 'een', 'van', 'voor', 'op', 'met', 'mijn', 'ons', 'onze', 'afspraak', 'bellen', 'maken', 'boeken', 'bevestigen',
 ]);
 /** Search phrases, most specific first: "Get car seat checked at fire station" → "car seat fire station", "car seat", ... */
 export function searchPhrases(text) {
     const words = text
         .toLowerCase()
-        .replace(/[^a-z0-9\s'-]/g, ' ')
+        .replace(/[^\p{L}\p{N}\s'-]/gu, ' ')
         .split(/\s+/)
         .filter((w) => w.length > 1 && !STOPWORDS.has(w));
     if (words.length === 0)
@@ -290,15 +293,24 @@ export function seriesCover(series, events, options) {
 }
 /**
  * Whether a calendar series reads as a reminder to do something before an event rather than the
- * event itself: "Garbage out for Monday pickup", "Put the bins out", or anything in the evening.
+ * event itself: "Garbage out for Monday pickup", "Put the bins out", "Sacar la basura", "Container
+ * buiten zetten", or anything in the evening.
  */
 export function looksLikePrep(series) {
     if (/\bout\b|\b(remind(er)?|put|take|bring|wheel|roll)\b/i.test(series.title))
         return true;
+    if (/\b(sacar|saca|poner|pon|recordatorio|recordar)\b/i.test(series.title))
+        return true;
+    if (/\b(buiten ?zetten|buitenzetten|aan de straat|aan de weg|herinnering|zet)\b/i.test(series.title))
+        return true;
     return !!series.time && Number(series.time.slice(0, 2)) >= 16;
 }
-const FILLER = new Set(['a', 'an', 'the', 'at', 'on', 'in', 'for', 'to', 'of', 'and', 'with', 'my', 'our']);
-const titleWords = (t) => new Set(t.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !FILLER.has(w)));
+const FILLER = new Set([
+    'a', 'an', 'the', 'at', 'on', 'in', 'for', 'to', 'of', 'and', 'with', 'my', 'our',
+    'el', 'la', 'los', 'las', 'un', 'una', 'de', 'del', 'al', 'y', 'en', 'para', 'con', 'mi',
+    'het', 'een', 'van', 'voor', 'op', 'met', 'mijn', 'ons', 'onze',
+]);
+const titleWords = (t) => new Set(t.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w && !FILLER.has(w)));
 /**
  * Whether two titles name the same thing: the words they share, of all the words in either (filler
  * like "the", "for" left out), reach `threshold`. "Trash pickup" and "trash  Pickup!" do; "Garbage

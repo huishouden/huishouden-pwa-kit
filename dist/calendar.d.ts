@@ -185,7 +185,8 @@ export interface SeriesCoverOptions<E> {
 export declare function seriesCover<E extends ScheduledEvent>(series: CalendarSeries, events: readonly E[], options: SeriesCoverOptions<E>): SeriesCover<E> | null;
 /**
  * Whether a calendar series reads as a reminder to do something before an event rather than the
- * event itself: "Garbage out for Monday pickup", "Put the bins out", or anything in the evening.
+ * event itself: "Garbage out for Monday pickup", "Put the bins out", "Sacar la basura", "Container
+ * buiten zetten", or anything in the evening.
  */
 export declare function looksLikePrep(series: Pick<CalendarSeries, 'title' | 'time'>): boolean;
 /**
