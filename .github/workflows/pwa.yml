@@ -6,7 +6,7 @@
 #       permissions: { contents: write, id-token: write, pull-requests: write }
 #       with:
 #         base: /spending/          # the portal: /
-#         site-url: https://example-family.web.app/spending/
+#         # site-url: optional; default https://<SUITE_SITE>.web.app<base> (the kit's ./site, 0.72+)
 #
 # With `base`, main publishes the build as a release asset (the repo's `hosting` pre-release) and
 # deploys the whole site: every app's latest published build under its path (`pwa-site assemble`,
@@ -50,9 +50,9 @@ on:
         type: string
         default: ''
       site-url:
-        description: Live URL the smoke tests run against (with base, the app's path on the site)
+        description: Live URL the smoke tests run against. Default with base, from kit 0.72 on, the app's path on the suite's site (SUITE_SITE)
         type: string
-        required: true
+        default: ''
       reconcile:
         description: With base / (the portal's schedule). Redeploy the site if an app published a newer build; no build, no tests
         type: boolean
@@ -220,11 +220,24 @@ jobs:
         with:
           name: dist
           path: dist
+      - name: The live address
+        if: steps.has.outputs.present == 'true'
+        env:
+          SITE_URL: ${{ inputs.site-url }}
+          BASE: ${{ inputs.base || '/' }}
+        run: |
+          url=$SITE_URL
+          if [ -z "$url" ]; then
+            site=$(bunx pwa-site site 2>/dev/null | sed -n 's/^site=//p')
+            if [ -z "$site" ]; then echo "::error::site-url is empty and the pinned kit has no 'pwa-site site' (0.72+): pass site-url"; exit 1; fi
+            url="https://$site.web.app$BASE"
+          fi
+          echo "LIVE_URL=$url" >> "$GITHUB_ENV"
+          echo "Live: $url"
       - name: Before (live) and after (this PR)
         id: shots
         if: steps.has.outputs.present == 'true'
         env:
-          LIVE_URL: ${{ inputs.site-url }}
           BASE: ${{ inputs.base || '/' }}
         run: |
           (bunx vite preview --port 4173 --strictPort >/tmp/preview.log 2>&1 &)
@@ -631,7 +644,9 @@ jobs:
           RECONCILE: ${{ inputs.reconcile }}
         run: |
           if [ "$RECONCILE" = true ]; then
-            site=$(jq -r '.[] | select(.path == "/") | .site' apps.json)
+            # The suite's site from the pinned kit (SUITE_SITE, 0.72+); older kits deploy the portal's site.
+            site=$(bun "$SITE_TOOL" site 2>/dev/null | sed -n 's/^site=//p')
+            site=${site:-$(jq -r '.[] | select(.path == "/") | .site' apps.json)}
             bun "$SITE_TOOL" stale --flavor production --manifest "https://$site.web.app/hh-site.json"
           fi
           bun "$SITE_TOOL" redirects-check
@@ -702,27 +717,39 @@ jobs:
           key: bun-${{ hashFiles('bun.lock') }}
       - if: steps.has-e2e.outputs.present == 'true'
         run: bun install --frozen-lockfile && bunx playwright install --with-deps chromium
-      - if: steps.has-e2e.outputs.present == 'true'
-        run: bun run e2e
+      - name: The live address
+        if: steps.has-e2e.outputs.present == 'true'
         env:
-          BASE_URL: ${{ inputs.site-url }}
+          SITE_URL: ${{ inputs.site-url }}
+          BASE: ${{ inputs.base || '/' }}
+        run: |
+          url=$SITE_URL
+          if [ -z "$url" ]; then
+            site=$(bunx pwa-site site 2>/dev/null | sed -n 's/^site=//p')
+            if [ -z "$site" ]; then echo "::error::site-url is empty and the pinned kit has no 'pwa-site site' (0.72+): pass site-url"; exit 1; fi
+            url="https://$site.web.app$BASE"
+          fi
+          echo "LIVE_URL=$url" >> "$GITHUB_ENV"
+          echo "Live: $url"
+      - if: steps.has-e2e.outputs.present == 'true'
+        run: BASE_URL="$LIVE_URL" bun run e2e
       # Chrome's sign-in prompt needs the site registered on the OAuth client, which no API can do.
-      # Only the suite's site, the project's default one (docs/one-site.md "Sign-in origins"), and
-      # the auth handler: the old per-app sites only redirect.
+      # Only the suite's site (docs/one-site.md "Sign-in origins") and the auth handler: the old
+      # per-app sites only redirect.
       - name: Check the suite site is an authorized sign-in origin
         if: steps.has-e2e.outputs.present == 'true' && vars.VITE_GOOGLE_CLIENT_ID != ''
         run: |
           if [ ! -e node_modules/.bin/pwa-oauth-origins ]; then echo "::notice::Kit older than 0.16; origin check skipped"; exit 0; fi
-          bunx pwa-oauth-origins "$CLIENT_ID" "https://$PROJECT.web.app" "https://$PROJECT.firebaseapp.com" --project="$PROJECT"
+          site=$(bunx pwa-site site 2>/dev/null | sed -n 's/^site=//p')
+          bunx pwa-oauth-origins "$CLIENT_ID" "https://${site:-$PROJECT}.web.app" "https://$PROJECT.firebaseapp.com" --project="$PROJECT"
         env:
           CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           PROJECT: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
       - name: Take README screenshots
         id: shots
         if: steps.has-e2e.outputs.present == 'true'
-        env:
-          BASE_URL: ${{ inputs.site-url }}
         run: |
+          export BASE_URL="$LIVE_URL"
           if jq -e '.scripts.screenshots' package.json >/dev/null; then bun run screenshots && echo "taken=true" >> "$GITHUB_OUTPUT"; else echo "no screenshots script"; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: steps.shots.outputs.taken == 'true'

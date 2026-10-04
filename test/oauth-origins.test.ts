@@ -21,5 +21,6 @@ describe('oauth origin check', () => {
   });
   test('a project needs only its suite site and its auth handler domain', () => {
     expect(signInOrigins('demo-staging')).toEqual(['https://demo-staging.web.app', 'https://demo-staging.firebaseapp.com']);
+    expect(signInOrigins('demo', 'demo-suite')).toEqual(['https://demo-suite.web.app', 'https://demo.firebaseapp.com']);
   });
 });

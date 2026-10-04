@@ -8,6 +8,7 @@
 //                                                         every app's latest build under its path, plus firebase.json
 //   pwa-site stale --manifest <file|url> --flavor <f>     which apps (or the observability settings) published since that deploy
 //   pwa-site redirects-check                              whether every old site redirects as apps.json says
+//   pwa-site site                                         the suite's Hosting site (SUITE_SITE), as site=<name>
 //
 // Common options: --registry <file|url> (default ./apps.json, else <owner>/portal's on main),
 // --owner <github owner> (default GITHUB_REPOSITORY_OWNER).
@@ -23,7 +24,9 @@ import {
   featuresOf,
   normalizePath,
   redirectConfig,
+  redirectingSites,
   retiredWorkerSource,
+  retiringWorkers,
   sharedSite,
   siteApps,
   siteConfig,
@@ -246,11 +249,14 @@ async function assemble() {
   const hosting: HostingSite[] = [siteConfig(site, included.map((path, i) => ({ path, features: featuresOf(policies[i]) })))];
   if (flag('redirects') && flavor === 'production') {
     // Only to a path this deploy serves: an old site never redirects to a 404.
-    for (const app of apps.filter((a) => a.redirect && a.path !== '/' && a.site !== site && included.includes(a.path))) {
+    for (const app of redirectingSites(registry).filter((a) => a.site !== site && included.includes(a.path))) {
       const dir = `legacy-${app.site}`;
-      mkdirSync(join(out, dir), { recursive: true });
-      writeFileSync(join(out, dir, 'sw.js'), retiredWorkerSource());
-      hosting.push(redirectConfig(app.site, `https://${site}.web.app${app.path}`, dir));
+      const workers = retiringWorkers(app, apps);
+      for (const w of workers) {
+        mkdirSync(join(out, dir, w, '..'), { recursive: true });
+        writeFileSync(join(out, dir, w), retiredWorkerSource());
+      }
+      hosting.push(redirectConfig(app.site, `https://${site}.web.app${app.path}`, dir, workers));
     }
   }
   writeFileSync(join(out, 'firebase.json'), `${JSON.stringify({ hosting }, null, 2)}\n`);
@@ -279,15 +285,20 @@ async function redirectsCheck() {
   const registry = await loadRegistry();
   const site = sharedSite(registry);
   const wrong: string[] = [];
-  for (const app of siteApps(registry).filter((a) => a.redirect && a.path !== '/' && a.site !== site)) {
+  const apps = siteApps(registry);
+  for (const app of redirectingSites(registry)) {
     const probe = `https://${app.site}.web.app/hh-check/deep?x=1`;
     const want = `https://${site}.web.app${app.path}hh-check/deep?x=1`;
     const res = await fetch(probe, { redirect: 'manual' }).catch(() => null);
     const location = res?.headers.get('location') ?? '';
-    const worker = await fetch(`https://${app.site}.web.app/sw.js`, { redirect: 'manual' })
-      .then((r) => r.text())
-      .catch(() => '');
-    if (res?.status !== 301 || location !== want || !worker.includes(RETIRED_WORKER_MARK)) {
+    const workers = await Promise.all(
+      retiringWorkers(app, apps).map((w) =>
+        fetch(`https://${app.site}.web.app/${w}`, { redirect: 'manual' })
+          .then((r) => r.text())
+          .catch(() => ''),
+      ),
+    );
+    if (res?.status !== 301 || location !== want || !workers.every((w) => w.includes(RETIRED_WORKER_MARK))) {
       wrong.push(app.site);
       console.log(`${app.site}: ${res?.status ?? 'no answer'} → ${location || '(none)'}; want 301 → ${want} and the retiring /sw.js`);
     } else console.log(`${app.site}: redirects to ${site}.web.app${app.path}`);
@@ -295,9 +306,13 @@ async function redirectsCheck() {
   output('wrong', wrong.length ? 'true' : 'false');
 }
 
-const commands: Record<string, () => Promise<void>> = { pack, assemble, stale, 'redirects-check': redirectsCheck };
+async function suiteSite() {
+  output('site', sharedSite(await loadRegistry()));
+}
+
+const commands: Record<string, () => Promise<void>> = { pack, assemble, stale, 'redirects-check': redirectsCheck, site: suiteSite };
 if (!command || !commands[command]) {
-  console.error('usage: pwa-site pack|assemble|stale|redirects-check ... (see the header of scripts/site.ts)');
+  console.error('usage: pwa-site pack|assemble|stale|redirects-check|site ... (see the header of scripts/site.ts)');
   process.exit(2);
 }
 await commands[command]();

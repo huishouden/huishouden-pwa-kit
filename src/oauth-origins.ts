@@ -13,11 +13,12 @@
 export type OriginStatus = 'registered' | 'missing' | 'unknown';
 
 /**
- * The origins a project's OAuth web client needs: the project's default Hosting site, which serves
- * the whole suite, and Firebase's auth handler domain (`authDomain`).
+ * The origins a project's OAuth web client needs: the Hosting site that serves the whole suite
+ * (production: `SUITE_SITE` from `./site`; staging: the project's default site, the default here)
+ * and Firebase's auth handler domain (`authDomain`).
  */
-export function signInOrigins(project: string): string[] {
-  return [`https://${project}.web.app`, `https://${project}.firebaseapp.com`];
+export function signInOrigins(project: string, site: string = project): string[] {
+  return [`https://${site}.web.app`, `https://${project}.firebaseapp.com`];
 }
 
 export function originProbeUrl(clientId: string, origin: string): string {
