@@ -14,6 +14,8 @@ export interface MailMessage {
   subject: string;
   text?: string;
   html?: string;
+  /** Sent to a list: it has a List-Unsubscribe header or `Precedence: bulk/list` (newsletters, offers). */
+  bulk?: boolean;
 }
 
 /** Gmail, or a stand-in for it (sample data, test fixtures). */
@@ -76,7 +78,8 @@ function bodies(part: GmailPart | undefined, out: { text?: string; html?: string
 export function toMailMessage(m: GmailApiMessage): MailMessage {
   const p = m.payload;
   const date = Number(m.internalDate) || Date.parse(header(p, 'Date')) || 0;
-  return { id: m.id, date, from: header(p, 'From'), subject: header(p, 'Subject'), ...bodies(p) };
+  const bulk = !!header(p, 'List-Unsubscribe') || /^(?:bulk|list)$/i.test(header(p, 'Precedence').trim());
+  return { id: m.id, date, from: header(p, 'From'), subject: header(p, 'Subject'), ...bodies(p), ...(bulk ? { bulk } : {}) };
 }
 
 const NAMED: Record<string, string> = {

@@ -1,4 +1,4 @@
-import { htmlToText } from './mail-core';
+import { decodeEntities, htmlToText } from './mail-core';
 import { isTimeZone, offsetAt } from './local-clock';
 import { DAY } from './time';
 /** The dashboard's categories, in the order the Settings screen offers them. */
@@ -331,30 +331,195 @@ export function dayOf(ms, timeZone) {
     const d = new Date(ms);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-/** One alert email as a transaction, or null when it isn't a purchase or refund (a payment notice, say). */
-export function parseAlertEmail(msg, cards, rules, options = {}) {
+const AMOUNT = String.raw `\$\s?([0-9][0-9,]*(?:\.[0-9]{2})?)`;
+const USD = String.raw `([0-9][0-9,]*\.[0-9]{2})\s*USD`;
+/** A merchant: up to the end of the clause ("on", "using", "was", a full stop before a space, a line end). */
+const MERCHANT = String.raw `([^\n<>]{2,80}?)`;
+const MERCHANT_END = String.raw `(?=\s+(?:on|using|with your|with card|was|has|is|for|in)\b|\.\s|\.?$|,\s|\n|<)`;
+/**
+ * The purchase rules, most specific first. Issuer wordings (Visa Purchase Alerts, "You made a $X
+ * transaction with M") are tried before the generic "purchase/transaction/charge of $X at M".
+ */
+export const PURCHASE_RULES = [
+    // Visa Purchase Alerts: "123.45 USD at MERCHANT in PLACE on Card 1111".
+    { name: 'visa-alert', pattern: new RegExp(String.raw `${USD} at ([^\n]{2,80}?) in [^\n]+? on Card (\d{4})`, 'i'), amount: 1, merchant: 2, digits: 3, strict: true },
+    // "used at MERCHANT in PLACE, ST for 77.77 USD".
+    { name: 'visa-used-at', pattern: /\bused at ([^\n]{2,80}?) in [^\n]+?, [A-Z]{2,3} for ([0-9][0-9,]*\.[0-9]{2}) USD/, amount: 2, merchant: 1, strict: true },
+    // "You made a $27.10 transaction with MERCHANT", "Your $27.10 transaction with MERCHANT".
+    { name: 'transaction-with', pattern: new RegExp(String.raw `\b(?:you made an?|your)\s+${AMOUNT}\s+(?:transaction|purchase|charge)\s+(?:with|at)\s+${MERCHANT}${MERCHANT_END}`, 'i'), amount: 1, merchant: 2, strict: true },
+    // "A refund of $18.00 from MERCHANT", "a $18.00 refund from MERCHANT", "credit of $5.00 from MERCHANT".
+    { name: 'refund-from', pattern: new RegExp(String.raw `\b(?:refund|credit|return)\s+of\s+${AMOUNT}\s+from\s+${MERCHANT}${MERCHANT_END}`, 'i'), amount: 1, merchant: 2, refund: true },
+    { name: 'refund-from', pattern: new RegExp(String.raw `${AMOUNT}\s+(?:refund|credit|return)\s+from\s+${MERCHANT}${MERCHANT_END}`, 'i'), amount: 1, merchant: 2, refund: true },
+    // "A purchase of $12.50 at MERCHANT", "a transaction of $9.00 with MERCHANT", "charge of $3.00 at MERCHANT".
+    { name: 'purchase-of', pattern: new RegExp(String.raw `\b(?:purchase|transaction|charge)\s+(?:of|for)\s+${AMOUNT}\s+(?:at|with|from)\s+${MERCHANT}${MERCHANT_END}`, 'i'), amount: 1, merchant: 2 },
+    // "You spent $12.00 at MERCHANT", "You were charged $4.00 by MERCHANT", "$12.00 purchase at MERCHANT".
+    { name: 'spent-at', pattern: new RegExp(String.raw `\b(?:spent|charged)\s+${AMOUNT}\s+(?:at|with|by)\s+${MERCHANT}${MERCHANT_END}`, 'i'), amount: 1, merchant: 2 },
+    { name: 'amount-purchase-at', pattern: new RegExp(String.raw `${AMOUNT}\s+(?:purchase|transaction|charge)\s+(?:at|with)\s+${MERCHANT}${MERCHANT_END}`, 'i'), amount: 1, merchant: 2 },
+    // "A purchase at MERCHANT for $12.00".
+    { name: 'purchase-at-for', pattern: new RegExp(String.raw `\b(?:purchase|transaction|charge)\s+at\s+${MERCHANT}\s+(?:for|of)\s+${AMOUNT}`, 'i'), amount: 2, merchant: 1 },
+];
+/** Words that mean an email is a payment, not a purchase. */
+const PAYMENT = /payment thank you|autopay|automatic payment|payment received|payment (?:is )?scheduled|we received your payment|thank you for your payment|payment posted/i;
+const DECLINED = /\bdeclined\b|\bwas not approved\b/i;
+const STATEMENT = /\b(?:statement|e-?statement) (?:is )?(?:ready|available)|\byour (?:monthly )?statement\b|\bpayment (?:is )?due\b|\bminimum payment\b/i;
+const SECURITY = /\b(?:verification|security|one-time|login|sign-?in) code\b|\bpassword\b|\bnew device\b|\bverify (?:your|it'?s)\b|\bunusual (?:sign-?in|activity)\b|\bidentity\b/i;
+const PURCHASE_WORDS = /\b(?:purchases?|purchased|transactions?|charged?|spent|refund(?:ed)?|card (?:was )?used)\b/i;
+const PROMO = /\bunsubscribe\b|\blimited time\b|\boffers?\b|\bearn\b|\bsign up\b|\bapply now\b|\bget up to\b|\bcash ?back\b|\brewards?\b|\bbonus\b|\binvest(?:ing|ment)?\b|\bshares?\b|\bportfolio\b|\bmarket order\b|\blimit order\b|\bdividend\b|\bdeposit(?:ed)?\b|\bwithdrawal\b/i;
+/** Words that are never a shop: what loose wording leaves where a merchant should be. */
+const NOT_A_MERCHANT = new Set([
+    'card purchase', 'purchase', 'purchases', 'transaction', 'merchant', 'store', 'shop', 'unknown', 'online', 'card', 'your card', 'debit card', 'credit card',
+    'visa', 'mastercard', 'account', 'your account', 'order', 'payment', 'price', 'model', 'models', 'option', 'options', 'stock', 'stocks', 'shares', 'market', 'home', 'here', 'checkout',
+]);
+/** Why a merchant can't be trusted, or null when it can. */
+export function merchantProblem(merchant) {
+    const m = merchant.trim();
+    if (m.length < 2 || m.length > 60 || !/[A-Za-z]/.test(m))
+        return 'generic-merchant';
+    if (NOT_A_MERCHANT.has(m.toLowerCase()))
+        return 'generic-merchant';
+    // Prose, not a name: "a reasonable price", "your card", "the end of the day".
+    if (/^(?:a|an|the|your|our|my|this|that|these|those|any|some|each|every|its|their|least|most|all|no|one)\b/i.test(m))
+        return 'generic-merchant';
+    // Alerts write shops as they're named (capitals, digits, a domain): all-lowercase words are prose.
+    if (!/[A-Z0-9]/.test(m) && !/\.[a-z]{2,}/.test(m))
+        return 'generic-merchant';
+    return null;
+}
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const DATE_TOKEN = String.raw `((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}/\d{1,2}/(?:\d{4}|\d{2})|\d{4}-\d{2}-\d{2})`;
+const LABELLED_DATE = new RegExp(String.raw `\b(?:transaction date|purchase date|date of (?:transaction|purchase)|date)\s*:?\s*${DATE_TOKEN}`, 'i');
+const ON_DATE = new RegExp(String.raw `\bon\s+(?:[A-Z][a-z]+day,?\s+)?${DATE_TOKEN}`, 'i');
+/** A written date as YYYY-MM-DD (US month first for slashes), or null. */
+export function writtenDay(token) {
+    const iso = token.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    let y, mo, d;
+    if (iso)
+        [y, mo, d] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+    else {
+        const slash = token.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+        if (slash)
+            [mo, d, y] = [Number(slash[1]), Number(slash[2]), Number(slash[3]) < 100 ? 2000 + Number(slash[3]) : Number(slash[3])];
+        else {
+            const named = token.match(/^([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})$/);
+            if (!named)
+                return null;
+            mo = MONTHS.indexOf(named[1].toLowerCase()) + 1;
+            [d, y] = [Number(named[2]), Number(named[3])];
+        }
+    }
+    if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= 31))
+        return null;
+    const day = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    return new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day ? day : null;
+}
+/**
+ * The transaction's day: a date the email writes for it ("Date: Oct 2, 2031", "on 10/02/2031" in
+ * the purchase's sentence), when it is at most 10 days before the email and not after it; otherwise
+ * the day the email was sent, in the household's time zone.
+ */
+export function alertDay(text, sentence, sent, timeZone) {
+    const sentDay = dayOf(sent, timeZone);
+    for (const m of [sentence.match(ON_DATE), text.match(LABELLED_DATE)]) {
+        const day = m ? writtenDay(m[1]) : null;
+        if (!day)
+            continue;
+        const back = (Date.parse(sentDay) - Date.parse(day)) / DAY;
+        if (back >= 0 && back <= 10)
+            return day;
+    }
+    return sentDay;
+}
+const money = (s) => parseFloat(s.replace(/,/g, ''));
+/** A labelled merchant and amount ("Merchant: X" / a "Merchant" table cell, and "Amount: $Y"), both or neither. */
+function labelledPurchase(text, html) {
+    const line = text.match(/^\s*(?:merchant|merchant name|payee|vendor|store name|where)\s*:\s*([^\n<]{2,80})$/im) ?? text.match(/^\s*(?:merchant|merchant name|payee|vendor|store name)\s*\n\s*([^\n<]{2,80})$/im);
+    const cell = html.match(/>\s*(?:merchant|merchant name|payee|vendor|store name)\s*:?\s*<\/t[dh]>\s*<t[dh][^>]*>([^<]{2,80})<\/t[dh]>/i);
+    const merchant = (line?.[1] ?? (cell ? decodeEntities(cell[1]) : '')).trim();
+    if (!merchant)
+        return null;
+    const amountLine = text.match(/^\s*(?:amount|transaction amount|purchase amount|total)\s*:?\s*\$\s?([0-9][0-9,]*\.[0-9]{2})/im) ?? text.match(/\b(?:amount|transaction amount|purchase amount|total)\s*:?\s*\n?\s*\$\s?([0-9][0-9,]*\.[0-9]{2})/i);
+    if (!amountLine)
+        return null;
+    return { merchant, amount: money(amountLine[1]), line: line?.[0] ?? merchant };
+}
+/** One email, read as a card alert (see `AlertReading`). */
+export function readAlert(msg, cards, rules, options = {}) {
     const html = msg.html ?? '';
     const body = msg.text ?? (html ? htmlToText(html) : '');
     const text = `${msg.subject}\n${body}`;
-    if (/payment thank you|autopay|automatic payment|payment received|we received your payment|thank you for your payment/i.test(text))
-        return null;
-    const amountMatch = text.match(/\$\s?([0-9,]+\.[0-9]{2})/) || text.match(/([0-9,]+\.[0-9]{2})\s*USD/i);
-    const amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, '')) : 0;
-    if (!amount || Number.isNaN(amount))
-        return null;
-    const description = extractMerchant(msg.subject, body, html);
-    // Only the alert's wording marks a refund.
-    const isRefund = /\brefund|\bcredit (?:of|for|to)|\breturn(?:ed)?\b|merchant credit/i.test(text);
-    const { card, last4 } = identifyCard(`${msg.from}\n${text}`, cards);
-    return {
-        date: dayOf(msg.date, options.timeZone),
-        description,
-        amount: isRefund ? -amount : amount,
-        category: categorise(description, rules),
-        card,
-        type: isRefund ? 'Return' : 'Sale',
-        ...(last4 ? { last4 } : {}),
-    };
+    const sentDay = () => dayOf(msg.date, options.timeZone);
+    if (PAYMENT.test(text))
+        return { kind: 'not-purchase', reason: 'payment' };
+    if (DECLINED.test(text))
+        return { kind: 'not-purchase', reason: 'declined' };
+    let found = null;
+    let generic = false;
+    for (const r of PURCHASE_RULES) {
+        const m = text.match(r.pattern);
+        if (!m)
+            continue;
+        const merchant = cleanMerchantName(m[r.merchant]);
+        const amount = money(m[r.amount]);
+        if (!(amount > 0))
+            continue;
+        if (merchantProblem(merchant)) {
+            generic = true;
+            continue;
+        }
+        const at = m.index ?? 0;
+        const sentence = text.slice(text.lastIndexOf('\n', at) + 1, (text.indexOf('\n', at + m[0].length) + 1 || text.length + 1) - 1);
+        found = { merchant, amount, rule: r.name, refund: !!r.refund, sentence, strict: !!r.strict };
+        break;
+    }
+    if (!found) {
+        const labelled = labelledPurchase(text, html);
+        if (labelled && labelled.amount > 0) {
+            const merchant = cleanMerchantName(labelled.merchant);
+            if (!merchantProblem(merchant))
+                found = { merchant, amount: labelled.amount, rule: 'labelled', refund: false, sentence: labelled.line, strict: true };
+            else
+                generic = true;
+        }
+    }
+    // Prose rules in mail sent to a list (offers: "earn 3% on every purchase of $50 at ...") are not trusted.
+    if (found && !found.strict && PROMO.test(text) && (msg.bulk || /\bunsubscribe\b/i.test(text)))
+        found = null;
+    if (found) {
+        const isRefund = found.refund || /\brefund(?:ed)?\b|\bmerchant credit\b/i.test(found.sentence);
+        const { card, last4 } = identifyCard(`${msg.from}\n${text}`, cards);
+        return {
+            kind: 'purchase',
+            rule: found.rule,
+            tx: {
+                date: alertDay(text, found.sentence, msg.date, options.timeZone),
+                description: found.merchant,
+                amount: isRefund ? -found.amount : found.amount,
+                category: categorise(found.merchant, rules),
+                card,
+                type: isRefund ? 'Return' : 'Sale',
+                ...(last4 ? { last4 } : {}),
+            },
+        };
+    }
+    const anyAmount = text.match(/\$\s?([0-9][0-9,]*\.[0-9]{2})/) || text.match(/([0-9][0-9,]*\.[0-9]{2})\s*USD/i);
+    const amount = anyAmount ? money(anyAmount[1]) : 0;
+    if (STATEMENT.test(text))
+        return { kind: 'not-purchase', reason: 'statement' };
+    if (SECURITY.test(text))
+        return { kind: 'not-purchase', reason: 'security' };
+    const listMail = msg.bulk || /\bunsubscribe\b/i.test(text);
+    if ((listMail || PROMO.test(text)) && !PURCHASE_WORDS.test(text))
+        return { kind: 'not-purchase', reason: 'bulk' };
+    if (!(amount > 0))
+        return { kind: 'not-purchase', reason: 'no-amount' };
+    if (listMail && !generic && !/\b(?:card|purchase[ds]?|transaction|charged)\b/i.test(msg.subject))
+        return { kind: 'not-purchase', reason: 'bulk' };
+    return { kind: 'unreadable', reason: generic ? 'generic-merchant' : 'no-merchant', date: sentDay(), amount };
+}
+/** One alert email as a transaction, or null when it isn't one it can trust (`readAlert` says why). */
+export function parseAlertEmail(msg, cards, rules, options = {}) {
+    const r = readAlert(msg, cards, rules, options);
+    return r.kind === 'purchase' ? r.tx : null;
 }
 // ---- Checking the mail ----
 /**
@@ -373,21 +538,25 @@ export class NothingToSearch extends Error {
         this.name = 'NothingToSearch';
     }
 }
-/** Messages to the alerts to write: parsed, oldest first, matched against what the household has. */
+/** Messages to the alerts to write: read, oldest first, matched against what the household has. Unconfident ones go to `review`, never to `create`. */
 export function planAlerts(messages, input) {
     const parsed = [];
+    const review = [];
     let notPurchases = 0;
     for (const m of messages) {
-        const tx = parseAlertEmail(m, input.cards, input.rules, input);
-        if (!tx)
-            notPurchases++;
+        const r = readAlert(m, input.cards, input.rules, input);
+        if (r.kind === 'purchase')
+            parsed.push({ ...r.tx, id: alertId(m.id), emailId: m.id });
+        else if (r.kind === 'unreadable')
+            review.push({ emailId: m.id, subject: m.subject.slice(0, 200), sent: m.date, date: r.date, reason: r.reason, ...(r.amount ? { amount: r.amount } : {}) });
         else
-            parsed.push({ ...tx, id: alertId(m.id), emailId: m.id });
+            notPurchases++;
     }
     // Oldest first, so of two alerts for one purchase the first one sent is kept.
     parsed.sort((a, b) => a.date.localeCompare(b.date));
+    review.sort((a, b) => a.sent - b.sent);
     const plan = planImport(parsed, input.existing, 'alert');
-    return { create: plan.create, duplicates: plan.duplicates, notPurchases };
+    return { create: plan.create, duplicates: plan.duplicates, notPurchases, review };
 }
 export async function checkAlerts(mailbox, input) {
     const query = alertQuery(input.cards, input.labels);
@@ -404,7 +573,7 @@ export async function checkAlerts(mailbox, input) {
 }
 // ---- Transaction documents ----
 /** The fields huishouden/rules allows on `spendingTransactions`. */
-export const TRANSACTION_FIELDS = ['date', 'description', 'amount', 'category', 'card', 'type', 'source', 'last4', 'emailId', 'createdAt', 'updatedAt', 'by'];
+export const TRANSACTION_FIELDS = ['date', 'description', 'amount', 'category', 'card', 'type', 'source', 'last4', 'emailId', 'importId', 'createdAt', 'updatedAt', 'by'];
 /** A transaction document as a member writes it: only the allowed fields, no empty optional ones. */
 export function transactionDoc(tx, source, by, createdAt, updatedAt) {
     return {
@@ -417,6 +586,7 @@ export function transactionDoc(tx, source, by, createdAt, updatedAt) {
         source,
         ...(tx.last4 && /^\d{4}$/.test(tx.last4) ? { last4: tx.last4 } : {}),
         ...(tx.emailId ? { emailId: tx.emailId.slice(0, 64) } : {}),
+        ...(tx.importId ? { importId: tx.importId.slice(0, 40) } : {}),
         createdAt,
         ...(updatedAt !== undefined ? { updatedAt } : {}),
         by,

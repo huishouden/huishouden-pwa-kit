@@ -42,7 +42,8 @@ function bodies(part, out = {}) {
 export function toMailMessage(m) {
     const p = m.payload;
     const date = Number(m.internalDate) || Date.parse(header(p, 'Date')) || 0;
-    return { id: m.id, date, from: header(p, 'From'), subject: header(p, 'Subject'), ...bodies(p) };
+    const bulk = !!header(p, 'List-Unsubscribe') || /^(?:bulk|list)$/i.test(header(p, 'Precedence').trim());
+    return { id: m.id, date, from: header(p, 'From'), subject: header(p, 'Subject'), ...bodies(p), ...(bulk ? { bulk } : {}) };
 }
 const NAMED = {
     nbsp: ' ',
