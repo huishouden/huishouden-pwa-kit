@@ -17,6 +17,7 @@
  * the `VITE_NEWRELIC_*` variables on each app's repo instead (apps on sites of their own; needs `gh`
  * signed in with admin on the repos).
  *
+ * Ends with each app's page views (REPORTING_SINCE, default `1 day ago`).
  * Optional: GITHUB_OWNER (default huishouden), FAMILY (default Huishouden), DRY_RUN=1.
  * The user key (NRAK-…) is read from the environment only and never printed.
  */
@@ -441,6 +442,16 @@ async function upsertDashboard() {
   return made?.dashboardCreate.entityResult?.guid ?? null;
 }
 
+// 6. Which apps reported page views lately: an app missing here has no settings on the site, or
+// nobody opened it.
+async function reporting() {
+  const nrql = `SELECT count(*) FROM PageView WHERE appName LIKE '${FAMILY} %' FACET appName SINCE ${process.env.REPORTING_SINCE ?? '1 day ago'} LIMIT 50`;
+  const d: any = await gql(`query($a: Int!, $q: Nrql!) { actor { account(id: $a) { nrql(query: $q) { results } } } }`, { a: ACCOUNT, q: nrql });
+  const counts = new Map<string, number>((d.actor.account.nrql.results ?? []).map((r: { appName?: string; facet?: string; count: number }) => [r.appName ?? r.facet ?? '', r.count]));
+  log(`\nPage views since ${process.env.REPORTING_SINCE ?? '1 day ago'}:`);
+  for (const app of apps) log(`  ${browserName(app)}: ${counts.get(browserName(app)) ?? 0}`);
+}
+
 try {
   const settings = await browserApps();
   if (OUT) writeSiteSettings(settings, OUT);
@@ -450,6 +461,7 @@ try {
   const dash = await upsertDashboard();
   log(`\nAlert policy ${policyId ?? '(dry run)'}; dashboard https://one.newrelic.com/redirect/entity/${dash ?? '(dry run)'}`);
   await dropRules();
+  await reporting();
 } catch (e) {
   console.error(`newrelic: ${scrub(e instanceof Error ? e.message : String(e))}`);
   process.exit(1);
