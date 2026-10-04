@@ -50,4 +50,10 @@ describe('series and edits on agenda items', () => {
     expect(op.data).toEqual({ exceptions: { '2031-10-16': { skipped: true, note: 'was $original' } }, updatedAt: '$now' });
     expect(() => fillEditOps(skip, {})).toThrow();
   });
+
+  test('calendarDetail is stored clipped and read back', () => {
+    const doc = agendaDoc('health', { ...input, series: undefined, edit: undefined, calendarDetail: `  ${'x'.repeat(250)}` }, 'a@example.com', 1);
+    expect(doc.calendarDetail).toHaveLength(200);
+    expect(toAgendaItem('x', doc as unknown as Record<string, unknown>).calendarDetail).toBe(doc.calendarDetail);
+  });
 });
