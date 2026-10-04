@@ -355,6 +355,15 @@ describe('calendar', () => {
     render(<CalendarHint app="Pet" available={false} />);
     expect(document.body.textContent).toBe('Sign in to search your calendar.');
   });
+
+  test('the hint names the app in the page language while the key stays the app', () => {
+    localStorage.clear();
+    render(<CalendarHint app="Baby" name="Bebé" available />);
+    expect(document.body.textContent).toBe('Google will ask once to let Bebé read your calendar. Bebé never changes it.');
+    localStorage.setItem('baby-calendar-allowed', '1');
+    render(<CalendarHint app="Baby" name="Bebé" available />);
+    expect(document.body.textContent).toBe('');
+  });
 });
 
 describe('contacts', () => {

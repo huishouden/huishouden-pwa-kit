@@ -4,8 +4,9 @@
  * hint before Google's first permission window, and suggestions of new events found when the app
  * opens. Built on `findCalendarEvents` in `../calendar`.
  *
- * `app` is the app's short name ("Baby"): it words the hint and keys whether this browser has
- * already been asked (`<app>-calendar-allowed` in localStorage).
+ * `app` is the app's short name ("Baby"): it keys whether this browser has already been asked
+ * (`<app>-calendar-allowed` in localStorage) and words the hint. Pass `name` (the app's name in the
+ * page's language, "Bebé") where it differs, so the key stays the same in every language.
  */
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import type { Auth } from 'firebase/auth';
@@ -80,11 +81,11 @@ export function matchWhen(m: CalendarMatch): string {
   return m.allDay ? kt('calendar.matchAllDay', { day, calendar: m.calendarName }) : kt('calendar.matchTimed', { day, time: formatTime(m.start), calendar: m.calendarName });
 }
 
-/** One line before Google's first permission window, or why the search is off. */
-export function CalendarHint({ app, available }: { app: string; available: boolean }) {
+/** One line before Google's first permission window, or why the search is off. `name` words it (default `app`). */
+export function CalendarHint({ app, name = app, available }: { app: string; name?: string; available: boolean }) {
   const kt = useKitT();
   if (!available) return <p className="text-base text-muted">{kt('calendar.signInToSearch')}</p>;
-  if (!calendarAsked(app)) return <p className="text-base text-muted">{kt('calendar.askOnce', { app })}</p>;
+  if (!calendarAsked(app)) return <p className="text-base text-muted">{kt('calendar.askOnce', { app: name })}</p>;
   return null;
 }
 
@@ -92,7 +93,7 @@ export function CalendarHint({ app, available }: { app: string; available: boole
  * "Find in my calendar" inside a dialog: searches for `query` (what the person typed as the title)
  * and hands the picked event back. The first search opens Google's permission window, so it runs on the tap.
  */
-export function CalendarFind({ auth, app, query, available, onPick }: { auth: Auth; app: string; query: string; available: boolean; onPick: (m: CalendarMatch) => void }) {
+export function CalendarFind({ auth, app, name, query, available, onPick }: { auth: Auth; app: string; name?: string; query: string; available: boolean; onPick: (m: CalendarMatch) => void }) {
   const kt = useKitT();
   const search = useCalendarSearch(auth, app);
   const q = query.trim();
@@ -106,7 +107,7 @@ export function CalendarFind({ auth, app, query, available, onPick }: { auth: Au
       >
         <CalendarSearch size={18} /> {search.state.status === 'searching' ? kt('calendar.searching') : kt('calendar.find')}
       </button>
-      <CalendarHint app={app} available={available} />
+      <CalendarHint app={app} name={name} available={available} />
       {search.state.status === 'error' && <ErrorNotice message={search.state.message} onRetry={() => void search.run(query)} />}
       {search.state.status === 'done' && search.state.matches.length === 0 && (
         <p role="status" className="text-base text-muted">

@@ -4,8 +4,9 @@
  * hint before Google's first permission window, and suggestions of new events found when the app
  * opens. Built on `findCalendarEvents` in `../calendar`.
  *
- * `app` is the app's short name ("Baby"): it words the hint and keys whether this browser has
- * already been asked (`<app>-calendar-allowed` in localStorage).
+ * `app` is the app's short name ("Baby"): it keys whether this browser has already been asked
+ * (`<app>-calendar-allowed` in localStorage) and words the hint. Pass `name` (the app's name in the
+ * page's language, "Bebé") where it differs, so the key stays the same in every language.
  */
 import { type ReactNode } from 'react';
 import type { Auth } from 'firebase/auth';
@@ -39,18 +40,20 @@ export declare function useCalendarSearch(auth: Auth, app: string): {
 };
 /** "Sun, Oct 19, 9:00 AM · Family", in the active locale. */
 export declare function matchWhen(m: CalendarMatch): string;
-/** One line before Google's first permission window, or why the search is off. */
-export declare function CalendarHint({ app, available }: {
+/** One line before Google's first permission window, or why the search is off. `name` words it (default `app`). */
+export declare function CalendarHint({ app, name, available }: {
     app: string;
+    name?: string;
     available: boolean;
 }): import("react").JSX.Element | null;
 /**
  * "Find in my calendar" inside a dialog: searches for `query` (what the person typed as the title)
  * and hands the picked event back. The first search opens Google's permission window, so it runs on the tap.
  */
-export declare function CalendarFind({ auth, app, query, available, onPick }: {
+export declare function CalendarFind({ auth, app, name, query, available, onPick }: {
     auth: Auth;
     app: string;
+    name?: string;
     query: string;
     available: boolean;
     onPick: (m: CalendarMatch) => void;
