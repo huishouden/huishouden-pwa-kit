@@ -180,6 +180,9 @@ writing), so the dashboard's month-long charts fill in over time and older detai
 
 ## Checking it works
 
+Every provisioning run ends with each app's page views over the last day (in the portal's
+monitoring run summary); an app at 0 after a visit has no settings on the site. By hand:
+
 ```sh
 newrelic nrql query --accountId <id> --query "SELECT count(*) FROM PageView, JavaScriptError, PageAction WHERE appName LIKE 'Huishouden %' FACET eventType(), appName SINCE 1 hour ago"
 newrelic nrql query --accountId <id> --query "SELECT latest(timestamp), sum(pushed) FROM NotifyRun SINCE 30 minutes ago"
