@@ -17,6 +17,9 @@ export interface Contact {
     email?: string;
     website?: string;
     address?: string;
+    /** Where the address is, when a map search found it: for "2.3 mi from home" (`./home`). */
+    lat?: number;
+    lng?: number;
     mapsUrl?: string;
     notes?: string;
     /**
@@ -98,6 +101,14 @@ export type ContactInput = Omit<Contact, 'id' | 'createdAt' | 'updatedAt' | 'by'
  * `private` always written. Pay details are never on it (`contactPayDoc`).
  */
 export declare function cleanContact(input: ContactInput): ContactInput;
+/** `lat` and `lng` when both are on the map; undefined otherwise. */
+export declare function coordinates(d: {
+    lat?: unknown;
+    lng?: unknown;
+} | undefined): {
+    lat: number;
+    lng: number;
+} | undefined;
 /** A contact document as a Contact. Pay details are read from `contactPay`, never from here. */
 export declare function toContact(id: string, data: Record<string, unknown>): Contact;
 /** Field lengths the household rules allow for contacts. */

@@ -5,8 +5,13 @@
  * Covers the forms most shops use: day ranges and lists, several time ranges a day, "off",
  * and "24/7". Anything else (public holidays, months, sunrise) makes `parseOpeningHours` return
  * null, and apps show the text as written rather than guess.
+ *
+ * Times are read on the household's clock: the home's `timeZone` (`./home`) when the household has
+ * set one, so a place near home shows its hours right on a phone that is travelling; otherwise the
+ * device's. Each function takes `timeZone` to say otherwise.
  */
 import { getLocale, kt } from './i18n.js';
+import { getHome } from './home.js';
 const DAY_CODES = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 function dayIndex(code) {
     return DAY_CODES.indexOf(code);
@@ -67,11 +72,27 @@ export function parseOpeningHours(text) {
     }
     return week;
 }
-const minutesOf = (date) => date.getHours() * 60 + date.getMinutes();
+/** The weekday (0 = Sunday) and minutes after midnight at `date` on `timeZone`'s clock (the device's when unset). */
+function wallClock(date, timeZone) {
+    if (!timeZone)
+        return { day: date.getDay(), minutes: date.getHours() * 60 + date.getMinutes() };
+    try {
+        // Read back as numbers only, never shown: a fixed locale keeps the parts' names.
+        const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }) // locale-check:allow
+            .formatToParts(date)
+            .map((p) => [p.type, p.value]));
+        return { day: DAY_NAMES.indexOf(parts.weekday), minutes: (Number(parts.hour) % 24) * 60 + Number(parts.minute) };
+    }
+    catch {
+        return { day: date.getDay(), minutes: date.getHours() * 60 + date.getMinutes() };
+    }
+}
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/** The zone hours are read in by default: the home's, when the household set one. */
+const homeZone = () => getHome()?.timeZone;
 /** Open at that moment, counting a period that started the evening before and runs past midnight. */
-export function isOpenAt(hours, date) {
-    const day = date.getDay();
-    const now = minutesOf(date);
+export function isOpenAt(hours, date, timeZone = homeZone()) {
+    const { day, minutes: now } = wallClock(date, timeZone);
     if (hours[day].some(([open, close]) => now >= open && now < close))
         return true;
     const yesterday = hours[(day + 6) % 7];
@@ -81,21 +102,18 @@ export function isOpenAt(hours, date) {
  * When the place closes, if it is open at `date`: the end of the period it is in, including one
  * that started the evening before and runs past midnight. Null when it is closed at `date`.
  */
-export function closesAt(hours, date) {
-    const day = date.getDay();
-    const now = minutesOf(date);
-    const midnight = new Date(date);
-    midnight.setHours(0, 0, 0, 0);
-    const at = (minutes) => new Date(midnight.getTime() + minutes * 60_000);
+export function closesAt(hours, date, timeZone = homeZone()) {
+    const { day, minutes: now } = wallClock(date, timeZone);
+    const later = (minutes) => new Date(date.getTime() - (date.getSeconds() * 1000 + date.getMilliseconds()) + (minutes - now) * 60_000);
     const yesterday = hours[(day + 6) % 7].find(([, close]) => close > 24 * 60 && now < close - 24 * 60);
     if (yesterday)
-        return at(yesterday[1] - 24 * 60);
+        return later(yesterday[1] - 24 * 60);
     const today = hours[day].find(([open, close]) => now >= open && now < close);
-    return today ? at(today[1]) : null;
+    return today ? later(today[1]) : null;
 }
 /** "7:00 AM – 6:00 PM", "Closed" or "Open 24 hours" for that date's day; times in `locale` (the active one). */
-export function describeDay(hours, date, locale = getLocale()) {
-    const periods = hours[date.getDay()];
+export function describeDay(hours, date, locale = getLocale(), timeZone = homeZone()) {
+    const periods = hours[wallClock(date, timeZone).day];
     if (periods.length === 0)
         return kt('hours.closed');
     const time = (m) => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, Math.floor(m / 60) % 24, m % 60)).replace(/[\u202f\u00a0]/g, ' ');

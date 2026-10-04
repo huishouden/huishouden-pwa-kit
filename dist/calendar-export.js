@@ -39,6 +39,9 @@ export const exportMark = (householdId, key) => `${householdId}:${key}`.slice(0,
 export function isExportedEvent(e) {
     return typeof e?.extendedProperties?.private?.[EXPORT_PROPERTY] === 'string' || (typeof e?.iCalUID === 'string' && e.iCalUID.endsWith('@huishouden'));
 }
+/** Apps whose agenda items happen at the household's home. */
+export const AT_HOME_APPS = ['home'];
+const locationOf = (app, input) => (input.home?.trim() && AT_HOME_APPS.includes(app) ? { location: input.home.trim() } : {});
 /** A short, stable, non-cryptographic hash (cyrb53) as hex, for noticing changes. */
 export function contentHash(text) {
     let h1 = 0xdeadbeef;
@@ -97,7 +100,7 @@ function times(item, timeZone) {
     const end = item.end !== undefined && item.end > item.start ? item.end : item.start + (SHORT_KINDS.includes(item.kind) ? 15 : 60) * MINUTE;
     return { allDay: false, start: item.start, end };
 }
-const hashOf = (e) => contentHash(JSON.stringify([e.title, e.description, e.url, e.allDay, e.startDate, e.endDate, e.start, e.end, e.alarmMinutes ?? null, e.series ? [e.series.rule, e.series.time ?? null, e.series.minutes, e.series.first, e.series.exdates, e.series.overrides.map((o) => o.hash)] : null, e.original ?? null]));
+const hashOf = (e) => contentHash(JSON.stringify([e.title, e.description, e.url, e.allDay, e.startDate, e.endDate, e.start, e.end, e.alarmMinutes ?? null, e.series ? [e.series.rule, e.series.time ?? null, e.series.minutes, e.series.first, e.series.exdates, e.series.overrides.map((o) => o.hash)] : null, e.original ?? null, ...(e.location ? [e.location] : [])]));
 function single(item, key, input) {
     const { title, description } = words(item, input);
     const when = times(item, input.timeZone);
@@ -110,6 +113,7 @@ function single(item, key, input) {
         title,
         description,
         url: item.url,
+        ...locationOf(item.app, input),
         ...when,
         ...(item.status ? { status: item.status } : {}),
         ...(alarmMinutes !== undefined ? { alarmMinutes } : {}),
@@ -168,6 +172,7 @@ function seriesEvent(items, key, input) {
         title,
         description,
         url: latest.url,
+        ...locationOf(latest.app, input),
         allDay: !s.time,
         ...(s.time ? {} : { startDate: first, endDate: addDays(first, 1) }),
         start,
@@ -265,6 +270,7 @@ export function toIcsEvents(events, { householdId, timeZone, lang = 'en' }) {
             summary: x.title,
             description: x.description,
             url: x.url,
+            ...(x.location ? { location: x.location } : {}),
             ...icsWhen(x),
             sequence: sequenceOf(x.updatedAt),
             lastModified: x.updatedAt,

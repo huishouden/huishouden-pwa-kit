@@ -437,6 +437,30 @@ export async function stubCalendar(page, { events, cachedToken = true }) {
             w.__mockCalendarToken = 'test-token';
     }, { events, cachedToken });
 }
+/**
+ * OpenStreetMap stands still for a test: Nominatim (search and reverse, `./home` and `./places`)
+ * answers from `options`, and map tiles are a plain grey square, so nothing leaves the machine and
+ * screenshots don't change with the map. Returns the URLs Nominatim was asked.
+ */
+export async function stubOpenStreetMap(page, { search = [], reverse = { error: 'Unable to geocode' }, area } = {}) {
+    const asked = [];
+    // A 1×1 grey PNG.
+    const tile = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN4+P/xfwAJLAPeVvNHBgAAAABJRU5ErkJggg==', 'base64');
+    await page.route('https://tile.openstreetmap.org/**', (route) => route.fulfill({ contentType: 'image/png', body: tile }));
+    await page.route('https://nominatim.openstreetmap.org/**', (route) => {
+        const url = new URL(route.request().url());
+        asked.push(url.href);
+        const zoom = Number(url.searchParams.get('zoom') ?? 18);
+        const body = url.pathname.startsWith('/reverse') ? (zoom <= 14 && area ? area : reverse) : search;
+        return route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(body) });
+    });
+    return asked;
+}
+/** The browser reports this position, with location permission granted for the page's origin. */
+export async function useGeolocation(context, point, origin) {
+    await context.grantPermissions(['geolocation'], origin ? { origin } : undefined);
+    await context.setGeolocation({ latitude: point.lat, longitude: point.lng, accuracy: 20 });
+}
 /** The Firebase web SDK the test sign-in loads; its saved session is read by any v9+ app build. */
 export const FIREBASE_WEB_SDK = '12.19.0';
 const tokens = new Map();
