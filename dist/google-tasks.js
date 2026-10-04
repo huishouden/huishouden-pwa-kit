@@ -1,4 +1,5 @@
 import { cachedGoogleToken, googleAccessToken, googleFetch } from './google-token';
+import { kt } from './i18n.js';
 /**
  * Reads the person's Google Tasks (read-only), so something said to an assistant ("add eggs to my
  * list": the Gemini app and Google Assistant write Google Tasks) can reach a household list. The
@@ -17,7 +18,7 @@ const API = 'https://tasks.googleapis.com/tasks/v1';
 export function googleTasksToken(auth) {
     if (typeof window !== 'undefined' && typeof window.__mockGoogleTasksToken === 'string')
         return Promise.resolve(window.__mockGoogleTasksToken);
-    return googleAccessToken(auth, SCOPES, { persist: true, deniedMessage: 'Google did not grant access to Google Tasks.' });
+    return googleAccessToken(auth, SCOPES, { persist: true, deniedMessage: kt('googleTasks.denied') });
 }
 /** The Google Tasks token this device already has, without asking anyone; null when there is none. */
 export function cachedGoogleTasksToken(auth) {
@@ -57,7 +58,7 @@ export async function googleTaskLists(token) {
         const page = await googleFetch(token, url, { label: 'Google Tasks' });
         for (const l of page.items ?? [])
             if (l.id)
-                lists.push({ id: l.id, title: l.title?.trim() || 'Untitled list' });
+                lists.push({ id: l.id, title: l.title?.trim() || kt('googleTasks.untitledList') });
         pageToken = page.nextPageToken;
     } while (pageToken);
     return lists;

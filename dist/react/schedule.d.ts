@@ -1,6 +1,6 @@
 import { type EventPrep, type EventRule, type OccurrenceChanges } from '../schedule';
 import { type Ymd } from '../time';
-/** The next `count` dates of a rule in words: "Thu, Oct 23 · Thu, Oct 30 · Thu, Nov 6". */
+/** The next `count` dates of a rule in words, in the active locale: "Thu, Oct 23 · Thu, Oct 30 · Thu, Nov 6". */
 export declare function nextDatesText(rule: EventRule, today: Ymd, count?: number, changes?: OccurrenceChanges | null): string;
 /**
  * How an event repeats. `rule.start` is the first day it can happen ("Starting"); the weekday chips,

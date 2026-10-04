@@ -5,8 +5,9 @@ import { isSchedule, nextDueAfterDone } from './schedule.js';
 import { cleanAudience, inAudience } from './audience.js';
 import { inverseOps } from './store.js';
 import { addDays, addMonths, DAY, daysBetween, dueText, isYmd, toYmd } from './time.js';
+import { cleanLocalTexts, kt, localizeRecords, localized } from './i18n.js';
 export const TODO_STATUSES = ['open', 'info'];
-export const TODO_FIELDS = ['app', 'ref', 'title', 'detail', 'createdAt', 'due', 'who', 'url', 'status', 'private', 'owner', 'done', 'cancel', 'updatedAt', 'by'];
+export const TODO_FIELDS = ['app', 'ref', 'title', 'detail', 'createdAt', 'due', 'who', 'url', 'status', 'private', 'owner', 'done', 'cancel', 'texts', 'updatedAt', 'by'];
 /** The collection of to-dos for named members only (`./audience`). */
 export const PERSONAL_TODOS = 'personalTodos';
 /** Fields of a `personalTodos` item: the list's plus `audience`. */
@@ -14,6 +15,28 @@ export const PERSONAL_TODO_FIELDS = [...TODO_FIELDS, 'audience'];
 export const TODO_ACTION_FIELDS = ['label', 'ops', 'roles', 'owner', 'emails'];
 /** Maximum lengths and counts, the same as the rules. */
 export const TODO_LIMITS = { app: 40, ref: 200, title: 120, detail: 200, url: 2000, who: 60, by: 254, label: 24, ops: 8, emails: 12 };
+/** Limits inside `texts`, the same as the fields they translate. */
+export const TODO_TEXT_LIMITS = { title: TODO_LIMITS.title, detail: TODO_LIMITS.detail, done: TODO_LIMITS.label, cancel: TODO_LIMITS.label };
+/**
+ * Runs `build` once per language and gives its to-dos with `texts` (title, detail, button words),
+ * so the portal shows each reader their own language. Wrap the app's to-do builder:
+ *
+ * ```ts
+ * syncTodos(db, id, 'bills', await localizeTodos(() => billTodos(bills, now)), { by: me });
+ * ```
+ */
+export function localizeTodos(build) {
+    return localizeRecords(build, (t) => ({ title: t.title, detail: t.detail, done: t.done?.label, cancel: t.cancel?.label }));
+}
+/** What the portal shows of a to-do in the reader's language: its title, detail and button words. */
+export function todoWords(item) {
+    return {
+        title: localized(item, 'title', item.title) ?? item.title,
+        detail: localized(item, 'detail', item.detail),
+        done: item.done ? localized(item, 'done', item.done.label) : undefined,
+        cancel: item.cancel ? localized(item, 'cancel', item.cancel.label) : undefined,
+    };
+}
 /**
  * The collections each app's actions may write: the portal refuses an action touching anything
  * else (so an item can't be made to change money or settings when someone taps Done). An app that
@@ -93,6 +116,7 @@ export function todoDoc(app, input, by, now = Date.now()) {
     const owner = input.owner ? lower(input.owner).slice(0, TODO_LIMITS.by) : '';
     const done = status === 'open' ? actionDoc(app, input.done, 'done') : undefined;
     const cancel = status === 'open' ? actionDoc(app, input.cancel, 'cancel') : undefined;
+    const texts = cleanLocalTexts(input.texts, TODO_TEXT_LIMITS);
     return {
         app,
         ref: input.ref.slice(0, TODO_LIMITS.ref),
@@ -107,6 +131,7 @@ export function todoDoc(app, input, by, now = Date.now()) {
         ...(owner ? { owner } : {}),
         ...(done ? { done } : {}),
         ...(cancel ? { cancel } : {}),
+        ...(texts ? { texts } : {}),
         updatedAt: now,
         by: lower(by),
     };
@@ -153,6 +178,7 @@ export function toTodoItem(id, data) {
     const due = num(data.due);
     const done = toAction(data.done);
     const cancel = toAction(data.cancel);
+    const texts = cleanLocalTexts(data.texts, TODO_TEXT_LIMITS);
     return {
         id,
         app: str(data.app) ?? '',
@@ -168,6 +194,7 @@ export function toTodoItem(id, data) {
         ...(owner ? { owner } : {}),
         ...(done ? { done } : {}),
         ...(cancel ? { cancel } : {}),
+        ...(texts ? { texts } : {}),
         ...(Array.isArray(data.audience) ? { audience: data.audience.filter((e) => typeof e === 'string') } : {}),
         updatedAt: num(data.updatedAt) ?? 0,
         by: str(data.by) ?? '',
@@ -315,17 +342,16 @@ export function todoOverdue(item, now) {
 export function addedText(item, now) {
     const days = Math.max(0, daysBetween(item.createdAt, now));
     if (days === 0)
-        return 'Added today';
+        return kt('todos.addedToday');
     if (days === 1)
-        return 'Added yesterday';
+        return kt('todos.addedYesterday');
     if (days < 14)
-        return `Added ${days} days ago`;
+        return kt('todos.addedDays', { n: days });
     if (days < 60)
-        return `Added ${Math.round(days / 7)} weeks ago`;
+        return kt('todos.addedWeeks', { n: Math.round(days / 7) });
     if (days < 365)
-        return `Added ${Math.round(days / 30)} months ago`;
-    const years = Math.round(days / 365);
-    return `Added ${years === 1 ? 'a year' : `${years} years`} ago`;
+        return kt('todos.addedMonths', { n: Math.round(days / 30) });
+    return kt('todos.addedYears', { n: Math.round(days / 365) });
 }
 /** Whether `me` with `role` may run the item's `done` or `cancel`: the action exists, is allowed for the app, and names their role, them as owner, or them. */
 export function canDo(item, which, role, me) {
@@ -346,7 +372,7 @@ const isNextDue = (v) => Object.keys(v).length === 1 && '$nextDue' in v;
 function resolveNextDue({ $nextDue: arg }, today) {
     const { schedule, due } = (arg ?? {});
     if (!isSchedule(schedule) || !isYmd(due))
-        throw new TodoActionError('This can only be changed in its app.');
+        throw new TodoActionError(kt('todos.onlyInApp'));
     return nextDueAfterDone(schedule, due, today);
 }
 function resolveValue(v, ctx, today) {
@@ -396,7 +422,7 @@ export class TodoActionError extends Error {
 export async function applyTodo(db, householdId, item, which, { me, now = Date.now() }) {
     const action = item[which];
     if (!action || !todoOpsAllowed(item.app, action.ops))
-        throw new TodoActionError('This can only be changed in its app.');
+        throw new TodoActionError(kt('todos.onlyInApp'));
     const ops = resolveOps(action.ops, { now, me });
     const base = `households/${householdId}`;
     const before = new Map();
@@ -408,7 +434,7 @@ export async function applyTodo(db, householdId, item, which, { me, now = Date.n
         before.set(key, snap.exists() ? { id: op.id, ...snap.data() } : undefined);
     }
     if (ops.some((op) => op.merge && !before.get(`${op.col}/${op.id}`))) {
-        throw new TodoActionError(`${item.title} was changed in its app. Open it there.`);
+        throw new TodoActionError(kt('todos.changedInApp', { title: item.title }));
     }
     const inverse = inverseOps(ops, (col, id) => before.get(`${col}/${id}`));
     const list = listOf(item);

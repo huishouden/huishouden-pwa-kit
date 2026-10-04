@@ -41,7 +41,7 @@ const typeInto = (el: HTMLInputElement, value: string) =>
   });
 
 async function chooseFile(text: string, name = 'contact.vcf') {
-  const input = document.querySelector('input[aria-label="Contact card file"]') as HTMLInputElement;
+  const input = document.querySelector('input[type=file][accept*=vcf]') as HTMLInputElement;
   expect(input.getAttribute('accept')).toBe('.vcf,.vcard,text/vcard,text/x-vcard');
   Object.defineProperty(input, 'files', { value: [new File([text], name, { type: 'text/vcard' })], configurable: true });
   await act(async () => void input.dispatchEvent(new Event('change', { bubbles: true })));
@@ -60,7 +60,7 @@ describe('ContactDialog: from the person’s own contacts', () => {
     expect(field('Email')!.value).toBe('jordan@example.com');
     expect(field('Address')!.value).toBe('12 Example Street, Apt 3, Springfield, IL 62704, United States');
     expect(notes()).toContain('Other phones: (555) 010-0143 (work)');
-    expect(document.body.textContent).toContain('Filled in the name, role, phone, email, website, address and notes from the contact card. Check them before saving.');
+    expect(document.body.textContent).toContain('Filled in the name, role, phone, email, website, address, and notes from the contact card. Check them before saving.');
     click(byText('Save'));
     expect(onSave.mock.calls[0][0]).toMatchObject({ name: 'Jordan Example', role: 'Landlord, Example Property Management', website: 'https://rentals.example.com', apps: ['home'] });
   });
@@ -197,5 +197,39 @@ describe('ContactDialog: Google Contacts', () => {
     await act(async () => click(byText('Try again')));
     await act(async () => await new Promise((r) => setTimeout(r, 0)));
     expect(document.querySelectorAll('ul[aria-label="Contacts to choose from"] button')).toHaveLength(3);
+  });
+});
+
+const { setLangForTests } = await import('../src/i18n');
+const { groupContacts } = await import('../src/contacts');
+const { contactFromCard } = await import('../src/vcard');
+
+describe('ContactDialog and contact text in Spanish and Dutch', () => {
+  afterEach(async () => {
+    await act(async () => setLangForTests('en'));
+  });
+
+  test('the dialog, its fill note and the card labels follow the language', async () => {
+    await act(async () => setLangForTests('es', ['es-MX']));
+    render(<ContactDialog contact={null} app="home" roles={['Landlord']} onSave={() => {}} onClose={() => {}} />);
+    expect(document.querySelector('[role=dialog]')!.getAttribute('aria-label')).toBe('Nuevo contacto');
+    expect(document.body.textContent).toContain('¿Ya está en tus contactos?');
+    expect(byText('Guardar')).not.toBeNull();
+    await chooseFile(vcf('iphone-landlord.vcf'));
+    expect(document.body.textContent).toContain(
+      'Datos completados con la tarjeta de contacto: nombre, función, teléfono, correo, sitio web, dirección y notas. Revísalos antes de guardar.',
+    );
+    expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toContain('Otros teléfonos: (555) 010-0143 (trabajo)');
+  });
+
+  test('Dutch: several people to choose from, and contacts without a role under Overig', async () => {
+    await act(async () => setLangForTests('nl', ['nl-NL']));
+    render(<ContactDialog contact={null} app="home" roles={[]} onSave={() => {}} onClose={() => {}} />);
+    await chooseFile(vcf('google-export.vcf'));
+    expect(document.body.textContent).toContain('De contactkaart bevat 2 personen. Kies er een.');
+    const contacts = [{ id: 'a', name: 'Ada', apps: [], createdAt: 0, by: '' }];
+    expect(groupContacts(contacts, []).map((g) => g.role)).toEqual(['Overig']);
+    const card = { name: 'Sam', phones: [{ value: '1' }, { value: '2', label: 'Mobile' }], emails: [] };
+    expect(contactFromCard(card).notes).toBe('Andere telefoonnummers: 2 (mobile)');
   });
 });

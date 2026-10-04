@@ -17,7 +17,8 @@
  * `undefined` while the session is being restored so neither the avatar nor Sign in flashes.
  */
 import { GLYPHS, logoSvg } from './logo';
-import { THEME_LABELS, THEME_MODES, getThemeMode, onThemeChange, setThemeMode, startTheme } from './theme';
+import { LANG_CHOICES, LANG_NAMES, getLangChoice, kt, onLangChange, setLangChoice } from './i18n';
+import { THEME_MODES, getThemeMode, onThemeChange, setThemeMode, startTheme } from './theme';
 export const SIGN_IN_EVENT = 'hh-sign-in';
 export const SIGN_OUT_EVENT = 'hh-sign-out';
 export const SUITE_NAME = 'Huishouden';
@@ -240,7 +241,8 @@ button { font-family: inherit; }
 .menu > .theme-label:first-child { margin-top: 0; }
 .modes {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Equal while every word fits; a long one ("Automatisch") takes the room it needs. */
+  grid-template-columns: repeat(3, minmax(max-content, 1fr));
   gap: 4px;
   margin-top: 6px;
   padding: 3px;
@@ -260,6 +262,7 @@ button { font-family: inherit; }
   cursor: pointer;
 }
 .mode:hover { background: var(--item-hover); }
+.langs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .mode[aria-pressed='true'] { background: var(--primary-bg); color: var(--primary-text); font-weight: 600; }
 .menu .version { margin-top: 8px; font-size: 12px; line-height: 16px; color: var(--menu-muted); }
 .signin, .avatar, .item, .mode, .menu-button { transition: background-color 150ms ease-out; }
@@ -272,7 +275,7 @@ const TEMPLATE = `
 <style>${STYLE}</style>
 <header part="bar">
   <div class="inner">
-    <a class="home" part="home" aria-label="${SUITE_NAME} home">
+    <a class="home" part="home">
       <span class="logo" aria-hidden="true"></span>
       <span class="names"><span class="suite">${SUITE_NAME}</span><h1></h1></span>
     </a>
@@ -294,6 +297,7 @@ export class HhAppBar extends Base {
     #root;
     #menuId = `hh-account-menu-${Math.random().toString(36).slice(2, 8)}`;
     #offTheme;
+    #offLang;
     constructor() {
         super();
         this.#root = this.attachShadow({ mode: 'open' });
@@ -335,6 +339,11 @@ export class HhAppBar extends Base {
         startTheme();
         this.#offTheme?.();
         this.#offTheme = onThemeChange(this.#syncThemeChoice);
+        this.#offLang?.();
+        this.#offLang = onLangChange(() => {
+            this.#renderHome();
+            this.#renderAccount();
+        });
         this.#renderHome();
         this.#renderAccount();
         this.#syncNav();
@@ -343,6 +352,8 @@ export class HhAppBar extends Base {
         this.#setOpen(false);
         this.#offTheme?.();
         this.#offTheme = undefined;
+        this.#offLang?.();
+        this.#offLang = undefined;
     }
     attributeChangedCallback(name) {
         if (name === 'signing-in')
@@ -363,6 +374,7 @@ export class HhAppBar extends Base {
     #renderHome() {
         const home = this.#root.querySelector('.home');
         home.href = this.portalUrl;
+        home.setAttribute('aria-label', kt('appBar.home'));
         const glyph = isGlyph(this.glyph) ? this.glyph : 'home';
         const logo = this.#root.querySelector('.logo');
         if (logo.dataset.glyph !== glyph) {
@@ -381,7 +393,14 @@ export class HhAppBar extends Base {
     }
     #renderAccount() {
         const account = this.#root.querySelector('.account');
-        const focused = this.#root.activeElement?.className;
+        const active = this.#root.activeElement;
+        const focused = active?.className;
+        // A language button keeps the focus through the re-render its own click causes.
+        const focusedLang = active?.dataset?.lang;
+        const refocus = () => {
+            if (focusedLang)
+                this.#root.querySelector(`.mode[data-lang="${focusedLang}"]`)?.focus();
+        };
         account.replaceChildren();
         const user = this.#user;
         if (user === undefined)
@@ -393,23 +412,28 @@ export class HhAppBar extends Base {
             button.setAttribute('part', 'sign-in');
             button.disabled = this.signingIn;
             if (this.signingIn)
-                button.textContent = 'Opening Google';
+                button.textContent = kt('appBar.openingGoogle');
             else {
-                button.setAttribute('aria-label', 'Sign in with Google');
-                button.innerHTML = '<span>Sign in<span class="long">&nbsp;with Google</span></span>';
+                button.setAttribute('aria-label', kt('appBar.signInWithGoogle'));
+                const label = document.createElement('span');
+                const long = document.createElement('span');
+                long.className = 'long';
+                long.textContent = `\u00a0${kt('appBar.withGoogle')}`;
+                label.append(kt('appBar.signIn'), long);
+                button.append(label);
             }
             button.addEventListener('click', () => this.#emit(SIGN_IN_EVENT));
-            // Signed out there is no avatar, so the theme and Privacy sit behind a small sliders button. Its name
+            // Signed out there is no avatar, so the theme, the language and Privacy sit behind a small sliders button. Its name
             // is not "Settings", which apps use for their own settings button.
             const trigger = document.createElement('button');
             trigger.type = 'button';
             trigger.className = 'menu-button';
             trigger.setAttribute('part', 'menu-button');
-            trigger.setAttribute('aria-label', 'Theme and privacy');
+            trigger.setAttribute('aria-label', kt('appBar.settingsMenu'));
             trigger.innerHTML = SETTINGS_ICON; // trusted: static markup
             this.#wireTrigger(trigger);
             const menu = this.#menu();
-            menu.append(...this.#themeChoice());
+            menu.append(...this.#themeChoice(), ...this.#langChoice());
             const items = document.createElement('div');
             items.className = 'items';
             items.append(this.#privacyLink());
@@ -423,6 +447,7 @@ export class HhAppBar extends Base {
             account.append(wrap, menu);
             if (focused === 'menu-button')
                 trigger.focus();
+            refocus();
             return;
         }
         const email = user.email ?? '';
@@ -434,7 +459,7 @@ export class HhAppBar extends Base {
         avatar.setAttribute('aria-haspopup', 'true');
         avatar.setAttribute('aria-controls', this.#menuId);
         avatar.setAttribute('aria-expanded', String(this.#open));
-        avatar.setAttribute('aria-label', `Signed in as ${email || name || 'you'}`);
+        avatar.setAttribute('aria-label', kt('appBar.signedInAs', { who: email || name || kt('appBar.you') }));
         avatar.title = email;
         const initial = () => {
             const span = document.createElement('span');
@@ -459,7 +484,7 @@ export class HhAppBar extends Base {
             menu.append(paragraph('who-name', name));
         if (email)
             menu.append(paragraph('who-email', email));
-        menu.append(...this.#themeChoice());
+        menu.append(...this.#themeChoice(), ...this.#langChoice());
         const items = document.createElement('div');
         items.className = 'items';
         // Every app shares the portal's origin (docs/one-site.md), so only the portal itself, by name, lacks the link.
@@ -467,14 +492,14 @@ export class HhAppBar extends Base {
             const all = document.createElement('a');
             all.className = 'item';
             all.href = this.portalUrl;
-            all.textContent = 'All apps';
+            all.textContent = kt('appBar.allApps');
             items.append(all);
         }
         items.append(this.#privacyLink());
         const out = document.createElement('button');
         out.type = 'button';
         out.className = 'item';
-        out.textContent = 'Sign out';
+        out.textContent = kt('appBar.signOut');
         out.addEventListener('click', () => {
             this.#setOpen(false);
             this.#emit(SIGN_OUT_EVENT);
@@ -487,6 +512,7 @@ export class HhAppBar extends Base {
         account.append(avatar, menu);
         if (focused === 'avatar')
             avatar.focus();
+        refocus();
     }
     #wireTrigger(trigger) {
         trigger.dataset.trigger = '';
@@ -502,19 +528,19 @@ export class HhAppBar extends Base {
         menu.setAttribute('part', 'menu');
         menu.hidden = !this.#open;
         menu.setAttribute('role', 'group');
-        menu.setAttribute('aria-label', this.#user ? 'Account' : 'Theme and privacy');
+        menu.setAttribute('aria-label', this.#user ? kt('appBar.account') : kt('appBar.settingsMenu'));
         return menu;
     }
     #privacyLink() {
         const privacy = document.createElement('a');
         privacy.className = 'item';
         privacy.href = privacyUrl(this.portalUrl, location.href);
-        privacy.textContent = 'Privacy';
+        privacy.textContent = kt('appBar.privacy');
         return privacy;
     }
     /** "Theme" and Automatic / Light / Dark: the suite's one choice (./theme), for every app at once. */
     #themeChoice() {
-        const label = paragraph('theme-label', 'Theme');
+        const label = paragraph('theme-label', kt('appBar.theme'));
         label.id = `${this.#menuId}-theme`;
         const modes = document.createElement('div');
         modes.className = 'modes';
@@ -527,16 +553,43 @@ export class HhAppBar extends Base {
             b.type = 'button';
             b.className = 'mode';
             b.dataset.mode = mode;
-            b.textContent = THEME_LABELS[mode];
+            b.textContent = kt(THEME_KEYS[mode]);
             b.setAttribute('aria-pressed', String(mode === chosen));
             b.addEventListener('click', () => setThemeMode(mode));
             modes.append(b);
         }
         return [label, modes];
     }
+    /** "Language" and Automatic / English / Español / Nederlands: the suite's one choice (./i18n). Each language is named in itself. */
+    #langChoice() {
+        const label = paragraph('theme-label', kt('appBar.language'));
+        label.id = `${this.#menuId}-lang`;
+        const choices = document.createElement('div');
+        choices.className = 'modes langs';
+        choices.setAttribute('role', 'group');
+        choices.setAttribute('aria-labelledby', label.id);
+        choices.setAttribute('part', 'language');
+        const chosen = getLangChoice();
+        for (const choice of LANG_CHOICES) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'mode';
+            b.dataset.lang = choice;
+            if (choice === 'auto')
+                b.textContent = kt('lang.auto');
+            else {
+                b.textContent = LANG_NAMES[choice];
+                b.lang = choice;
+            }
+            b.setAttribute('aria-pressed', String(choice === chosen));
+            b.addEventListener('click', () => void setLangChoice(choice));
+            choices.append(b);
+        }
+        return [label, choices];
+    }
     #syncThemeChoice = () => {
         const chosen = getThemeMode();
-        this.#root.querySelectorAll('.mode').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === chosen)));
+        this.#root.querySelectorAll('.mode[data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === chosen)));
     };
     #setOpen(open, { restoreFocus = false } = {}) {
         if (open === this.#open)
@@ -579,6 +632,7 @@ export class HhAppBar extends Base {
         this.dispatchEvent(new CustomEvent(type, { bubbles: true, composed: true }));
     }
 }
+const THEME_KEYS = { auto: 'theme.auto', light: 'theme.light', dark: 'theme.dark' };
 // lucide "settings-2" (two sliders), stroke 2, coloured by the text colour.
 const SETTINGS_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 17H5"/><path d="M19 7h-9"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>';
 function paragraph(className, text) {

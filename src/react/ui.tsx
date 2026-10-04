@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouse
 import { createPortal } from 'react-dom';
 import { ChevronDown, Ellipsis, EyeOff, Plus, X, type LucideIcon } from 'lucide-react';
 import { personColour, personInitial, personName } from '../people';
+import { useKitT } from './i18n';
 
 export const inputClass =
   'w-full min-h-11 rounded-xl border border-line bg-white px-3 py-2.5 text-base text-ink outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:bg-forest-900 dark:focus:ring-forest-700';
@@ -137,7 +138,7 @@ export function SuggestionChip({
   onRemove,
   editing,
   large,
-  removeLabel = `Don't suggest ${label}`,
+  removeLabel,
   hint,
 }: {
   label: string;
@@ -151,6 +152,8 @@ export function SuggestionChip({
   /** A line in the sheet under the action, such as when it may come back. */
   hint?: string;
 }) {
+  const kt = useKitT();
+  removeLabel ??= kt('ui.dontSuggest', { label });
   const [menu, setMenu] = useState(false);
   const press = useLongPress(() => setMenu(true));
   return (
@@ -163,7 +166,7 @@ export function SuggestionChip({
         type="button"
         {...press}
         onClick={onPick}
-        aria-label={`Add ${label}`}
+        aria-label={kt('ui.addSuggestion', { label })}
         className={`inline-flex min-h-11 items-center gap-1.5 rounded-full whitespace-nowrap select-none [-webkit-touch-callout:none] hover:bg-forest-100 dark:hover:bg-forest-700 ${
           large ? 'px-4' : 'px-3.5'
         } ${editing ? 'pr-1' : ''}`}
@@ -213,6 +216,7 @@ export function SuggestionChip({
  * itself does, so the keyboard only opens when a field is tapped.
  */
 export function Dialog({ title, onClose, children, footer, wide }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+  const kt = useKitT();
   const panel = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
@@ -226,7 +230,7 @@ export function Dialog({ title, onClose, children, footer, wide }: { title: stri
     if (!el) return;
     if (touchScreen()) return el.focus({ preventScroll: true });
     if (el.contains(document.activeElement)) return;
-    el.querySelector<HTMLElement>('input, select, textarea, button:not([aria-label="Close"])')?.focus();
+    el.querySelector<HTMLElement>('input, select, textarea, button:not([data-dialog-close])')?.focus();
   }, []);
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6" onClick={onClose}>
@@ -241,7 +245,7 @@ export function Dialog({ title, onClose, children, footer, wide }: { title: stri
       >
         <div className="mb-5 flex items-center justify-between gap-4">
           <h2 className="text-xl font-semibold text-ink">{title}</h2>
-          <button type="button" onClick={onClose} className={iconButton} aria-label="Close">
+          <button type="button" onClick={onClose} className={iconButton} aria-label={kt('ui.close')} data-dialog-close="">
             <X size={20} />
           </button>
         </div>
@@ -278,20 +282,22 @@ export type Attention = 'overdue' | 'soon' | 'ok' | 'unknown';
 
 /** "Overdue" and "Soon" labels; nothing for the rest, so the eye goes to what needs doing. */
 export function StatusPill({ state }: { state: Attention }) {
+  const kt = useKitT();
   if (state === 'overdue')
-    return <span className="inline-flex shrink-0 items-center rounded-full bg-attention-tint px-2.5 py-0.5 text-sm font-semibold text-attention">Overdue</span>;
+    return <span className="inline-flex shrink-0 items-center rounded-full bg-attention-tint px-2.5 py-0.5 text-sm font-semibold text-attention">{kt('ui.overdue')}</span>;
   if (state === 'soon')
-    return <span className="inline-flex shrink-0 items-center rounded-full border border-line bg-surface px-2.5 py-0.5 text-sm font-semibold text-ink-soft">Soon</span>;
+    return <span className="inline-flex shrink-0 items-center rounded-full border border-line bg-surface px-2.5 py-0.5 text-sm font-semibold text-ink-soft">{kt('ui.soon')}</span>;
   return null;
 }
 
 /** A failed action in words, with Try again. */
 export function ErrorNotice({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const kt = useKitT();
   return (
     <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-error-tint px-3 py-2 text-base text-error">
       <span className="min-w-0 flex-1">{message}</span>
       <button type="button" className="min-h-11 rounded-xl px-3 font-semibold underline-offset-4 hover:underline" onClick={onRetry}>
-        Try again
+        {kt('ui.tryAgain')}
       </button>
     </div>
   );
@@ -305,7 +311,7 @@ export function ErrorNotice({ message, onRetry }: { message: string; onRetry: ()
  */
 export function SampleBanner({
   text,
-  short = 'Nothing is saved.',
+  short,
   notice,
   children,
   className = '',
@@ -316,12 +322,14 @@ export function SampleBanner({
   children?: ReactNode;
   className?: string;
 }) {
+  const kt = useKitT();
+  short ??= kt('ui.nothingSaved');
   const [open, setOpen] = useState(false);
   return (
     <div role="note" data-sample-banner className={`${cardClass} flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1 sm:px-4 sm:py-1.5 ${className}`}>
       <div data-sample-line className="flex min-h-11 w-full min-w-0 items-center gap-3 sm:w-auto sm:flex-1 sm:gap-4">
         <span data-sample-chip className="shrink-0 rounded-full bg-attention-tint px-3 py-1 text-sm font-semibold whitespace-nowrap text-attention">
-          Sample data
+          {kt('ui.sampleData')}
         </span>
         {notice ? (
           typeof notice === 'string' ? <p className="min-w-0 flex-1 text-base text-muted">{notice}</p> : <div className="min-w-0 flex-1">{notice}</div>
@@ -336,7 +344,7 @@ export function SampleBanner({
             >
               <span className="truncate">{short}</span>
               <ChevronDown size={16} strokeWidth={2.2} aria-hidden className={`shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
-              <span className="sr-only">{open ? 'Hide details' : 'Details'}</span>
+              <span className="sr-only">{open ? kt('ui.hideDetails') : kt('ui.details')}</span>
             </button>
             <p className="hidden min-w-0 flex-1 text-base text-muted sm:block">{text}</p>
           </>
@@ -385,13 +393,14 @@ export function splitTabs(tabs: Tab[]): { bar: Tab[]; more: Tab[] } {
  * `compact` tightened the phone tabs before the bottom bar; it no longer changes anything.
  */
 export function SectionTabs({ tabs, tab, onTab }: { tabs: Tab[]; tab: string; onTab: (id: string) => void; compact?: boolean }) {
+  const kt = useKitT();
   if (tabs.length === 0) return null;
   return (
     <>
       <nav
         slot="nav"
         data-bottom-nav=""
-        aria-label="Sections"
+        aria-label={kt('ui.sections')}
         className="hidden w-full gap-1 overflow-x-auto rounded-2xl border border-line bg-surface p-1 sm:flex sm:w-auto"
       >
         {tabs.map((t) => (
@@ -416,6 +425,7 @@ export function SectionTabs({ tabs, tab, onTab }: { tabs: Tab[]; tab: string; on
 const BOTTOM_NAV_ATTR = 'data-hh-bottom-nav';
 
 function BottomNav({ tabs, tab, onTab }: { tabs: Tab[]; tab: string; onTab: (id: string) => void }) {
+  const kt = useKitT();
   const [sheet, setSheet] = useState(false);
   const { bar, more } = splitTabs(tabs);
   const inMore = more.some((t) => t.id === tab);
@@ -447,22 +457,22 @@ function BottomNav({ tabs, tab, onTab }: { tabs: Tab[]; tab: string; onTab: (id:
     <>
       <nav
         {...{ [BOTTOM_NAV_ATTR]: '' }}
-        aria-label="Sections"
+        aria-label={kt('ui.sections')}
         className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] sm:hidden"
       >
         <ul className="mx-auto flex max-w-lg">
           {bar.map((t) => item(t.id, t.short ?? t.label, t.icon, t.id === tab, { onClick: () => onTab(t.id), 'aria-current': t.id === tab ? 'page' : undefined }))}
           {more.length > 0 &&
-            item('more', 'More', Ellipsis, inMore, {
+            item('more', kt('ui.more'), Ellipsis, inMore, {
               onClick: () => setSheet(true),
               'aria-haspopup': 'dialog',
               'aria-expanded': sheet,
-              'aria-label': inMore ? `More, showing ${more.find((t) => t.id === tab)!.label}` : 'More',
+              'aria-label': inMore ? kt('ui.moreShowing', { tab: more.find((t) => t.id === tab)!.label }) : kt('ui.more'),
             })}
         </ul>
       </nav>
       {sheet && (
-        <Dialog title="More" onClose={() => setSheet(false)}>
+        <Dialog title={kt('ui.more')} onClose={() => setSheet(false)}>
           <ul className="grid gap-1">
             {more.map((t) => {
               const Icon = t.icon;
@@ -495,13 +505,14 @@ function BottomNav({ tabs, tab, onTab }: { tabs: Tab[]; tab: string; onTab: (id:
 
 /** A member's initial on their colour, for "logged by" marks. */
 export function PersonBadge({ email, me, members, size = 32 }: { email: string; me: string; members: string[]; size?: number }) {
+  const kt = useKitT();
   const name = personName(email, { email: me });
   return (
     <span
       className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white"
       style={{ width: size, height: size, backgroundColor: personColour(email, members), fontSize: size * 0.42 }}
-      title={`Logged by ${name}`}
-      aria-label={`Logged by ${name}`}
+      title={kt('ui.loggedBy', { name })}
+      aria-label={kt('ui.loggedBy', { name })}
       role="img"
     >
       {personInitial(email)}
@@ -527,6 +538,7 @@ export function useToast() {
 
 /** The toast at the bottom: 6 seconds for news, 9 for errors; Undo runs and dismisses it. */
 export function Toast({ toast, onDone }: { toast: ToastState | null; onDone: () => void }) {
+  const kt = useKitT();
   useEffect(() => {
     if (!toast) return;
     const id = setTimeout(onDone, toast.tone === 'error' ? 9000 : 6000);
@@ -550,7 +562,7 @@ export function Toast({ toast, onDone }: { toast: ToastState | null; onDone: () 
               }}
               className="min-h-11 rounded-xl px-3 font-semibold text-forest-200 underline-offset-4 hover:underline"
             >
-              Undo
+              {kt('ui.undo')}
             </button>
           )}
         </div>

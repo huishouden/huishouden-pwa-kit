@@ -82,7 +82,8 @@ forest-600. Only the glyph changes between apps: portal `home` (a door), Tasks `
   alone), the app's own tabs or switchers in the `nav` slot (beside the name on tablets, a second
   row on phones; section tabs move to the bottom bar on phones, below), app buttons in the `actions` slot, and on the right "Sign in with Google" or the
   signed-in profile photo (`.hh-avatar`) opening the account menu: name, email, Theme (Automatic,
-  Light, Dark), All apps, Privacy, Sign out, and the running version; signed out, a "Theme and privacy"
+  Light, Dark), Language (Automatic, English, Español, Nederlands; each language named in itself),
+  All apps, Privacy, Sign out, and the running version; signed out, a "Theme, language and privacy"
   button (sliders) beside Sign in opens them. The bar follows the suite's theme by itself. Sticky, cream, a stone-200 rule below,
   content width 1200px.
 - Sections: `SectionTabs` from `/react/ui`, never hand-built. From 640px they are a segmented

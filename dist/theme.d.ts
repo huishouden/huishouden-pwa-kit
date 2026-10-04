@@ -18,8 +18,10 @@
  */
 export type ThemeMode = 'auto' | 'light' | 'dark';
 export declare const THEME_MODES: readonly ThemeMode[];
-/** What the choices are called wherever they are offered. */
+/** What the choices are called in English. Shown text uses `themeLabel` (the active language). */
 export declare const THEME_LABELS: Record<ThemeMode, string>;
+/** What a choice is called in the active language: "Automatic", "Automático", "Automatisch". */
+export declare function themeLabel(mode: ThemeMode): string;
 /** The suite's one stored choice. */
 export declare const THEME_KEY = "hh-theme";
 /** Where Tasks and Groceries kept their own choice (JSON, under the app's original name); read once and moved. */

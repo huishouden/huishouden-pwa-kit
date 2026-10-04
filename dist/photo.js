@@ -1,6 +1,7 @@
 // Small square photos for avatars (a pet, a person, a car), kept as a data URL in a Firestore
 // document instead of Cloud Storage, so it works on the free plan. Not for galleries: one photo is
 // cropped square, shrunk and compressed until it fits well under Firestore's 1 MiB document limit.
+import { kt } from './i18n.js';
 /** The longest data URL `squarePhoto` returns by default: about 60 KB, a few hundred ms to sync. */
 export const PHOTO_MAX_CHARS = 60_000;
 export class PhotoError extends Error {
@@ -65,12 +66,12 @@ export async function fitPhoto(encode, options = {}) {
             const dataUrl = first ?? (await encode(size, type, quality));
             first = null;
             if (dataUrl === null)
-                throw new PhotoError("This browser can't make a photo smaller.", 'unsupported');
+                throw new PhotoError(kt('photo.cantShrink'), 'unsupported');
             if (dataUrl.length <= maxChars)
                 return { dataUrl, type, size, quality };
         }
         if (size <= SIZE_FLOOR)
-            throw new PhotoError('That photo is too detailed to make small enough.', 'too-large');
+            throw new PhotoError(kt('photo.tooDetailed'), 'too-large');
         size = Math.max(SIZE_FLOOR, Math.round(size * 0.75));
     }
 }
@@ -98,13 +99,13 @@ async function toDataUrl(blob) {
  */
 export async function squarePhoto(file, options = {}) {
     if (typeof createImageBitmap !== 'function')
-        throw new PhotoError("This browser can't read photos.", 'unsupported');
+        throw new PhotoError(kt('photo.cantRead'), 'unsupported');
     let bitmap;
     try {
         bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
     }
     catch {
-        throw new PhotoError("Couldn't read that photo. Try another one.", 'unreadable');
+        throw new PhotoError(kt('photo.unreadable'), 'unreadable');
     }
     const source = { width: bitmap.width, height: bitmap.height };
     const crop = squareCrop(bitmap.width, bitmap.height, options.position);

@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import { ghostButton, secondaryButton } from './ui';
+import { useKitT } from './i18n';
 import type { Auth } from 'firebase/auth';
 import { SUGGESTION_RESCAN_MS, dismissId, dismissedIds } from '../suggestions';
 
@@ -139,6 +140,7 @@ export function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead,
   /** An item whose add button does something else ("Use as prep"): its words and accessible name. Add otherwise. */
   addAs?: (item: T) => { label: string; ariaLabel: string } | null;
 }) {
+  const kt = useKitT();
   const [open, setOpen] = useState(false);
   const [added, setAdded] = useState<ReadonlyMap<string, number>>(() => new Map());
   const card = useRef<HTMLElement>(null);
@@ -175,11 +177,11 @@ export function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead,
   };
   const actions = (m: T, as = addAs?.(m)) => (
     <div className="flex shrink-0 gap-1">
-      <button type="button" className={ghostButton} onClick={() => dismiss(m)} aria-label={`Not this one: ${titleOf(m)}`}>
-        Not this one
+      <button type="button" className={ghostButton} onClick={() => dismiss(m)} aria-label={kt('suggestions.notThisOneFor', { title: titleOf(m) })}>
+        {kt('suggestions.notThisOne')}
       </button>
-      <button type="button" className={secondaryButton} onClick={() => add(m)} aria-label={as?.ariaLabel ?? `Add ${titleOf(m)}`}>
-        {as ? as.label : <><Plus size={18} /> Add</>}
+      <button type="button" className={secondaryButton} onClick={() => add(m)} aria-label={as?.ariaLabel ?? kt('suggestions.add', { title: titleOf(m) })}>
+        {as ? as.label : <><Plus size={18} /> {kt('common.add')}</>}
       </button>
     </div>
   );
@@ -193,7 +195,7 @@ export function SuggestionsCard<T>({ suggestions, idOf, titleOf, detailOf, lead,
         </p>
         {rest.length > 0 && (
           <button type="button" className={ghostButton} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={listId}>
-            {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />} +{rest.length} more
+            {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />} {kt('suggestions.more', { count: rest.length })}
           </button>
         )}
         {actions(first)}

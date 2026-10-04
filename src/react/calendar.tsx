@@ -22,6 +22,8 @@ import {
   type ImportedRecord,
 } from '../calendar';
 import { formatDayShort, formatTime } from '../time';
+import { kt } from '../i18n';
+import { useKitT } from './i18n';
 import { Dialog, ErrorNotice, ghostButton, iconButton, linkClass, primaryButton, secondaryButton } from './ui';
 import { SuggestionsCard, useSuggestions } from './suggestions';
 
@@ -72,15 +74,17 @@ export function useCalendarSearch(auth: Auth, app: string) {
   return { state, run, reset };
 }
 
-/** "Sun, Oct 19, 9:00 AM · Family", in the device's locale. */
+/** "Sun, Oct 19, 9:00 AM · Family", in the active locale. */
 export function matchWhen(m: CalendarMatch): string {
-  return `${formatDayShort(m.start)}${m.allDay ? ', all day' : `, ${formatTime(m.start)}`} · ${m.calendarName}`;
+  const day = formatDayShort(m.start);
+  return m.allDay ? kt('calendar.matchAllDay', { day, calendar: m.calendarName }) : kt('calendar.matchTimed', { day, time: formatTime(m.start), calendar: m.calendarName });
 }
 
 /** One line before Google's first permission window, or why the search is off. */
 export function CalendarHint({ app, available }: { app: string; available: boolean }) {
-  if (!available) return <p className="text-base text-muted">Sign in to search your calendar.</p>;
-  if (!calendarAsked(app)) return <p className="text-base text-muted">Google will ask once to let {app} read your calendar. {app} never changes it.</p>;
+  const kt = useKitT();
+  if (!available) return <p className="text-base text-muted">{kt('calendar.signInToSearch')}</p>;
+  if (!calendarAsked(app)) return <p className="text-base text-muted">{kt('calendar.askOnce', { app })}</p>;
   return null;
 }
 
@@ -89,6 +93,7 @@ export function CalendarHint({ app, available }: { app: string; available: boole
  * and hands the picked event back. The first search opens Google's permission window, so it runs on the tap.
  */
 export function CalendarFind({ auth, app, query, available, onPick }: { auth: Auth; app: string; query: string; available: boolean; onPick: (m: CalendarMatch) => void }) {
+  const kt = useKitT();
   const search = useCalendarSearch(auth, app);
   const q = query.trim();
   return (
@@ -99,17 +104,17 @@ export function CalendarFind({ auth, app, query, available, onPick }: { auth: Au
         disabled={!available || !q || search.state.status === 'searching'}
         onClick={() => void search.run(query)}
       >
-        <CalendarSearch size={18} /> {search.state.status === 'searching' ? 'Searching your calendars' : 'Find in my calendar'}
+        <CalendarSearch size={18} /> {search.state.status === 'searching' ? kt('calendar.searching') : kt('calendar.find')}
       </button>
       <CalendarHint app={app} available={available} />
       {search.state.status === 'error' && <ErrorNotice message={search.state.message} onRetry={() => void search.run(query)} />}
       {search.state.status === 'done' && search.state.matches.length === 0 && (
         <p role="status" className="text-base text-muted">
-          No events matching "{q}" in your calendars from last week to a year ahead.
+          {kt('calendar.noMatches', { query: q })}
         </p>
       )}
       {search.state.status === 'done' && search.state.matches.length > 0 && (
-        <ul className="grid gap-1.5" aria-label="Calendar matches">
+        <ul className="grid gap-1.5" aria-label={kt('calendar.matches')}>
           {search.state.matches.map((m) => (
             <li key={`${m.id}-${m.start}`}>
               <button
@@ -138,15 +143,16 @@ export function CalendarFind({ auth, app, query, available, onPick }: { auth: Au
 
 /** The linked calendar event inside a dialog, with a way to unlink it. */
 export function LinkedEvent({ link, onUnlink }: { link?: string; onUnlink: () => void }) {
+  const kt = useKitT();
   return (
     <div className="flex items-center gap-2 rounded-xl bg-tint py-0.5 pr-1 pl-3 text-base text-ink-soft">
-      <span className="min-w-0 flex-1">From your calendar.</span>
+      <span className="min-w-0 flex-1">{kt('calendar.fromCalendar')}</span>
       {link && (
         <a className={linkClass} href={link} target="_blank" rel="noopener noreferrer">
-          <ExternalLink size={16} aria-hidden="true" /> Open in Calendar
+          <ExternalLink size={16} aria-hidden="true" /> {kt('calendar.openInCalendar')}
         </a>
       )}
-      <button type="button" className={iconButton} aria-label="Unlink from the calendar event" onClick={onUnlink}>
+      <button type="button" className={iconButton} aria-label={kt('calendar.unlink')} onClick={onUnlink}>
         <X size={18} />
       </button>
     </div>
@@ -173,15 +179,16 @@ export function CalendarImportDialog({ state, records, intro, noneFound, allImpo
   /** Shown above the events: an app's own suggestions from the same scan (Pet's birthdays). */
   children?: ReactNode;
 }) {
+  const kt = useKitT();
   const fresh = state.status === 'done' ? notImported(state.matches, records) : [];
   return (
     <Dialog
-      title="Import from calendar"
+      title={kt('calendar.importTitle')}
       onClose={onClose}
       footer={
         <>
           <button type="button" className={ghostButton} onClick={onClose}>
-            Done
+            {kt('common.done')}
           </button>
           {fresh.length > 1 && (
             <button
@@ -192,7 +199,7 @@ export function CalendarImportDialog({ state, records, intro, noneFound, allImpo
                 onClose();
               }}
             >
-              Add all {fresh.length}
+              {kt('calendar.addAll', { count: fresh.length })}
             </button>
           )}
         </>
@@ -203,7 +210,7 @@ export function CalendarImportDialog({ state, records, intro, noneFound, allImpo
       <div className="mt-4">
         {(state.status === 'searching' || state.status === 'idle') && (
           <p role="status" className="text-base text-muted">
-            Searching your calendars
+            {kt('calendar.searching')}
           </p>
         )}
         {state.status === 'error' && <ErrorNotice message={state.message} onRetry={onRetry} />}
@@ -213,7 +220,7 @@ export function CalendarImportDialog({ state, records, intro, noneFound, allImpo
           </p>
         )}
         {fresh.length > 0 && (
-          <ul className="divide-y divide-line rounded-2xl border border-line" aria-label="Calendar events">
+          <ul className="divide-y divide-line rounded-2xl border border-line" aria-label={kt('calendar.events')}>
             {fresh.map((m) => (
               <li key={`${m.id}-${m.start}`} className="flex items-center gap-3 px-3 py-2">
                 <div className="min-w-0 flex-1">
@@ -221,8 +228,8 @@ export function CalendarImportDialog({ state, records, intro, noneFound, allImpo
                   <p className="text-sm text-muted">{matchWhen(m)}</p>
                   {m.location && <p className="text-sm text-muted [overflow-wrap:anywhere]">{m.location}</p>}
                 </div>
-                <button type="button" className={secondaryButton} onClick={() => onAdd([m])} aria-label={`Add ${m.title}`}>
-                  <Plus size={18} /> Add
+                <button type="button" className={secondaryButton} onClick={() => onAdd([m])} aria-label={kt('calendar.addTitle', { title: m.title })}>
+                  <Plus size={18} /> {kt('common.add')}
                 </button>
               </li>
             ))}
@@ -312,15 +319,16 @@ export function CalendarSuggestions({ suggestions, onAdd, onDismiss, now = Date.
   /** For the day words ("Today", "Tue"); default the current time. */
   now?: number;
 }) {
+  const kt = useKitT();
   return (
     <SuggestionsCard
       suggestions={suggestions}
       idOf={(m) => m.id}
       titleOf={(m) => m.title}
       detailOf={(m) => suggestionWhen(m, now)}
-      lead="New in your calendar"
-      label="New in your calendar"
-      moreLabel="More new calendar events"
+      lead={kt('calendar.newInCalendar')}
+      label={kt('calendar.newInCalendar')}
+      moreLabel={kt('calendar.moreNew')}
       icon={<CalendarPlus size={20} className="shrink-0 text-link" aria-hidden="true" />}
       onAdd={onAdd}
       onDismiss={onDismiss}

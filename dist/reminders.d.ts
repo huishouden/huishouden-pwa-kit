@@ -1,19 +1,35 @@
 import { type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { type MedCourse } from './dose.js';
+import { type Lang } from './i18n.js';
 /**
  * Reminders any app writes and the shared sender (huishouden/notify) delivers as push
  * notifications: one collection, `households/{id}/reminders`. The sender checks every five
  * minutes for reminders that are due and not yet sent, pushes them to the recipients' devices,
  * and marks them sent. Apps never send anything themselves.
  *
+ * Each device is notified in its own language. A reminder's `title` and `body` are in the writer's
+ * language; `texts` carries the same title and body in every language the suite speaks, and the
+ * sender shows the one matching the device's push subscription (`./push` `lang`), falling back to
+ * `title`/`body`. Kit builders fill `texts` (`remindersForCourseInEveryLang`); an app wraps its own
+ * reminder builder with `localizeReminders(() => build())`, which runs it once per language.
+ *
  * Fields match the rules exactly (see REMINDER_FIELDS); keep them in step.
  */
+/** A reminder's words in one language. */
+export interface ReminderText {
+    title: string;
+    body: string;
+}
+/** The same title and body per language (`en`, `es`, `nl`), for the sender to pick by the device's language. */
+export type ReminderTexts = Partial<Record<Lang, ReminderText>>;
 export interface Reminder {
     id: string;
     /** Short name of the app that owns it ("pet"); its notification opens in that app when it can. */
     app: string;
     title: string;
     body: string;
+    /** `title` and `body` in each language; the sender uses the device's (`./push` `lang`), else `title`/`body`. */
+    texts?: ReminderTexts;
     /** When to notify, ms since epoch. */
     at: number;
     /** Deep link opened when the notification is tapped (https). */
@@ -37,12 +53,32 @@ export interface Reminder {
     createdAt: number;
     by: string;
 }
-export declare const REMINDER_FIELDS: readonly ["app", "title", "body", "at", "url", "recipients", "ref", "private", "sent", "sentAt", "createdAt", "by"];
+export declare const REMINDER_FIELDS: readonly ["app", "title", "body", "texts", "at", "url", "recipients", "ref", "private", "sent", "sentAt", "createdAt", "by"];
+/** Limits of a stored title and body, also inside `texts` (the rules check the same). */
+export declare const REMINDER_LIMITS: {
+    readonly title: 120;
+    readonly body: 500;
+};
 /** The collection of reminders for named members only (`./audience`); the sender reads it too. */
 export declare const PERSONAL_REMINDERS = "personalReminders";
 /** Fields of a `personalReminders` document: a reminder's plus `audience`. */
-export declare const PERSONAL_REMINDER_FIELDS: readonly ["app", "title", "body", "at", "url", "recipients", "ref", "private", "sent", "sentAt", "createdAt", "by", "audience"];
-export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Partial<Pick<Reminder, 'id' | 'body' | 'recipients' | 'ref' | 'private'>>;
+export declare const PERSONAL_REMINDER_FIELDS: readonly ["app", "title", "body", "texts", "at", "url", "recipients", "ref", "private", "sent", "sentAt", "createdAt", "by", "audience"];
+export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Partial<Pick<Reminder, 'id' | 'body' | 'texts' | 'recipients' | 'ref' | 'private'>>;
+/** `texts` as stored: known languages only, each title and body trimmed and clipped; undefined when none is left. */
+export declare function cleanTexts(texts: ReminderTexts | undefined | null): ReminderTexts | undefined;
+/**
+ * Runs `build` once per language (its `t`/`kt` and formatters in that language) and returns its
+ * reminders in the page's language, each with `texts` holding every language's title and body, so
+ * each device is notified in its own. `build` must be synchronous and return the same reminders in
+ * the same order every time (only the words differ).
+ *
+ * ```ts
+ * syncReminders(db, id, 'car', await localizeReminders(() => carReminders(data)), me);
+ * ```
+ */
+export declare function localizeReminders<R extends ReminderInput>(build: () => R[]): Promise<(R & {
+    texts: ReminderTexts;
+})[]>;
 /**
  * For writes from a helper's or kid's device (`isRestricted(role)`): only reminders not marked
  * private are read and written, each on its own, and one the rules refuse (written before the
@@ -135,3 +171,7 @@ export interface CourseReminderOptions {
 export declare function remindersForCourse(course: MedCourse & {
     id: string;
 }, options: CourseReminderOptions): ReminderInput[];
+/** `remindersForCourse` with `texts` in every language (`localizeReminders`), so each device is notified in its own. */
+export declare function remindersForCourseInEveryLang(course: MedCourse & {
+    id: string;
+}, options: CourseReminderOptions): Promise<ReminderInput[]>;

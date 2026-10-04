@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { VitePWA, type VitePWAOptions } from 'vite-plugin-pwa';
 import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
+import { LANG_BOOT_SCRIPT } from './i18n.js';
 import { THEME_BOOT_SCRIPT } from './theme.js';
 import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource } from './share-sw.js';
 
@@ -66,7 +67,7 @@ export interface PwaAppOptions {
 export function pwaApp(options: PwaAppOptions) {
   const { overrides = {} } = options;
   const base = normalizeBase(options.base);
-  return [sitePath(base), buildStamp(), telemetryChunks(), linkPreview(options), themeBoot(), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
+  return [sitePath(base), buildStamp(), telemetryChunks(), linkPreview(options), themeBoot(), langBoot(), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
     registerType: 'autoUpdate',
     includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
     base,
@@ -187,6 +188,21 @@ export function themeBoot() {
     transformIndexHtml(html: string) {
       if (html.includes('data-hh-theme-boot')) return html;
       return html.replace(/<\/head>/, `    <script data-hh-theme-boot>${THEME_BOOT_SCRIPT}</script>\n  </head>`);
+    },
+  };
+}
+
+/**
+ * The suite's language (./i18n) on <html lang> before the first paint: the stored choice, else the
+ * first of the device's languages the suite speaks, else English. Screen readers and the browser's
+ * hyphenation and translate offer read it before the app's bundle loads.
+ */
+export function langBoot() {
+  return {
+    name: 'huishouden-lang-boot',
+    transformIndexHtml(html: string) {
+      if (html.includes('data-hh-lang-boot')) return html;
+      return html.replace(/<\/head>/, `    <script data-hh-lang-boot>${LANG_BOOT_SCRIPT}</script>\n  </head>`);
     },
   };
 }

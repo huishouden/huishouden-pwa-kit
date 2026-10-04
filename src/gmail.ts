@@ -1,6 +1,7 @@
 import type { Auth } from 'firebase/auth';
 import { googleAccessMessage, popupBlocked, popupCancelled } from './feedback';
 import { cachedGoogleToken, forgetGoogleToken, googleAccessToken } from './google-token';
+import { kt } from './i18n.js';
 
 /**
  * Read-only Gmail for the signed-in member, in the browser: search, read a message's text and HTML,
@@ -52,7 +53,7 @@ export function storedGmailToken(auth: Auth): string | null {
 /** Asks Google for read-only Gmail access (or reuses the hour's token). Call from a tap. */
 export function requestGmailToken(auth: Auth): Promise<string> {
   if (typeof window !== 'undefined' && window.__gmailTestToken) return Promise.resolve(window.__gmailTestToken);
-  return googleAccessToken(auth, [GMAIL_READONLY_SCOPE], { persist: true, deniedMessage: 'Google did not allow reading email.' });
+  return googleAccessToken(auth, [GMAIL_READONLY_SCOPE], { persist: true, deniedMessage: kt('gmail.denied') });
 }
 
 export class GmailError extends Error {
@@ -87,7 +88,7 @@ async function call<T>(token: string, path: string, params: Record<string, strin
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
     throw new GmailError(
-      res.status === 401 ? 'Gmail access has ended; check email again to allow it.' : `Gmail answered ${res.status}: ${body.error?.message ?? res.statusText}`,
+      res.status === 401 ? kt('gmail.ended') : kt('gmail.answered', { status: String(res.status), message: body.error?.message ?? res.statusText }),
       res.status,
     );
   }
@@ -119,13 +120,13 @@ export function gmailMailbox(token: string): Mailbox {
 
 /** Plain words for a failed Gmail check. */
 export function gmailError(e: unknown): string {
-  if (popupCancelled(e)) return 'Gmail was not connected.';
-  if (popupBlocked(e)) return 'The browser blocked Google’s window. Allow popups for this site and try again.';
+  if (popupCancelled(e)) return kt('gmail.notConnected');
+  if (popupBlocked(e)) return kt('gmail.popupBlocked');
   const access = googleAccessMessage(e, 'Gmail');
   if (access) return access;
   if (e instanceof GmailError) return e.message;
-  if (e instanceof TypeError) return "Couldn't reach Gmail. Check the connection.";
-  return (e as Error)?.message || "Couldn't check email.";
+  if (e instanceof TypeError) return kt('gmail.unreachable');
+  return (e as Error)?.message || kt('gmail.couldNotCheck');
 }
 
 /** base64url (Gmail's encoding of part bodies) to UTF-8 text. */

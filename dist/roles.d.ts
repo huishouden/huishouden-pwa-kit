@@ -17,8 +17,13 @@ import { type Household } from './household.js';
  */
 export type Role = 'admin' | 'member' | 'helper' | 'kid';
 export declare const ROLES: readonly Role[];
+/** The roles' names in English. Shown text uses `roleLabel` (the active language). */
 export declare const ROLE_LABELS: Record<Role, string>;
-/** One line each, for a role picker. */
+/** A role's name in the active language: "Helper", "Ayudante", "Hulp". */
+export declare function roleLabel(role: Role): string;
+/** A role's one-line description in the active language, for a role picker. */
+export declare function roleDescription(role: Role): string;
+/** One line each, in English. Shown text uses `roleDescription`. */
 export declare const ROLE_DESCRIPTIONS: Record<Role, string>;
 /**
  * What a role may do, for hiding controls:
@@ -37,7 +42,7 @@ export declare function can(role: Role | null | undefined, action: RoleAction): 
 export declare const MONEY_APPS: readonly string[];
 /** Helpers and kids: their reads of private-capable collections must ask for `private == false`. */
 export declare function isRestricted(role: Role | null | undefined): boolean;
-/** The sentence to show where `action` is refused: "Only admins and members can change settings." */
+/** The sentence to show where `action` is refused, in the active language: "Only admins and members can change settings." */
 export declare function refusal(action: RoleAction): string;
 /** The `roles` map from a household document, keeping only valid entries. */
 export declare function toRoles(data: unknown): Record<string, Role>;

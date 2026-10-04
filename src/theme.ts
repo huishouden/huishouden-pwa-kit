@@ -17,12 +17,19 @@
  * React: `useTheme()` from `@huishouden/pwa-kit/react/theme`.
  */
 
+import { kt } from './i18n.js';
+
 export type ThemeMode = 'auto' | 'light' | 'dark';
 
 export const THEME_MODES: readonly ThemeMode[] = ['auto', 'light', 'dark'];
 
-/** What the choices are called wherever they are offered. */
+/** What the choices are called in English. Shown text uses `themeLabel` (the active language). */
 export const THEME_LABELS: Record<ThemeMode, string> = { auto: 'Automatic', light: 'Light', dark: 'Dark' };
+
+/** What a choice is called in the active language: "Automatic", "Automático", "Automatisch". */
+export function themeLabel(mode: ThemeMode): string {
+  return kt(mode === 'auto' ? 'theme.auto' : mode === 'light' ? 'theme.light' : 'theme.dark');
+}
 
 /** The suite's one stored choice. */
 export const THEME_KEY = 'hh-theme';

@@ -393,7 +393,7 @@ describe('contacts', () => {
     const box = document.querySelector('textarea[aria-label="Listing text"]') as HTMLTextAreaElement;
     typeInto(box, 'Example Animal Hospital\n4.6 (512)\n1 Example Way, Springfield, IL 62704\n(217) 555-0100\nexample.com\n"Lovely staff, very kind to our dog."');
     click(byText('Fill in'));
-    expect(document.body.textContent).toContain('Filled in the name, phone, website and address from the pasted text. Check them before saving.');
+    expect(document.body.textContent).toContain('Filled in the name, phone, website, and address from the pasted text. Check them before saving.');
     expect(document.querySelector('details:not([open]) summary')?.textContent).toBe("Show the text that wasn't used");
     expect(document.body.textContent).toContain('Lovely staff, very kind to our dog.');
     click(byText('Save'));

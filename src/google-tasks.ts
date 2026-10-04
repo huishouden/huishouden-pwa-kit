@@ -1,5 +1,6 @@
 import type { Auth } from 'firebase/auth';
 import { cachedGoogleToken, googleAccessToken, googleFetch } from './google-token';
+import { kt } from './i18n.js';
 
 /**
  * Reads the person's Google Tasks (read-only), so something said to an assistant ("add eggs to my
@@ -49,7 +50,7 @@ declare global {
 /** A token that can read Google Tasks: from a tap, asking once; kept for its hour on this device. */
 export function googleTasksToken(auth: Auth): Promise<string> {
   if (typeof window !== 'undefined' && typeof window.__mockGoogleTasksToken === 'string') return Promise.resolve(window.__mockGoogleTasksToken);
-  return googleAccessToken(auth, SCOPES, { persist: true, deniedMessage: 'Google did not grant access to Google Tasks.' });
+  return googleAccessToken(auth, SCOPES, { persist: true, deniedMessage: kt('googleTasks.denied') });
 }
 
 /** The Google Tasks token this device already has, without asking anyone; null when there is none. */
@@ -98,7 +99,7 @@ export async function googleTaskLists(token: string): Promise<GoogleTaskList[]> 
     url.searchParams.set('maxResults', '100');
     if (pageToken) url.searchParams.set('pageToken', pageToken);
     const page = await googleFetch<{ items?: { id?: string; title?: string }[]; nextPageToken?: string }>(token, url, { label: 'Google Tasks' });
-    for (const l of page.items ?? []) if (l.id) lists.push({ id: l.id, title: l.title?.trim() || 'Untitled list' });
+    for (const l of page.items ?? []) if (l.id) lists.push({ id: l.id, title: l.title?.trim() || kt('googleTasks.untitledList') });
     pageToken = page.nextPageToken;
   } while (pageToken);
   return lists;

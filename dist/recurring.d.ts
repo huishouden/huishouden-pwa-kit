@@ -68,7 +68,8 @@ interface CadenceSpec {
     next: (d: Ymd, day: number) => Ymd;
 }
 export declare const CADENCES: Record<Cadence, CadenceSpec>;
-export declare const CADENCE_LABELS: Record<Cadence, string>;
+/** What each cadence is called, in the active language ("Monthly", "Mensual", "Maandelijks"). */
+export declare const CADENCE_LABELS: Readonly<Record<Cadence, string>>;
 /** An amount per `cadence` as an amount per month, rounded to cents. */
 export declare const monthlyEquivalent: (amount: number, cadence: Cadence) => number;
 export declare const DEFAULT_NOT_BILL_CATEGORIES: string[];
