@@ -103,6 +103,15 @@ describe('the events', () => {
     expect(bins.end - bins.start).toBe(30 * 60_000);
   });
 
+  test('an occurrence moved from a past day to a later one skips none of the days between', () => {
+    // 2031-09-11 (a past Thursday) was moved to 2031-10-03; nothing else before 2031-10-02 is published.
+    const moved = toAgendaItem('moved', { ...agenda.find((i) => i.id === 'home_event_bins_2031-10-02')!, start: at('2031-10-03T07:00:00+02:00'), series: { ...agenda[0].series!, original: '2031-09-11' } });
+    const events = exportEvents({ ...input('admin@example.com'), agenda: [...agenda, moved], todos: [] });
+    const bins = events.find((e) => e.key === 'home|event:bins')!;
+    expect(bins.series!.exdates).toEqual(['2031-10-16']);
+    expect(bins.series!.overrides.map((o) => o.original)).toContain('2031-09-11');
+  });
+
   test('the reader’s language', async () => {
     await loadExportLang('nl');
     const nl = exportEvents(input('admin@example.com', {}, 'nl')).find((e) => e.key === 'home|event:bins')!;
