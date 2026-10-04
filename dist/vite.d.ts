@@ -28,7 +28,8 @@ export interface PwaAppOptions {
     includeAssets?: string[];
     /**
      * The app's public address, with its path (`https://<site>.web.app/pet/`). Link previews need absolute URLs for the
-     * page and image; without it they fall back to relative ones, which some messengers ignore.
+     * page and image. Default with `base`: `base` on the suite's site (`SUITE_ORIGIN` in `./site`);
+     * without either, relative ones, which some messengers ignore.
      */
     url?: string;
     /**

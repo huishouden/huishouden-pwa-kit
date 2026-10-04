@@ -8,6 +8,17 @@
  */
 import { APP_PATHS_REGEX, permissionsPolicy, securityHeaders } from './security-headers.js';
 import { SITE_OBSERVABILITY } from './observability.js';
+/**
+ * The suite's Firebase Hosting site (docs/one-site.md): every app is served at
+ * `https://<SUITE_SITE>.web.app/<app>/`. The one place the production address is set: deploys,
+ * link previews, smoke tests, sign-in origin checks and the bootstrap derive it from here
+ * (docs/one-site.md "Moving the suite").
+ */
+export const SUITE_SITE = 'huishouden-piekstra';
+/** `<SUITE_SITE>.web.app` */
+export const SUITE_HOST = `${SUITE_SITE}.web.app`;
+/** `https://<SUITE_SITE>.web.app` */
+export const SUITE_ORIGIN = `https://${SUITE_HOST}`;
 /** `pet`, `/pet` or `/pet/` as `/pet/`; empty as `/`. */
 export function normalizePath(path) {
     const trimmed = path.replace(/^\/+|\/+$/g, '');
@@ -54,9 +65,18 @@ export function siteApps(registry) {
         throw new Error('apps.json: exactly one entry (the portal) must have path "/"');
     return [...roots, ...apps.filter((a) => a.path !== '/')];
 }
-/** The shared site's Firebase Hosting name: the portal's site. */
+/** The shared site's Firebase Hosting name, `SUITE_SITE`, once the registry checks out. */
 export function sharedSite(registry) {
-    return siteApps(registry)[0].site;
+    siteApps(registry);
+    return SUITE_SITE;
+}
+/** An absolute link into an app on the production suite site: `suiteUrl('/pet/', '?tab=care')`. For code with no page (tests, scripts, Workers). */
+export function suiteUrl(base, path = '') {
+    return appUrl(base, path, SUITE_ORIGIN);
+}
+/** Old sites that redirect to the suite: each app's, and the portal's (the suite's former address). */
+export function redirectingSites(registry) {
+    return siteApps(registry).filter((a) => a.redirect && a.site !== SUITE_SITE);
 }
 /** Which device features a `Permissions-Policy` value turns on. */
 export function featuresOf(policy) {
@@ -103,16 +123,50 @@ export function siteConfig(site, entries, publicDir = 'public') {
  * before files, and RE2 has no lookahead, so the exception is spelled out.
  */
 export const REDIRECT_ALL_BUT_WORKER = '^/(?P<rest>(?:[^s]|s[^w]|sw[^.]|sw\\.[^j]|sw\\.j[^s]|sw\\.js.).*|s|sw|sw\\.|sw\\.j)?$';
-/** The hosting config of an old per-app site: everything 301s to `target` (`https://<shared>/pet/`), query kept by Hosting. */
-export function redirectConfig(site, target, publicDir) {
+const escapeRe = (c) => c.replace(/[\\^$.*+?()[\]{}|\-]/g, '\\$&');
+/**
+ * An RE2 pattern (no anchors) for every string except those in `except`, which must be non-empty
+ * strings. RE2 has no lookahead, so the complement is spelled out along a trie of the exceptions.
+ */
+export function allBut(except) {
+    const root = { end: false, next: new Map() };
+    for (const word of except) {
+        let n = root;
+        for (const c of word) {
+            if (!n.next.has(c))
+                n.next.set(c, { end: false, next: new Map() });
+            n = n.next.get(c);
+        }
+        n.end = true;
+    }
+    const walk = (n) => {
+        const chars = [...n.next.keys()];
+        const alts = [chars.length ? `[^${chars.map(escapeRe).join('')}].*` : '.+', ...chars.map((c) => `${escapeRe(c)}${walk(n.next.get(c))}`)];
+        if (!n.end)
+            alts.push('');
+        return `(?:${alts.join('|')})`;
+    };
+    return walk(root);
+}
+/**
+ * The hosting config of an old site: everything 301s to `target` (`https://<shared>/pet/`), query
+ * kept by Hosting, except the workers in `workers` (paths under the site's root, default `sw.js`),
+ * which it serves from `publicDir`: the retiring worker, so an installed copy leaves its cache.
+ */
+export function redirectConfig(site, target, publicDir, workers = ['sw.js']) {
     const to = target.endsWith('/') ? target : `${target}/`;
+    const regex = workers.length === 1 && workers[0] === 'sw.js' ? REDIRECT_ALL_BUT_WORKER : `^/(?P<rest>${allBut(workers)})$`;
     return {
         site,
         public: publicDir,
         ignore: ['firebase.json', '**/.*'],
-        redirects: [{ regex: REDIRECT_ALL_BUT_WORKER, destination: `${to}:rest`, type: 301 }],
-        headers: [{ source: '/sw.js', headers: NO_CACHE }],
+        redirects: [{ regex, destination: `${to}:rest`, type: 301 }],
+        headers: workers.map((w) => ({ source: `/${w}`, headers: NO_CACHE })),
     };
+}
+/** The workers an old site retires: the portal's former address held every app's, an app's site only its own. */
+export function retiringWorkers(app, apps) {
+    return app.path === '/' ? apps.map((a) => `${a.path.slice(1)}sw.js`) : ['sw.js'];
 }
 /** Marks the retiring worker, so a check can tell it is the one being served. */
 export const RETIRED_WORKER_MARK = 'huishouden: this address moved';

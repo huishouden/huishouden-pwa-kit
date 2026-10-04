@@ -3,6 +3,7 @@ import { VitePWA, type VitePWAOptions } from 'vite-plugin-pwa';
 import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
 import { LANG_BOOT_SCRIPT } from './i18n.js';
 import { THEME_BOOT_SCRIPT } from './theme.js';
+import { SUITE_ORIGIN } from './site.js';
 import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource } from './share-sw.js';
 
 export interface PwaAppOptions {
@@ -29,7 +30,8 @@ export interface PwaAppOptions {
   includeAssets?: string[];
   /**
    * The app's public address, with its path (`https://<site>.web.app/pet/`). Link previews need absolute URLs for the
-   * page and image; without it they fall back to relative ones, which some messengers ignore.
+   * page and image. Default with `base`: `base` on the suite's site (`SUITE_ORIGIN` in `./site`);
+   * without either, relative ones, which some messengers ignore.
    */
   url?: string;
   /**
@@ -151,7 +153,8 @@ const escapeAttr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;
  * Any description or og:/twitter: tags already in index.html are replaced.
  */
 export function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' | 'url' | 'base'>) {
-  const base = options.url?.replace(/\/$/, '') ?? normalizeBase(options.base).replace(/\/$/, '');
+  const url = options.url ?? (options.base !== undefined ? new URL(normalizeBase(options.base), SUITE_ORIGIN).href : undefined);
+  const base = url?.replace(/\/$/, '') ?? normalizeBase(options.base).replace(/\/$/, '');
   const tags: [string, string, string][] = [
     ['name', 'description', options.description],
     ['property', 'og:type', 'website'],
@@ -166,7 +169,7 @@ export function linkPreview(options: Pick<PwaAppOptions, 'name' | 'description' 
     ['name', 'twitter:description', options.description],
     ['name', 'twitter:image', `${base}/og.png`],
   ];
-  if (options.url) tags.push(['property', 'og:url', `${base}/`]);
+  if (url) tags.push(['property', 'og:url', `${base}/`]);
   return {
     name: 'huishouden-link-preview',
     transformIndexHtml(html: string) {
