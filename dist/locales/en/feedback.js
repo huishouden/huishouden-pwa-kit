@@ -8,4 +8,9 @@ export default {
     'feedback.notConfigured': '{service} access is not set up for this app yet.',
     'feedback.unreachable': 'Couldn’t reach Google. Check the connection and try again.',
     'feedback.signInFirst': 'Sign in first.',
+    'feedback.windowBlocked': 'Your browser blocked Google’s window. Allow pop-ups for this site, then try again.',
+    'feedback.windowClosed': 'Google’s window was closed before finishing. Try again when you are ready.',
+    'feedback.windowFailed': 'Google’s window stopped before finishing. Try again.',
+    'feedback.windowWaiting': 'Waiting for Google’s window. Can’t see it? It may be behind this window.',
+    'feedback.windowShow': 'Show Google’s window',
 };

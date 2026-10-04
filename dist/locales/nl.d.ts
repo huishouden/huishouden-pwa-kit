@@ -218,6 +218,11 @@ declare const _default: {
     'feedback.notConfigured': string;
     'feedback.unreachable': string;
     'feedback.signInFirst': string;
+    'feedback.windowBlocked': string;
+    'feedback.windowClosed': string;
+    'feedback.windowFailed': string;
+    'feedback.windowWaiting': string;
+    'feedback.windowShow': string;
     'dose.amount': string;
     'dose.timeOfDay': string;
     'dose.assumeMonths': string;

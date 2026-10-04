@@ -56,3 +56,22 @@ export function googleAccessMessage(e: unknown, service = 'Google'): string | nu
   if (code === 'unavailable') return kt('feedback.unreachable');
   return null;
 }
+
+/**
+ * Words for a failed `googleAuthCode` (connecting Google Calendar, an alert inbox) or any wait on
+ * Google's window, so no failure is silent: blocked, closed before finishing, refused, or stopped
+ * for another reason (reported, `./observability`). Null only when the error is not about
+ * Google's window or permission, so the caller words it (a server's answer, being offline).
+ */
+export function googleWindowMessage(e: unknown, service = 'Google'): string | null {
+  if (popupBlocked(e)) return kt('feedback.windowBlocked');
+  if (popupCancelled(e)) return kt('feedback.windowClosed');
+  const known = googleAccessMessage(e, service);
+  if (known) return known;
+  if (e instanceof Error && e.name === 'GoogleTokenError') {
+    // Google's window ended some other way: say so, and keep Google's words for whoever looks into it.
+    reportError(e, { where: 'Google window' });
+    return kt('feedback.windowFailed');
+  }
+  return null;
+}

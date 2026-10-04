@@ -137,11 +137,7 @@ export async function googleAccessToken(auth: Auth, scopes: readonly string[], {
         hint: user.email ?? undefined,
         include_granted_scopes: true,
         callback: resolve,
-        error_callback: (e) => {
-          if (e.type === 'popup_closed') reject(new GoogleTokenError(kt('googleToken.closed'), 'popup_closed'));
-          else if (e.type === 'popup_failed_to_open') reject(new GoogleTokenError(kt('googleToken.blocked'), 'popup_failed_to_open'));
-          else reject(new GoogleTokenError(e.message || kt('googleToken.noAnswer'), 'unknown'));
-        },
+        error_callback: (e) => reject(gsiWindowError(e)),
       });
       client.requestAccessToken({ prompt: '' });
     });
@@ -167,7 +163,9 @@ export async function googleAccessToken(auth: Auth, scopes: readonly string[], {
  * A one-time authorization code for `scopes`, from Google's code client in a popup, for a server
  * to exchange for lasting (offline) access with the client's secret: huishouden/calendar's Google
  * Calendar sync, Spending's alert inbox. The server exchanges it with `redirect_uri=postmessage`. Call from a tap. Rejects
- * as `googleAccessToken` does when the window is closed, blocked, or a scope is left unticked.
+ * as `googleAccessToken` does when the window is closed, blocked, or a scope is left unticked;
+ * `googleWindowMessage` (`./feedback`) words each. Calling it again while Google's window is still
+ * open brings that window to the front and returns the same answer.
  */
 export interface GoogleAuthCodeOptions extends Pick<GoogleTokenOptions, 'deniedMessage' | 'clientId'> {
   /**
@@ -178,32 +176,63 @@ export interface GoogleAuthCodeOptions extends Pick<GoogleTokenOptions, 'deniedM
   selectAccount?: boolean;
 }
 
+/** The code request waiting on Google's window, so a second tap brings that window back rather than starting over. */
+let codeInFlight: { key: string; client: { requestCode(): void }; answer: Promise<{ code: string; scope: string }> } | null = null;
+
 export async function googleAuthCode(auth: Auth, scopes: readonly string[], { deniedMessage = kt('googleToken.denied'), clientId, selectAccount = false }: GoogleAuthCodeOptions = {}): Promise<{ code: string; scope: string }> {
   const user = auth.currentUser;
   if (!user) throw new Error(kt('feedback.signInFirst'));
   const client_id = clientId || configuredClientId;
   if (!client_id) throw new GoogleTokenError(kt('googleToken.notConfigured'), 'not_configured');
+  const key = `${client_id} ${user.uid} ${selectAccount} ${[...scopes].sort().join(' ')}`;
+  if (codeInFlight?.key === key) {
+    // Google names its window, so asking again opens nothing new: the same window comes to the front.
+    codeInFlight.client.requestCode();
+    return codeInFlight.answer;
+  }
+  // Nothing may be awaited between the tap and requestCode() when Google's script is already here
+  // (it is preloaded at startup): a browser blocks a window opened after the tap's moment has passed.
   const gsi =
     loadedGsi() ??
     (await loadGsi().catch(() => {
       throw new GoogleTokenError(kt('googleToken.unreachable'), 'unavailable');
     }));
-  const answer = await new Promise<GsiCodeResponse>((resolve, reject) => {
-    const client = gsi.oauth2.initCodeClient({
+  let client!: { requestCode(): void };
+  const reply = new Promise<GsiCodeResponse>((resolve, reject) => {
+    client = gsi.oauth2.initCodeClient({
       client_id,
       scope: scopes.join(' '),
       ux_mode: 'popup',
       include_granted_scopes: !selectAccount,
       ...(selectAccount ? { select_account: true } : user.email ? { login_hint: user.email } : {}),
       callback: resolve,
-      error_callback: (e) => {
-        if (e.type === 'popup_closed') reject(new GoogleTokenError(kt('googleToken.closed'), 'popup_closed'));
-        else if (e.type === 'popup_failed_to_open') reject(new GoogleTokenError(kt('googleToken.blocked'), 'popup_failed_to_open'));
-        else reject(new GoogleTokenError(e.message || kt('googleToken.noAnswer'), 'unknown'));
-      },
+      error_callback: (e) => reject(gsiWindowError(e)),
     });
-    client.requestCode();
   });
+  const answer = reply.then((r) => codeFrom(r, scopes, deniedMessage));
+  const entry = { key, client, answer };
+  codeInFlight = entry;
+  const settled = () => {
+    if (codeInFlight === entry) codeInFlight = null;
+  };
+  answer.then(settled, settled);
+  try {
+    client.requestCode();
+  } catch (e) {
+    settled();
+    throw new GoogleTokenError(e instanceof Error && e.message ? e.message : kt('googleToken.noAnswer'), 'unknown');
+  }
+  return answer;
+}
+
+/** Google Identity Services' `error_callback` as a `GoogleTokenError` with its code. */
+function gsiWindowError(e: { type?: string; message?: string }): GoogleTokenError {
+  if (e.type === 'popup_closed') return new GoogleTokenError(kt('googleToken.closed'), 'popup_closed');
+  if (e.type === 'popup_failed_to_open') return new GoogleTokenError(kt('googleToken.blocked'), 'popup_failed_to_open');
+  return new GoogleTokenError(e.message || kt('googleToken.noAnswer'), 'unknown');
+}
+
+function codeFrom(answer: GsiCodeResponse, scopes: readonly string[], deniedMessage: string): { code: string; scope: string } {
   if (answer.error === 'access_denied') throw new GoogleTokenError(deniedMessage, 'access_denied');
   if (answer.error || !answer.code) throw new GoogleTokenError(kt('googleToken.answered', { error: answer.error_description || answer.error || '' }), 'unknown');
   const granted = (answer.scope ?? '').split(/\s+/).filter(Boolean);

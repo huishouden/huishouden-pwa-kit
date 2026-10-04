@@ -11,4 +11,9 @@ export default {
   'feedback.notConfigured': 'Toegang tot {service} is nog niet ingesteld voor deze app.',
   'feedback.unreachable': 'Google is niet bereikbaar. Controleer de verbinding en probeer het opnieuw.',
   'feedback.signInFirst': 'Log eerst in.',
+  'feedback.windowBlocked': 'Je browser heeft het venster van Google geblokkeerd. Sta pop-ups toe voor deze site en probeer het opnieuw.',
+  'feedback.windowClosed': 'Het venster van Google is gesloten voordat het klaar was. Probeer het opnieuw wanneer je zover bent.',
+  'feedback.windowFailed': 'Het venster van Google is gestopt voordat het klaar was. Probeer het opnieuw.',
+  'feedback.windowWaiting': 'Wachten op het venster van Google. Zie je het niet? Het staat misschien achter dit venster.',
+  'feedback.windowShow': 'Venster van Google tonen',
 } satisfies CatalogueOf<typeof en>;
