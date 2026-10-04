@@ -233,3 +233,31 @@ describe('ContactDialog and contact text in Spanish and Dutch', () => {
     expect(contactFromCard(card).notes).toBe('Andere telefoonnummers: 2 (mobile)');
   });
 });
+
+describe('ContactDialog: roles kept in English, shown in the reader’s language', () => {
+  const LABELS: Record<string, string> = { Plumber: 'Plomero', Roofer: 'Techador' };
+  const roleLabel = (r: string) => LABELS[r] ?? r;
+  const roleField = () => document.querySelector('input[aria-label="Role"]') as HTMLInputElement;
+
+  test('a chip shows its label and saves the role', () => {
+    const onSave = mock((_: unknown) => {});
+    render(<ContactDialog contact={null} app="home" roles={['Plumber', 'Roofer']} roleLabel={roleLabel} onSave={onSave} onClose={() => {}} />);
+    expect(byText('Plumber')).toBeNull();
+    click(byText('Plomero'));
+    expect(roleField().value).toBe('Plomero');
+    typeInto(field('Name')!, 'Example Plumbing');
+    click(byText('Save'));
+    expect(onSave.mock.calls[0][0]).toMatchObject({ name: 'Example Plumbing', role: 'Plumber' });
+  });
+
+  test('typing a label saves its role; anything else is saved as typed', () => {
+    const onSave = mock((_: unknown) => {});
+    render(<ContactDialog contact={null} app="home" roles={['Plumber', 'Roofer']} roleLabel={roleLabel} onSave={onSave} onClose={() => {}} />);
+    typeInto(field('Name')!, 'Example Roofing');
+    typeInto(roleField(), 'techador');
+    expect(byText('Techador')!.getAttribute('aria-pressed')).toBe('true');
+    typeInto(roleField(), 'Arborist');
+    click(byText('Save'));
+    expect(onSave.mock.calls[0][0]).toMatchObject({ role: 'Arborist' });
+  });
+});
