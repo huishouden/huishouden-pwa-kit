@@ -406,8 +406,10 @@ errors, speed and anonymous usage counts to one New Relic account on its free ti
   query strings: messages, stacks and URLs pass through `redact` and the agent's obfuscation rules.
   An app holding names that could end up in an error (Health's medicines and people) registers them
   with `setSensitiveWords(app, words)`, and every report has them replaced with `[redacted]`.
-  Geography is the country and region New Relic derives from the request; the city it also derives
-  is dropped at ingest. No session replay, traces, AJAX URLs or click tracking.
+  Geography is what New Relic derives from the network address (country, region, city, the
+  network's coordinates), kept 8 days with the rest of the Browser data; the free plan can't drop the
+  city (docs/observability.md "Geography"). Never the device's location. No session replay, traces,
+  AJAX URLs or click tracking.
 - **Say so.** The portal's `/privacy` page (linked from every app's account menu as "Privacy" and
   from the portal's footer) says in plain words what is collected, what isn't and who provides it;
   each app's README has a Privacy section pointing to it.
