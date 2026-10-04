@@ -170,7 +170,7 @@ export async function updateContact(db: Firestore, householdId: string, id: stri
   const now = Date.now();
   const cleaned = cleanContact(input) as Record<string, unknown>;
   const update: Record<string, unknown> = { ...cleaned, updatedAt: now, by };
-  for (const k of ['role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes']) if (!(k in cleaned)) update[k] = deleteField();
+  for (const k of ['role', 'phone', 'email', 'website', 'address', 'lat', 'lng', 'mapsUrl', 'notes']) if (!(k in cleaned)) update[k] = deleteField();
   if (!('pay' in input)) return updateDoc(doc(contactsOf(db, householdId), id), update);
   const batch = writeBatch(db);
   batch.update(doc(contactsOf(db, householdId), id), update);

@@ -260,3 +260,18 @@ describe('the import ignores what the export wrote', () => {
     expect(toMatch({ ...base, iCalUID: 'abc@google.com' }, 'Family')?.title).toBe('Garbage pickup');
   });
 });
+
+describe('things at home', () => {
+  test("Home's events carry the home address as their LOCATION; others don't", () => {
+    const before = exportEvents(input('admin@example.com'));
+    const events = exportEvents({ ...input('admin@example.com'), home: '12 Example Lane, Springfield' });
+    const bins = events.find((e) => e.key === 'home|event:bins')!;
+    expect(bins.location).toBe('12 Example Lane, Springfield');
+    expect(events.find((e) => e.app === 'pet')!.location).toBeUndefined();
+    const ics = exportIcs(events, { householdId: 'h-demo', timeZone: TZ, lang: 'en', now: NOW });
+    expect(ics).toContain('LOCATION:12 Example Lane\\, Springfield');
+    // Setting a home changes only the events at home, so only those are rewritten.
+    expect(events.filter((e) => e.app !== 'home').map((e) => e.hash)).toEqual(before.filter((e) => e.app !== 'home').map((e) => e.hash));
+    expect(bins.hash).not.toBe(before.find((e) => e.key === 'home|event:bins')!.hash);
+  });
+});

@@ -1,0 +1,39 @@
+[
+  {
+    "place_id": 1001,
+    "osm_type": "way",
+    "osm_id": 424242,
+    "lat": "39.7817",
+    "lon": "-89.6501",
+    "place_rank": 30,
+    "display_name": "12, Example Lane, Riverside, Springfield, Sangamon County, Illinois, 62701, United States",
+    "address": {
+      "house_number": "12",
+      "road": "Example Lane",
+      "suburb": "Riverside",
+      "city": "Springfield",
+      "county": "Sangamon County",
+      "state": "Illinois",
+      "postcode": "62701",
+      "country": "United States",
+      "country_code": "us"
+    }
+  },
+  {
+    "place_id": 1002,
+    "osm_type": "node",
+    "osm_id": 777,
+    "lat": "42.1",
+    "lon": "-72.59",
+    "place_rank": 30,
+    "display_name": "12, Example Lane, Springfield, Hampden County, Massachusetts, 01103, United States",
+    "address": {
+      "house_number": "12",
+      "road": "Example Lane",
+      "city": "Springfield",
+      "state": "Massachusetts",
+      "postcode": "01103",
+      "country": "United States"
+    }
+  }
+]

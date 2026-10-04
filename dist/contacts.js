@@ -124,7 +124,7 @@ export async function updateContact(db, householdId, id, input, by) {
     const now = Date.now();
     const cleaned = cleanContact(input);
     const update = { ...cleaned, updatedAt: now, by };
-    for (const k of ['role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes'])
+    for (const k of ['role', 'phone', 'email', 'website', 'address', 'lat', 'lng', 'mapsUrl', 'notes'])
         if (!(k in cleaned))
             update[k] = deleteField();
     if (!('pay' in input))

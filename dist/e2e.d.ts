@@ -151,6 +151,25 @@ export interface CalendarStubOptions {
  * which `useCalendarSuggestions` needs before it looks. Works signed out, in the sample app.
  */
 export declare function stubCalendar(page: Page | BrowserContext, { events, cachedToken }: CalendarStubOptions): Promise<void>;
+export interface MapStubOptions {
+    /** What a Nominatim address search answers (its `jsonv2` objects with `address`); any search gets these. */
+    search?: unknown[];
+    /** What a reverse lookup (a position to an address) answers; zoom 14 and below (a neighbourhood) gets `area` instead. */
+    reverse?: unknown;
+    /** The neighbourhood a reverse lookup at suburb level answers, for "Approximate only". */
+    area?: unknown;
+}
+/**
+ * OpenStreetMap stands still for a test: Nominatim (search and reverse, `./home` and `./places`)
+ * answers from `options`, and map tiles are a plain grey square, so nothing leaves the machine and
+ * screenshots don't change with the map. Returns the URLs Nominatim was asked.
+ */
+export declare function stubOpenStreetMap(page: Page | BrowserContext, { search, reverse, area }?: MapStubOptions): Promise<string[]>;
+/** The browser reports this position, with location permission granted for the page's origin. */
+export declare function useGeolocation(context: BrowserContext, point: {
+    lat: number;
+    lng: number;
+}, origin?: string): Promise<void>;
 export interface SignInTestUserOptions {
     /** Which of the household's people signs in: `admin`, `member`, `helper` or `kid`. */
     as?: TestRole;

@@ -527,6 +527,41 @@ export async function stubCalendar(page: Page | BrowserContext, { events, cached
   );
 }
 
+export interface MapStubOptions {
+  /** What a Nominatim address search answers (its `jsonv2` objects with `address`); any search gets these. */
+  search?: unknown[];
+  /** What a reverse lookup (a position to an address) answers; zoom 14 and below (a neighbourhood) gets `area` instead. */
+  reverse?: unknown;
+  /** The neighbourhood a reverse lookup at suburb level answers, for "Approximate only". */
+  area?: unknown;
+}
+
+/**
+ * OpenStreetMap stands still for a test: Nominatim (search and reverse, `./home` and `./places`)
+ * answers from `options`, and map tiles are a plain grey square, so nothing leaves the machine and
+ * screenshots don't change with the map. Returns the URLs Nominatim was asked.
+ */
+export async function stubOpenStreetMap(page: Page | BrowserContext, { search = [], reverse = { error: 'Unable to geocode' }, area }: MapStubOptions = {}): Promise<string[]> {
+  const asked: string[] = [];
+  // A 1×1 grey PNG.
+  const tile = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN4+P/xfwAJLAPeVvNHBgAAAABJRU5ErkJggg==', 'base64');
+  await page.route('https://tile.openstreetmap.org/**', (route) => route.fulfill({ contentType: 'image/png', body: tile }));
+  await page.route('https://nominatim.openstreetmap.org/**', (route) => {
+    const url = new URL(route.request().url());
+    asked.push(url.href);
+    const zoom = Number(url.searchParams.get('zoom') ?? 18);
+    const body = url.pathname.startsWith('/reverse') ? (zoom <= 14 && area ? area : reverse) : search;
+    return route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(body) });
+  });
+  return asked;
+}
+
+/** The browser reports this position, with location permission granted for the page's origin. */
+export async function useGeolocation(context: BrowserContext, point: { lat: number; lng: number }, origin?: string) {
+  await context.grantPermissions(['geolocation'], origin ? { origin } : undefined);
+  await context.setGeolocation({ latitude: point.lat, longitude: point.lng, accuracy: 20 });
+}
+
 export interface SignInTestUserOptions {
   /** Which of the household's people signs in: `admin`, `member`, `helper` or `kid`. */
   as?: TestRole;

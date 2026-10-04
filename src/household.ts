@@ -1,9 +1,10 @@
-import { collection, doc, getDocs, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
+import { collection, deleteField, doc, getDocs, onSnapshot, query, where, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { addDoc, arrayRemove, arrayUnion, setDoc, updateDoc } from './firestore.js';
 import { observeHousehold } from './observability.js';
 import { kt } from './i18n.js';
 import { isCurrencyCode, setCurrency } from './money.js';
 import { effectiveRoles, toRoles, type Role } from './roles.js';
+import { homeDoc, setHome, toHome, type HomeCandidate, type HouseholdHome } from './home.js';
 
 /**
  * A household shared by every app in the family: one document per household in
@@ -12,7 +13,7 @@ import { effectiveRoles, toRoles, type Role } from './roles.js';
  * access to members of the parent document — so adding someone here gives them every app at once.
  *
  * Shape matches the rules every app shares:
- *   { name: string, members: string[], joined?: string[], roles?: { [email]: Role }, currency?: string, createdAt: number }
+ *   { name: string, members: string[], joined?: string[], roles?: { [email]: Role }, currency?: string, home?: HouseholdHome, createdAt: number }
  */
 export interface Household {
   id: string;
@@ -25,6 +26,8 @@ export interface Household {
   roles?: Record<string, Role>;
   /** ISO 4217 code amounts are shown in ("USD", "EUR"); unset means US dollars. Admins and members set it. */
   currency?: string;
+  /** Where the household lives (`./home`): every member reads it; admins and members set it. */
+  home?: HouseholdHome;
   createdAt: number;
 }
 
@@ -72,8 +75,12 @@ export function watchHousehold(db: Firestore, email: string, onChange: (state: H
       // Stay loading while the only household is a local one the server hasn't accepted yet.
       if (docs.length && docs.every((d) => d.pending)) return;
       const household = pickHousehold(docs, email);
-      // Every amount the kit formats follows the household's currency.
-      if (household) setCurrency(household.currency);
+      // Every amount the kit formats follows the household's currency, and every distance and
+      // nearby search its home.
+      if (household) {
+        setCurrency(household.currency);
+        setHome(household.home);
+      }
       onChange(household ? { status: 'ready', household } : { status: 'none' });
     },
     (error) => onChange({ status: 'error', error }),
@@ -94,6 +101,7 @@ export function toHousehold(id: string, data: Record<string, unknown>): Househol
     joined: Array.isArray(data.joined) ? data.joined.map(String) : [],
     roles: toRoles(data.roles),
     ...(isCurrencyCode(data.currency) ? { currency: data.currency } : {}),
+    ...(toHome(data.home) ? { home: toHome(data.home) } : {}),
     createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
   };
 }
@@ -102,6 +110,21 @@ export function toHousehold(id: string, data: Record<string, unknown>): Househol
 export async function setHouseholdCurrency(db: Firestore, householdId: string, currency: string): Promise<void> {
   if (!isCurrencyCode(currency)) throw new Error(`Not a currency code: ${currency}`);
   await updateDoc(doc(db, COLLECTION, householdId), { currency });
+}
+
+/**
+ * Sets where the household lives (admins and members; the rules check): a found address, a
+ * position, or with `approximate` only the neighbourhood. The zone is this browser's.
+ */
+export async function setHouseholdHome(db: Firestore, householdId: string, home: HomeCandidate, by: string, options?: { timeZone?: string; now?: number }): Promise<HouseholdHome> {
+  const saved = homeDoc(home, by, options);
+  await updateDoc(doc(db, COLLECTION, householdId), { home: saved });
+  return saved;
+}
+
+/** Forgets where the household lives. */
+export async function clearHouseholdHome(db: Firestore, householdId: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, householdId), { home: deleteField() });
 }
 
 /** Starts a household with only its creator, its admin; others are invited from inside. */

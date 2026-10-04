@@ -1,9 +1,10 @@
-import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, deleteField, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { addDoc, arrayRemove, arrayUnion, setDoc, updateDoc } from './firestore.js';
 import { observeHousehold } from './observability.js';
 import { kt } from './i18n.js';
 import { isCurrencyCode, setCurrency } from './money.js';
 import { effectiveRoles, toRoles } from './roles.js';
+import { homeDoc, setHome, toHome } from './home.js';
 export const normalizeEmail = (email) => email.trim().toLowerCase();
 const COLLECTION = 'households';
 /**
@@ -32,9 +33,12 @@ export function watchHousehold(db, email, onChange) {
         if (docs.length && docs.every((d) => d.pending))
             return;
         const household = pickHousehold(docs, email);
-        // Every amount the kit formats follows the household's currency.
-        if (household)
+        // Every amount the kit formats follows the household's currency, and every distance and
+        // nearby search its home.
+        if (household) {
             setCurrency(household.currency);
+            setHome(household.home);
+        }
         onChange(household ? { status: 'ready', household } : { status: 'none' });
     }, (error) => onChange({ status: 'error', error }));
 }
@@ -51,6 +55,7 @@ export function toHousehold(id, data) {
         joined: Array.isArray(data.joined) ? data.joined.map(String) : [],
         roles: toRoles(data.roles),
         ...(isCurrencyCode(data.currency) ? { currency: data.currency } : {}),
+        ...(toHome(data.home) ? { home: toHome(data.home) } : {}),
         createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
     };
 }
@@ -59,6 +64,19 @@ export async function setHouseholdCurrency(db, householdId, currency) {
     if (!isCurrencyCode(currency))
         throw new Error(`Not a currency code: ${currency}`);
     await updateDoc(doc(db, COLLECTION, householdId), { currency });
+}
+/**
+ * Sets where the household lives (admins and members; the rules check): a found address, a
+ * position, or with `approximate` only the neighbourhood. The zone is this browser's.
+ */
+export async function setHouseholdHome(db, householdId, home, by, options) {
+    const saved = homeDoc(home, by, options);
+    await updateDoc(doc(db, COLLECTION, householdId), { home: saved });
+    return saved;
+}
+/** Forgets where the household lives. */
+export async function clearHouseholdHome(db, householdId) {
+    await updateDoc(doc(db, COLLECTION, householdId), { home: deleteField() });
 }
 /** Starts a household with only its creator, its admin; others are invited from inside. */
 export async function createHousehold(db, email, name) {

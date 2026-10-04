@@ -1,0 +1,15 @@
+{
+  "place_id": 2001,
+  "osm_type": "relation",
+  "osm_id": 5150,
+  "lat": "39.7795",
+  "lon": "-89.6440",
+  "place_rank": 20,
+  "display_name": "Riverside, Springfield, Sangamon County, Illinois, United States",
+  "address": {
+    "suburb": "Riverside",
+    "city": "Springfield",
+    "state": "Illinois",
+    "country": "United States"
+  }
+}
