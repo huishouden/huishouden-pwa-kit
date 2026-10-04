@@ -441,7 +441,7 @@ export type AlertReading =
   | { kind: 'not-purchase'; reason: NotPurchaseReason }
   | { kind: 'unreadable'; reason: UnreadableReason; date: string; amount?: number };
 
-export type NotPurchaseReason = 'payment' | 'declined' | 'statement' | 'security' | 'bulk' | 'no-amount';
+export type NotPurchaseReason = 'payment' | 'declined' | 'statement' | 'security' | 'account' | 'bulk' | 'no-purchase' | 'no-amount';
 export type UnreadableReason = 'no-merchant' | 'generic-merchant';
 
 const AMOUNT = String.raw`\$\s?([0-9][0-9,]*(?:\.[0-9]{2})?)`;
@@ -471,6 +471,8 @@ export const PURCHASE_RULES: PurchaseRule[] = [
   { name: 'visa-alert', pattern: new RegExp(String.raw`${USD} at ([^\n]{2,80}?) in [^\n]+? on Card (\d{4})`, 'i'), amount: 1, merchant: 2, digits: 3, strict: true },
   // "used at MERCHANT in PLACE, ST for 77.77 USD".
   { name: 'visa-used-at', pattern: /\bused at ([^\n]{2,80}?) in [^\n]+?, [A-Z]{2,3} for ([0-9][0-9,]*\.[0-9]{2}) USD/, amount: 2, merchant: 1, strict: true },
+  // Visa Purchase Alerts' body: "Your Visa card ending in 1111 was used online or over the phone at MERCHANT in PLACE, for $19.99 USD."
+  { name: 'visa-alert', pattern: /\bwas (?:\w+ ){0,3}used (?:online or over the phone |in person )?at ([^\n]{2,80}?) in [^\n]+?, for \$?([0-9][0-9,]*\.[0-9]{2}) USD/i, amount: 2, merchant: 1, strict: true },
   // "You made a $27.10 transaction with MERCHANT", "Your $27.10 transaction with MERCHANT".
   { name: 'transaction-with', pattern: new RegExp(String.raw`\b(?:you made an?|your)\s+${AMOUNT}\s+(?:transaction|purchase|charge)\s+(?:with|at)\s+${MERCHANT}${MERCHANT_END}`, 'i'), amount: 1, merchant: 2, strict: true },
   // "A refund of $18.00 from MERCHANT", "a $18.00 refund from MERCHANT", "credit of $5.00 from MERCHANT".
@@ -491,6 +493,8 @@ const DECLINED = /\bdeclined\b|\bwas not approved\b/i;
 const STATEMENT = /\b(?:statement|e-?statement) (?:is )?(?:ready|available)|\byour (?:monthly )?statement\b|\bpayment (?:is )?due\b|\bminimum payment\b/i;
 const SECURITY = /\b(?:verification|security|one-time|login|sign-?in) code\b|\bpassword\b|\bnew device\b|\bverify (?:your|it'?s)\b|\bunusual (?:sign-?in|activity)\b|\bidentity\b/i;
 const PURCHASE_WORDS = /\b(?:purchases?|purchased|transactions?|charged?|spent|refund(?:ed)?|card (?:was )?used)\b/i;
+/** An investing or bank account's own notices: orders, trades, transfers, deposits. Never a card purchase. */
+const ACCOUNT = /\b(?:option order|stock order|crypto order|limit order|market order|stop order|order (?:to (?:buy|sell)|has been |was )?(?:executed|filled|placed|canceled|cancelled|expired)|shares? of|contracts? of|trade confirmations?|your trade|transfer (?:is |has )?(?:complete|completed|initiated|on its way)|withdrawal|deposit (?:is |has )?(?:complete|completed|initiated)|dividend|direct deposit|interest (?:paid|payment))\b/i;
 const PROMO = /\bunsubscribe\b|\blimited time\b|\boffers?\b|\bearn\b|\bsign up\b|\bapply now\b|\bget up to\b|\bcash ?back\b|\brewards?\b|\bbonus\b|\binvest(?:ing|ment)?\b|\bshares?\b|\bportfolio\b|\bmarket order\b|\blimit order\b|\bdividend\b|\bdeposit(?:ed)?\b|\bwithdrawal\b/i;
 
 /** Words that are never a shop: what loose wording leaves where a merchant should be. */
@@ -554,6 +558,9 @@ export function alertDay(text: string, sentence: string, sent: number, timeZone?
 
 const money = (s: string) => parseFloat(s.replace(/,/g, ''));
 
+/** Markup where plain text should be: tags or style attributes. */
+export const looksLikeHtml = (s: string): boolean => /<(?:!doctype|html|head|body|div|table|tr|td|p|span|br|img|a|style|!--)\b|\b(?:style|class|width|cellpadding)="[^"]*"/i.test(s);
+
 /** A labelled merchant and amount ("Merchant: X" / a "Merchant" table cell, and "Amount: $Y"), both or neither. */
 function labelledPurchase(text: string, html: string): { merchant: string; amount: number; line: string } | null {
   const line = text.match(/^\s*(?:merchant|merchant name|payee|vendor|store name|where)\s*:\s*([^\n<]{2,80})$/im) ?? text.match(/^\s*(?:merchant|merchant name|payee|vendor|store name)\s*\n\s*([^\n<]{2,80})$/im);
@@ -568,7 +575,9 @@ function labelledPurchase(text: string, html: string): { merchant: string; amoun
 /** One email, read as a card alert (see `AlertReading`). */
 export function readAlert(msg: MailMessage, cards: AlertCard[], rules: CategoryRule[], options: ParseOptions = {}): AlertReading {
   const html = msg.html ?? '';
-  const body = msg.text ?? (html ? htmlToText(html) : '');
+  // Some senders put HTML in the text/plain part: it is read as HTML.
+  const plain = msg.text !== undefined && !looksLikeHtml(msg.text) ? msg.text : undefined;
+  const body = plain ?? (html ? htmlToText(html) : msg.text ? htmlToText(msg.text) : '');
   const text = `${msg.subject}\n${body}`;
   const sentDay = () => dayOf(msg.date, options.timeZone);
 
@@ -624,10 +633,13 @@ export function readAlert(msg: MailMessage, cards: AlertCard[], rules: CategoryR
   const anyAmount = text.match(/\$\s?([0-9][0-9,]*\.[0-9]{2})/) || text.match(/([0-9][0-9,]*\.[0-9]{2})\s*USD/i);
   const amount = anyAmount ? money(anyAmount[1]) : 0;
   if (STATEMENT.test(text)) return { kind: 'not-purchase', reason: 'statement' };
+  if (ACCOUNT.test(text)) return { kind: 'not-purchase', reason: 'account' };
   if (SECURITY.test(text)) return { kind: 'not-purchase', reason: 'security' };
   const listMail = msg.bulk || /\bunsubscribe\b/i.test(text);
   if ((listMail || PROMO.test(text)) && !PURCHASE_WORDS.test(text)) return { kind: 'not-purchase', reason: 'bulk' };
   if (!(amount > 0)) return { kind: 'not-purchase', reason: 'no-amount' };
+  // Only an email that speaks of a purchase is worth asking about.
+  if (!PURCHASE_WORDS.test(text)) return { kind: 'not-purchase', reason: 'no-purchase' };
   if (listMail && !generic && !/\b(?:card|purchase[ds]?|transaction|charged)\b/i.test(msg.subject)) return { kind: 'not-purchase', reason: 'bulk' };
   return { kind: 'unreadable', reason: generic ? 'generic-merchant' : 'no-merchant', date: sentDay(), amount };
 }
