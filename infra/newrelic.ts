@@ -208,6 +208,19 @@ const geoRuleNrql = (event: string) => `DELETE city, asnLatitude, asnLongitude F
 const sameNrql = (a: string, b: string) => a.replace(/\s+/g, ' ').trim().toLowerCase() === b.replace(/\s+/g, ' ').trim().toLowerCase();
 
 async function dropRules() {
+  try {
+    await geoRules();
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (!/access denied/i.test(message)) throw e;
+    throw new Error(
+      `New Relic refused this key's user the pipeline cloud rules that drop city and coordinates (${message.slice(0, 160)}). ` +
+        'Give that user a role that can manage Pipeline Control (Administration > Access management), or create the rules once in Pipeline Control > Cloud rules; until then city and coordinates are kept.',
+    );
+  }
+}
+
+async function geoRules() {
   const rules: { id: string; name: string; nrql: string; scope?: { id: string } }[] = [];
   let cursor: string | null = null;
   do {
@@ -460,8 +473,8 @@ try {
   const policyId = await alerts();
   const dash = await upsertDashboard();
   log(`\nAlert policy ${policyId ?? '(dry run)'}; dashboard https://one.newrelic.com/redirect/entity/${dash ?? '(dry run)'}`);
-  await dropRules();
   await reporting();
+  await dropRules();
 } catch (e) {
   console.error(`newrelic: ${scrub(e instanceof Error ? e.message : String(e))}`);
   process.exit(1);
