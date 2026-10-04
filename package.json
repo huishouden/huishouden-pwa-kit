@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.75.1",
+  "version": "0.76.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "PolyForm-Shield-1.0.0",
   "type": "module",
@@ -88,6 +88,10 @@
     "./gmail": {
       "types": "./dist/gmail.d.ts",
       "default": "./dist/gmail.js"
+    },
+    "./mail-core": {
+      "types": "./dist/mail-core.d.ts",
+      "default": "./dist/mail-core.js"
     },
     "./google-token": {
       "types": "./dist/google-token.d.ts",
@@ -252,6 +256,10 @@
     "./signin-handoff": {
       "types": "./dist/signin-handoff.d.ts",
       "default": "./dist/signin-handoff.js"
+    },
+    "./spending-core": {
+      "types": "./dist/spending-core.d.ts",
+      "default": "./dist/spending-core.js"
     },
     "./staging": {
       "types": "./dist/staging.d.ts",

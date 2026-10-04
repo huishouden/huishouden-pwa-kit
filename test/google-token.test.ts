@@ -26,15 +26,15 @@ const gis = {
       },
     }),
     hasGrantedAllScopes: () => true,
-    initCodeClient: (cfg: { client_id: string; scope: string; ux_mode: string; login_hint?: string; callback: (r: Record<string, unknown>) => void; error_callback?: (e: { type: string }) => void }) => ({
+    initCodeClient: (cfg: { client_id: string; scope: string; ux_mode: string; login_hint?: string; select_account?: boolean; include_granted_scopes?: boolean; callback: (r: Record<string, unknown>) => void; error_callback?: (e: { type: string }) => void }) => ({
       requestCode() {
-        codeRequests.push({ clientId: cfg.client_id, scope: cfg.scope, mode: cfg.ux_mode, hint: cfg.login_hint });
+        codeRequests.push({ clientId: cfg.client_id, scope: cfg.scope, mode: cfg.ux_mode, hint: cfg.login_hint, ...(cfg.select_account ? { chooser: true, granted: cfg.include_granted_scopes } : {}) });
         codeAnswer(cfg);
       },
     }),
   },
 };
-const codeRequests: { clientId: string; scope: string; mode: string; hint?: string }[] = [];
+const codeRequests: { clientId: string; scope: string; mode: string; hint?: string; chooser?: boolean; granted?: boolean }[] = [];
 let codeAnswer: (cfg: { scope: string; callback: (r: Record<string, unknown>) => void; error_callback?: (e: { type: string }) => void }) => void = (cfg) => cfg.callback({ code: 'one-time-code', scope: cfg.scope });
 
 const { cachedGoogleToken, configureGoogleTokens, forgetGoogleToken, googleAccessToken, googleAuthCode, googleFetch, GoogleApiError, GoogleTokenError } = await import('../src/google-token');
@@ -252,6 +252,13 @@ describe('googleAuthCode', () => {
     codeAnswer = (cfg) => cfg.callback({ code: 'one-time-code', scope: cfg.scope });
     expect(await googleAuthCode(auth(), [A])).toEqual({ code: 'one-time-code', scope: A });
     expect(codeRequests).toEqual([{ clientId: 'client-1.apps.googleusercontent.com', scope: A, mode: 'popup', hint: 'u1@example.com' }]);
+  });
+
+  test('selectAccount: the account chooser, no hint, only the scopes asked for', async () => {
+    codeRequests.length = 0;
+    codeAnswer = (cfg) => cfg.callback({ code: 'other-account-code', scope: cfg.scope });
+    expect(await googleAuthCode(auth(), [A], { selectAccount: true })).toEqual({ code: 'other-account-code', scope: A });
+    expect(codeRequests).toEqual([{ clientId: 'client-1.apps.googleusercontent.com', scope: A, mode: 'popup', hint: undefined, chooser: true, granted: false }]);
   });
 
   test('a scope left unticked, or the window closed, is an error with its code', async () => {
