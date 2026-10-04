@@ -2,15 +2,17 @@
  * Calendar search in React: the one-search-at-a-time hook, "Find in my calendar" inside a dialog,
  * the import dialog that lists events not yet in the app, the linked-event row, the one-line
  * hint before Google's first permission window, and suggestions of new events found when the app
- * opens. Built on `findCalendarEvents` in `../calendar`.
+ * opens. Built on `findCalendarEvents` in `../calendar`. And the other way: `AddToCalendar` puts one
+ * item into the person's own calendar (`../calendar-export`).
  *
  * `app` is the app's short name ("Baby"): it keys whether this browser has already been asked
  * (`<app>-calendar-allowed` in localStorage) and words the hint. Pass `name` (the app's name in the
  * page's language, "Bebé") where it differs, so the key stays the same in every language.
  */
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Auth } from 'firebase/auth';
-import { CalendarPlus, CalendarSearch, ExternalLink, MapPin, Plus, X } from 'lucide-react';
+import { CalendarPlus, CalendarSearch, Download, ExternalLink, MapPin, Plus, X } from 'lucide-react';
+import { addToCalendarIcs, googleTemplateUrl, type CalendarEntry } from '../calendar-export';
 import {
   cachedCalendarToken,
   calendarError,
@@ -334,5 +336,79 @@ export function CalendarSuggestions({ suggestions, onAdd, onDismiss, now = Date.
       onAdd={onAdd}
       onDismiss={onDismiss}
     />
+  );
+}
+
+// ---- Add to calendar: one item into the person's own calendar ----
+
+/** A file name for the .ics: the title's letters and digits, "event" when none. */
+const icsName = (title: string) => `${title.normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').slice(0, 60) || 'event'}.ics`;
+
+/**
+ * "Add to calendar" for one item: a menu with Google Calendar (its add-event page, in a new tab)
+ * and a .ics file that Apple Calendar, Outlook and the rest open. Pass the item as the app
+ * publishes it to the agenda (`CalendarEntry`); one on a schedule (`series`) goes in as the whole
+ * repeating series. `compact` shows only the icon (rows in a list); the label is its name.
+ */
+export function AddToCalendar({ entry, compact = false, className }: { entry: CalendarEntry; compact?: boolean; className?: string }) {
+  const kt = useKitT();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: Event) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    const escape = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', away);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [open]);
+  const download = () => {
+    const blob = new Blob([addToCalendarIcs(entry)], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = icsName(entry.title);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    setOpen(false);
+  };
+  const label = kt('calendarExport.addTo', { title: entry.title });
+  const item = 'flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-base text-ink hover:bg-stone-100 dark:hover:bg-forest-700';
+  return (
+    <div ref={box} className={`relative inline-block ${className ?? ''}`}>
+      <button
+        type="button"
+        className={compact ? iconButton : secondaryButton}
+        aria-label={compact ? label : undefined}
+        title={compact ? label : undefined}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+      >
+        <CalendarPlus size={18} aria-hidden="true" />
+        {!compact && kt('calendarExport.add')}
+      </button>
+      {open && (
+        <div role="menu" aria-label={label} className="absolute right-0 z-30 mt-1 w-64 rounded-xl border border-line bg-surface p-1 shadow-lg">
+          <a role="menuitem" className={item} href={googleTemplateUrl(entry)} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}>
+            <ExternalLink size={16} aria-hidden="true" /> {kt('calendarExport.google')}
+          </a>
+          <button role="menuitem" type="button" className={item} onClick={download}>
+            <Download size={16} aria-hidden="true" /> {kt('calendarExport.ics')}
+          </button>
+          {entry.series && <p className="px-3 pt-1 pb-2 text-sm text-muted">{kt('calendarExport.repeats')}</p>}
+        </div>
+      )}
+    </div>
   );
 }

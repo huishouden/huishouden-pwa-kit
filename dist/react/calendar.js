@@ -3,14 +3,16 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
  * Calendar search in React: the one-search-at-a-time hook, "Find in my calendar" inside a dialog,
  * the import dialog that lists events not yet in the app, the linked-event row, the one-line
  * hint before Google's first permission window, and suggestions of new events found when the app
- * opens. Built on `findCalendarEvents` in `../calendar`.
+ * opens. Built on `findCalendarEvents` in `../calendar`. And the other way: `AddToCalendar` puts one
+ * item into the person's own calendar (`../calendar-export`).
  *
  * `app` is the app's short name ("Baby"): it keys whether this browser has already been asked
  * (`<app>-calendar-allowed` in localStorage) and words the hint. Pass `name` (the app's name in the
  * page's language, "Bebé") where it differs, so the key stays the same in every language.
  */
-import { useCallback, useRef, useState } from 'react';
-import { CalendarPlus, CalendarSearch, ExternalLink, MapPin, Plus, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CalendarPlus, CalendarSearch, Download, ExternalLink, MapPin, Plus, X } from 'lucide-react';
+import { addToCalendarIcs, googleTemplateUrl } from '../calendar-export';
 import { cachedCalendarToken, calendarError, findCalendarEvents, notImported, SUGGESTION_RESCAN_MS, suggestionWhen, } from '../calendar';
 import { formatDayShort, formatTime } from '../time';
 import { kt } from '../i18n';
@@ -142,4 +144,51 @@ export function useCalendarSuggestions({ auth, words, isImported, app, horizonDa
 export function CalendarSuggestions({ suggestions, onAdd, onDismiss, now = Date.now() }) {
     const kt = useKitT();
     return (_jsx(SuggestionsCard, { suggestions: suggestions, idOf: (m) => m.id, titleOf: (m) => m.title, detailOf: (m) => suggestionWhen(m, now), lead: kt('calendar.newInCalendar'), label: kt('calendar.newInCalendar'), moreLabel: kt('calendar.moreNew'), icon: _jsx(CalendarPlus, { size: 20, className: "shrink-0 text-link", "aria-hidden": "true" }), onAdd: onAdd, onDismiss: onDismiss }));
+}
+// ---- Add to calendar: one item into the person's own calendar ----
+/** A file name for the .ics: the title's letters and digits, "event" when none. */
+const icsName = (title) => `${title.normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').slice(0, 60) || 'event'}.ics`;
+/**
+ * "Add to calendar" for one item: a menu with Google Calendar (its add-event page, in a new tab)
+ * and a .ics file that Apple Calendar, Outlook and the rest open. Pass the item as the app
+ * publishes it to the agenda (`CalendarEntry`); one on a schedule (`series`) goes in as the whole
+ * repeating series. `compact` shows only the icon (rows in a list); the label is its name.
+ */
+export function AddToCalendar({ entry, compact = false, className }) {
+    const kt = useKitT();
+    const [open, setOpen] = useState(false);
+    const box = useRef(null);
+    useEffect(() => {
+        if (!open)
+            return;
+        const away = (e) => {
+            if (box.current && !box.current.contains(e.target))
+                setOpen(false);
+        };
+        const escape = (e) => e.key === 'Escape' && setOpen(false);
+        document.addEventListener('pointerdown', away);
+        document.addEventListener('keydown', escape);
+        return () => {
+            document.removeEventListener('pointerdown', away);
+            document.removeEventListener('keydown', escape);
+        };
+    }, [open]);
+    const download = () => {
+        const blob = new Blob([addToCalendarIcs(entry)], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = icsName(entry.title);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        setOpen(false);
+    };
+    const label = kt('calendarExport.addTo', { title: entry.title });
+    const item = 'flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-base text-ink hover:bg-stone-100 dark:hover:bg-forest-700';
+    return (_jsxs("div", { ref: box, className: `relative inline-block ${className ?? ''}`, children: [_jsxs("button", { type: "button", className: compact ? iconButton : secondaryButton, "aria-label": compact ? label : undefined, title: compact ? label : undefined, "aria-haspopup": "menu", "aria-expanded": open, onClick: (e) => {
+                    e.stopPropagation();
+                    setOpen((o) => !o);
+                }, children: [_jsx(CalendarPlus, { size: 18, "aria-hidden": "true" }), !compact && kt('calendarExport.add')] }), open && (_jsxs("div", { role: "menu", "aria-label": label, className: "absolute right-0 z-30 mt-1 w-64 rounded-xl border border-line bg-surface p-1 shadow-lg", children: [_jsxs("a", { role: "menuitem", className: item, href: googleTemplateUrl(entry), target: "_blank", rel: "noopener noreferrer", onClick: () => setOpen(false), children: [_jsx(ExternalLink, { size: 16, "aria-hidden": "true" }), " ", kt('calendarExport.google')] }), _jsxs("button", { role: "menuitem", type: "button", className: item, onClick: download, children: [_jsx(Download, { size: 16, "aria-hidden": "true" }), " ", kt('calendarExport.ics')] }), entry.series && _jsx("p", { className: "px-3 pt-1 pb-2 text-sm text-muted", children: kt('calendarExport.repeats') })] }))] }));
 }

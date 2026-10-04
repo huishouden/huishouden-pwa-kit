@@ -53,6 +53,8 @@ export function sameSite(url, base) {
 export const PRIVACY_PATH = '/privacy';
 /** The portal's page for using Huishouden from an AI assistant (the connector), linked from every app's account menu. */
 export const ASSISTANT_PATH = '/assistant';
+/** The portal's page for seeing the household in the person's own calendar app (huishouden/calendar), linked from every app's account menu. */
+export const CALENDAR_SETTINGS_PATH = '/my-calendar';
 /** The privacy page on the portal `portalUrl` points at ("https://example-portal.web.app/privacy"). */
 export function privacyUrl(portalUrl, base) {
     try {
@@ -69,6 +71,15 @@ export function assistantUrl(portalUrl, base) {
     }
     catch {
         return ASSISTANT_PATH;
+    }
+}
+/** The own-calendar page on the portal `portalUrl` points at ("https://example-portal.web.app/my-calendar"). */
+export function calendarSettingsUrl(portalUrl, base) {
+    try {
+        return new URL(CALENDAR_SETTINGS_PATH, new URL(portalUrl, base)).href;
+    }
+    catch {
+        return CALENDAR_SETTINGS_PATH;
     }
 }
 function isGlyph(value) {
@@ -510,7 +521,11 @@ export class HhAppBar extends Base {
         assistant.className = 'item';
         assistant.href = assistantUrl(this.portalUrl, location.href);
         assistant.textContent = kt('appBar.assistant');
-        items.append(assistant);
+        const calendar = document.createElement('a');
+        calendar.className = 'item';
+        calendar.href = calendarSettingsUrl(this.portalUrl, location.href);
+        calendar.textContent = kt('appBar.calendar');
+        items.append(calendar, assistant);
         items.append(this.#privacyLink());
         const out = document.createElement('button');
         out.type = 'button';

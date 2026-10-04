@@ -362,6 +362,17 @@ declare const _default: {
     readonly 'chart.summary': "{label} from {first} on {firstDay} to {last} on {lastDay}";
     readonly 'chart.summaryTarget': "{label} from {first} on {firstDay} to {last} on {lastDay}; target {target}";
     readonly 'chart.target': "Target {target}";
+    readonly 'calendarExport.medicineFor': "Medicine for {who}";
+    readonly 'calendarExport.healthFor': "Health: {who}";
+    readonly 'calendarExport.health': "Health";
+    readonly 'calendarExport.done': "✓ {title}";
+    readonly 'calendarExport.todo': "To do: {title}";
+    readonly 'calendarExport.description': "From Huishouden: appointments, regular events and things to do at home.";
+    readonly 'calendarExport.add': "Add to calendar";
+    readonly 'calendarExport.addTo': "Add {title} to a calendar";
+    readonly 'calendarExport.google': "Google Calendar";
+    readonly 'calendarExport.ics': "Apple, Outlook or other (.ics)";
+    readonly 'calendarExport.repeats': "Adds the whole series, repeating.";
     readonly 'calendar.noTitle': "(no title)";
     readonly 'calendar.denied': "Google did not grant calendar access.";
     readonly 'calendar.notAllowed': "Calendar access was not allowed. Try again when you are ready.";
@@ -397,6 +408,7 @@ declare const _default: {
     readonly 'appBar.you': "you";
     readonly 'appBar.account': "Account";
     readonly 'appBar.allApps': "All apps";
+    readonly 'appBar.calendar': "In your own calendar";
     readonly 'appBar.assistant': "Use with your AI assistant";
     readonly 'appBar.privacy': "Privacy";
     readonly 'appBar.signOut': "Sign out";

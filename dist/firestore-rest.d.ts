@@ -37,6 +37,9 @@ export declare class Increment {
     readonly by: number;
     constructor(by: number);
 }
+/** `deleteField()` in a merge: the field is removed, as the SDK's FieldValue. */
+export declare class FieldDelete {
+}
 export type Code = 'permission-denied' | 'not-found' | 'already-exists' | 'failed-precondition' | 'invalid-argument' | 'unauthenticated' | 'unavailable' | 'unknown';
 export declare class FirestoreError extends Error {
     readonly code: Code;
@@ -47,7 +50,7 @@ export declare function encode(v: unknown): Value;
 export declare function encodeFields(data: Record<string, unknown>): Record<string, Value>;
 export declare function decode(value: Value): unknown;
 export declare function decodeFields(fields?: Record<string, Value>): Record<string, unknown>;
-/** Leaf field paths of a merge, as the SDK's `set(…, { merge: true })` writes them (nested maps merge too). */
+/** Leaf field paths of a merge, as the SDK's `set(…, { merge: true })` writes them (nested maps merge too); a `FieldDelete` is in the mask but not the values, so it goes. */
 export declare function mergePaths(data: Record<string, unknown>, prefix?: string): string[];
 /** One write in a commit: a full set, a merge (creating the document if missing), a create that must not overwrite, or a delete. */
 export type Write = {
@@ -103,6 +106,16 @@ export declare class FirestoreRest {
      * collections must ask for `private == false`.
      */
     query(parent: string, collection: string, { where, orderBy, limit }?: QueryOptions): Promise<Doc[]>;
+    /**
+     * How many documents of `collection` under `parent` match, and the sum of each of `sum`'s
+     * fields over them, in one request (Firestore bills one read per 1000 index entries). Cheap
+     * enough to ask every few minutes whether anything changed: any write that changes `updatedAt`,
+     * adds or removes a document moves the count or the sum.
+     */
+    aggregate(parent: string, collection: string, { where }?: Pick<QueryOptions, 'where'>, sum?: string[]): Promise<{
+        count: number;
+        sums: Record<string, number>;
+    }>;
     /** Every write at once, or none: the rules check each as if the app had made it. */
     commit(writes: Write[]): Promise<void>;
 }

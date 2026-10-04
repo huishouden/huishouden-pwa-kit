@@ -17,7 +17,8 @@
 #
 # Caller repo variables: GCP_WIF_PROVIDER, GCP_DEPLOY_SA (deploy is skipped until both are set),
 # VITE_FIREBASE_*, VITE_GOOGLE_CLIENT_ID, VITE_VAPID_PUBLIC_KEY, VITE_CONNECTOR_URL (the portal's AI
-# assistant connector, huishouden/connector; STAGING_VITE_CONNECTOR_URL for staging) and VITE_NEWRELIC_* (passed to the
+# assistant connector, huishouden/connector; STAGING_VITE_CONNECTOR_URL for staging), VITE_CALENDAR_URL
+# (the calendar feed and Google sync, huishouden/calendar; STAGING_VITE_CALENDAR_URL) and VITE_NEWRELIC_* (passed to the
 # production build; staging builds get no New Relic variables, so staging sends no reports). Optional package.json scripts:
 # test (unit), e2e (Playwright smoke tests against site-url after each deploy), screenshots
 # (Playwright, writes docs/screenshots/*.png; committed back to main when they change, which needs
@@ -81,6 +82,7 @@ jobs:
       VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
       VITE_VAPID_PUBLIC_KEY: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
       VITE_CONNECTOR_URL: ${{ vars.VITE_CONNECTOR_URL }}
+      VITE_CALENDAR_URL: ${{ vars.VITE_CALENDAR_URL }}
       # Error, performance and usage reports (STANDARD.md "Observability"); public browser values.
       VITE_NEWRELIC_ACCOUNT_ID: ${{ vars.VITE_NEWRELIC_ACCOUNT_ID }}
       VITE_NEWRELIC_APP_ID: ${{ vars.VITE_NEWRELIC_APP_ID }}
@@ -137,6 +139,7 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.STAGING_VITE_GOOGLE_CLIENT_ID }}
           VITE_CONNECTOR_URL: ${{ vars.STAGING_VITE_CONNECTOR_URL }}
+          VITE_CALENDAR_URL: ${{ vars.STAGING_VITE_CALENDAR_URL }}
           VITE_VAPID_PUBLIC_KEY: ''
           VITE_NEWRELIC_ACCOUNT_ID: ''
           VITE_NEWRELIC_APP_ID: ''
@@ -325,6 +328,7 @@ jobs:
       VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID }}
       VITE_GOOGLE_CLIENT_ID: ${{ vars.STAGING_VITE_GOOGLE_CLIENT_ID }}
       VITE_CONNECTOR_URL: ${{ vars.STAGING_VITE_CONNECTOR_URL }}
+      VITE_CALENDAR_URL: ${{ vars.STAGING_VITE_CALENDAR_URL }}
       BASE_URL: https://${{ vars.STAGING_SITE }}.web.app${{ inputs.base || '/' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

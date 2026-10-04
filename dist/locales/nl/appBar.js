@@ -9,6 +9,7 @@ export default {
     'appBar.you': 'jou',
     'appBar.account': 'Account',
     'appBar.allApps': 'Alle apps',
+    'appBar.calendar': 'In je eigen agenda',
     'appBar.assistant': 'Gebruiken met je AI-assistent',
     'appBar.privacy': 'Privacy',
     'appBar.signOut': 'Uitloggen',
