@@ -62,6 +62,10 @@ rules still decide. Kinds: `reschedule` (moved), `retime` (a series' usual time)
 `notes`, `skip` (one occurrence deleted), `cancel` (a one-off deleted). Leave out what the app can't
 do: a change in Google that has no edit is put back as the app has it.
 
+**`calendarDetail`**: up to 200 characters that the portal never shows, for the reader's own
+calendar when they turn on detail. Health puts a dose's medicine names here, since `detail` shows
+on the portal, which may be on a wall tablet.
+
 ## Add to calendar
 
 ```tsx

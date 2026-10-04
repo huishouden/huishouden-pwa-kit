@@ -64,13 +64,19 @@ export interface AgendaItem {
      * Done (`./todo-core`), made as the person so the app's rules still decide.
      */
     edit?: AgendaEdit;
+    /**
+     * More than the portal shows, for the reader's own calendar only, when they turn on detail
+     * (`./calendar-export`): a Health dose's medicine names. The portal never displays it; like the
+     * rest of the item, only its readers can read it.
+     */
+    calendarDetail?: string;
     updatedAt: number;
     /** Lowercase email of the member whose app wrote it. */
     by: string;
 }
 /** What an agenda item says, per language. */
 export type AgendaTexts = LocalTexts<'title' | 'detail'>;
-export declare const AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "texts", "series", "edit", "updatedAt", "by"];
+export declare const AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "texts", "series", "edit", "calendarDetail", "updatedAt", "by"];
 /**
  * An occurrence's schedule. Each occurrence of the series carries the same `rule`, `time` and
  * `through`; `original` is the day the schedule put this one on (the key of a move or skip in the
@@ -131,13 +137,14 @@ export declare const AGENDA_EDIT_COLLECTIONS: Record<string, readonly string[]>;
 /** The collection of items for named members only (`./audience`). */
 export declare const PERSONAL_AGENDA = "personalAgenda";
 /** Fields of a `personalAgenda` item: the agenda's plus `audience`. */
-export declare const PERSONAL_AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "texts", "series", "edit", "updatedAt", "by", "audience"];
+export declare const PERSONAL_AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "texts", "series", "edit", "calendarDetail", "updatedAt", "by", "audience"];
 /** Maximum lengths, the same as the rules. */
 export declare const AGENDA_LIMITS: {
     readonly app: 40;
     readonly ref: 200;
     readonly title: 120;
     readonly detail: 200;
+    readonly calendarDetail: 200;
     readonly url: 2000;
     readonly who: 60;
     readonly by: 254;

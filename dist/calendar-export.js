@@ -83,7 +83,9 @@ function words(item, input) {
         return { title: who ? generic : kt('calendarExport.health'), description: item.url };
     }
     const shown = item.status === 'done' ? kt('calendarExport.done', { title }) : title;
-    return { title: shown, description: [detail, item.url].filter(Boolean).join('\n\n') };
+    // Health's detail for the person's own calendar (medicine names), only when they asked for it.
+    const full = item.app === 'health' && input.settings.healthDetail ? item.calendarDetail : undefined;
+    return { title: shown, description: [detail, full, item.url].filter(Boolean).join('\n\n') };
 }
 function times(item, timeZone) {
     if (item.allDay) {

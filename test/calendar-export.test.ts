@@ -85,6 +85,14 @@ describe('settings', () => {
     expect(es.title).toBe('Medicina para Ana');
   });
 
+  test('a calendar-only detail goes in only with Health detail on', () => {
+    const withNames = agenda.map((i) => (i.app === 'health' ? { ...i, calendarDetail: 'Amoxicillin 250 mg, Vitamin D' } : i));
+    const off = exportEvents({ ...input('carer@example.com'), agenda: withNames }).find((e) => e.app === 'health')!;
+    expect(off.description).not.toContain('Vitamin D');
+    const on = exportEvents({ ...input('carer@example.com', { healthDetail: true }), agenda: withNames }).find((e) => e.app === 'health')!;
+    expect(on.description).toContain('Amoxicillin 250 mg, Vitamin D');
+  });
+
   test('Health with detail on shows what Health published', () => {
     const [dose] = exportEvents(input('carer@example.com', { healthDetail: true })).filter((e) => e.app === 'health');
     expect(dose.description).toContain('Amoxicillin 250 mg');
