@@ -1,0 +1,13 @@
+name: license-check
+description: >
+  Fails unless the repo's LICENSE is PolyForm Shield 1.0.0 with Huishouden's Required Notice
+  (byte for byte the kit's own LICENSE) and package.json, when there is one, says
+  "license": "PolyForm-Shield-1.0.0".
+runs:
+  using: composite
+  steps:
+    - name: License is PolyForm Shield 1.0.0
+      shell: bash
+      env:
+        EXPECTED: ${{ github.action_path }}/../../LICENSE
+      run: bash "${{ github.action_path }}/check.sh" "$EXPECTED"
