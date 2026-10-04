@@ -4,6 +4,7 @@ import type en from './en.js';
 import agenda from './es/agenda.js';
 import appBar from './es/appBar.js';
 import calendar from './es/calendar.js';
+import calendarExport from './es/calendarExport.js';
 import chart from './es/chart.js';
 import common from './es/common.js';
 import contacts from './es/contacts.js';
@@ -32,6 +33,7 @@ export default {
   ...agenda,
   ...appBar,
   ...calendar,
+  ...calendarExport,
   ...chart,
   ...common,
   ...contacts,

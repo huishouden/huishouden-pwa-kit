@@ -1,5 +1,9 @@
 import { type Ymd } from './time.js';
 import { type LocalTexts } from './i18n.js';
+import { type EventRule } from './schedule.js';
+import { type Hhmm } from './time.js';
+import { type Role } from './role-core.js';
+import type { Op } from './store.js';
 /**
  * The household's agenda: dated things from every app in one collection,
  * `households/{id}/agenda`, so the portal can show one calendar and a Today view without reading
@@ -48,17 +52,86 @@ export interface AgendaItem {
     audience?: string[];
     /** The title and detail in every language (`localizeAgenda`); `title`/`detail` are the writer's and the fallback. */
     texts?: AgendaTexts;
+    /**
+     * One occurrence of something on a schedule (garbage pickup every Thursday): the schedule, so a
+     * calendar can show the whole series as one repeating event (`./calendar-export`), and which of
+     * its days this one is.
+     */
+    series?: AgendaSeries;
+    /**
+     * How a change made elsewhere (the item moved or renamed in the person's own calendar) is written
+     * back to the record it came from: declarative writes on the app's own collections, as a to-do's
+     * Done (`./todo-core`), made as the person so the app's rules still decide.
+     */
+    edit?: AgendaEdit;
     updatedAt: number;
     /** Lowercase email of the member whose app wrote it. */
     by: string;
 }
 /** What an agenda item says, per language. */
 export type AgendaTexts = LocalTexts<'title' | 'detail'>;
-export declare const AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "texts", "updatedAt", "by"];
+export declare const AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "texts", "series", "edit", "updatedAt", "by"];
+/**
+ * An occurrence's schedule. Each occurrence of the series carries the same `rule`, `time` and
+ * `through`; `original` is the day the schedule put this one on (the key of a move or skip in the
+ * app's own record), which differs from the item's day when it was moved. A day of the rule up to
+ * `through` with no item is skipped; after `through` nothing is known yet, so the schedule stands.
+ */
+export interface AgendaSeries {
+    rule: EventRule;
+    /** Its usual time of day; all day without one. */
+    time?: Hhmm;
+    /** How long a timed occurrence lasts, in minutes (default `SERIES_DEFAULT_MINUTES`). */
+    minutes?: number;
+    original: Ymd;
+    /** The last day the app published occurrences for. */
+    through: Ymd;
+}
+export declare const SERIES_FIELDS: readonly ["rule", "time", "minutes", "original", "through"];
+export declare const SERIES_DEFAULT_MINUTES = 60;
+/**
+ * Writes that change the source record, each with the roles that may (the same as the app's rules).
+ * `reschedule`: the item moved to another day or time. `retime`: a series' usual time changed for
+ * every occurrence. `rename`: a new title (for a series, the whole series'). `notes`: new notes.
+ * `skip`: this occurrence of a series won't happen. `cancel`: a one-off item was deleted.
+ *
+ * Op data may use the to-do placeholders (`'$now'`, `'$today'`, `'$me'`) and these, filled in from
+ * the change: `'$start'` and `'$end'` (ms), `'$date'` (YYYY-MM-DD) and `'$time'` (HH:MM, or the
+ * field is removed when the item became all day), `'$title'` and `'$notes'`, and for an occurrence
+ * of a series `'$original'`, its day as the schedule has it, also as a map key, so one edit on the
+ * series serves every occurrence: `{ exceptions: { $original: { skipped: true } } }`.
+ */
+export interface AgendaEdit {
+    reschedule?: AgendaAction;
+    retime?: AgendaAction;
+    rename?: AgendaAction;
+    notes?: AgendaAction;
+    skip?: AgendaAction;
+    cancel?: AgendaAction;
+}
+export type AgendaEditKind = keyof AgendaEdit;
+export declare const AGENDA_EDIT_KINDS: readonly AgendaEditKind[];
+export interface AgendaAction {
+    /** Writes under `households/{id}`, on collections the app may change (`AGENDA_EDIT_COLLECTIONS`). */
+    ops: Op[];
+    roles: Role[];
+    /** Also these members (lowercase emails): whoever added the record, a medicine's carers. */
+    emails?: string[];
+}
+/** The most writes one action may make, and members it may name. */
+export declare const AGENDA_EDIT_LIMITS: {
+    readonly ops: 4;
+    readonly emails: 12;
+};
+/**
+ * The collections each app's agenda edits may write. A change from a calendar that would touch
+ * anything else is refused, so an item can't be made to change money or settings.
+ */
+export declare const AGENDA_EDIT_COLLECTIONS: Record<string, readonly string[]>;
 /** The collection of items for named members only (`./audience`). */
 export declare const PERSONAL_AGENDA = "personalAgenda";
 /** Fields of a `personalAgenda` item: the agenda's plus `audience`. */
-export declare const PERSONAL_AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "texts", "updatedAt", "by", "audience"];
+export declare const PERSONAL_AGENDA_FIELDS: readonly ["app", "ref", "kind", "title", "start", "end", "allDay", "detail", "url", "who", "status", "private", "texts", "series", "edit", "updatedAt", "by", "audience"];
 /** Maximum lengths, the same as the rules. */
 export declare const AGENDA_LIMITS: {
     readonly app: 40;
@@ -118,6 +191,35 @@ export declare function agendaWindow(now: number): {
 };
 /** Whether an item belongs in the published window: overlapping it, or overdue whatever its age. */
 export declare function inAgendaWindow(item: Pick<AgendaItem, 'start' | 'end' | 'status'>, now: number): boolean;
+/** A series as stored: known keys only, or undefined when it isn't one. */
+export declare function cleanSeries(v: unknown): AgendaSeries | undefined;
+/** Whether every op writes only collections `app`'s edits may (`AGENDA_EDIT_COLLECTIONS`), and at most `AGENDA_EDIT_LIMITS.ops`. */
+export declare function agendaOpsAllowed(app: string, ops: readonly Op[]): boolean;
+/** An item's edits as stored; throws on one that writes outside the app's collections (`AGENDA_EDIT_COLLECTIONS`). */
+export declare function cleanEdit(app: string, edit: AgendaEdit): AgendaEdit | undefined;
+/** Whether `me` with `role` may make the item's `kind` edit: it exists, is allowed for the app, and names their role or them. */
+export declare function canEdit(item: Pick<AgendaItem, 'app' | 'edit'>, kind: AgendaEditKind, role: Role | null | undefined, me: string | null | undefined): boolean;
+/** What fills an edit's placeholders: the change as the calendar has it. */
+export interface EditValues {
+    start?: number;
+    end?: number;
+    /** YYYY-MM-DD, the item's day where it happens. */
+    date?: Ymd;
+    /** HH:MM, or null when it became all day (the field is removed). */
+    time?: Hhmm | null;
+    title?: string;
+    notes?: string;
+    /** YYYY-MM-DD: the day the schedule put the occurrence on, for `'$original'` (a value, or a map key). */
+    original?: Ymd;
+}
+/** Sentinel the writer turns into a field delete (Firestore REST: the field left out of a merge's values). */
+export declare const DELETE_FIELD = "$delete";
+/**
+ * An edit's ops with the change's values in place of `'$start'`, `'$date'`, `'$time'`, `'$title'`
+ * and so on (the to-do placeholders such as `'$now'` are left for `resolveOps`). Throws when the
+ * change lacks a value an op needs. `'$time'` for an item that became all day is `DELETE_FIELD`.
+ */
+export declare function fillEditOps(ops: readonly Op[], values: EditValues): Op[];
 /** A stored document as an item, read defensively. */
 export declare function toAgendaItem(id: string, data: Record<string, unknown>): AgendaItem;
 export interface AgendaRange {

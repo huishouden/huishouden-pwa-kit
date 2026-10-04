@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.66.0",
+  "version": "0.67.0",
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "PolyForm-Shield-1.0.0",
   "type": "module",
@@ -32,6 +32,10 @@
     "./calendar": {
       "types": "./dist/calendar.d.ts",
       "default": "./dist/calendar.js"
+    },
+    "./calendar-export": {
+      "types": "./dist/calendar-export.d.ts",
+      "default": "./dist/calendar-export.js"
     },
     "./chart": {
       "types": "./dist/chart.d.ts",
@@ -104,6 +108,10 @@
     "./i18n": {
       "types": "./dist/i18n.d.ts",
       "default": "./dist/i18n.js"
+    },
+    "./ics": {
+      "types": "./dist/ics.d.ts",
+      "default": "./dist/ics.js"
     },
     "./invite": {
       "types": "./dist/invite.d.ts",
@@ -354,7 +362,9 @@
     "@types/react-dom": "^19.3.0",
     "firebase": "^12",
     "happy-dom": "^20.14.5",
+    "ical.js": "2.2.1",
     "lucide-react": "^1.50.0",
+    "node-ical": "0.27.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "sharp": "^0.35.5",

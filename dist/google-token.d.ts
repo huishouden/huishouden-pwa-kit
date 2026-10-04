@@ -31,6 +31,16 @@ export interface GoogleTokenOptions {
  */
 export declare function googleAccessToken(auth: Auth, scopes: readonly string[], { persist, deniedMessage, clientId }?: GoogleTokenOptions): Promise<string>;
 /**
+ * A one-time authorization code for `scopes`, from Google's code client in a popup, for a server
+ * to exchange for lasting (offline) access with the client's secret: huishouden/calendar's Google
+ * Calendar sync. The server exchanges it with `redirect_uri=postmessage`. Call from a tap. Rejects
+ * as `googleAccessToken` does when the window is closed, blocked, or a scope is left unticked.
+ */
+export declare function googleAuthCode(auth: Auth, scopes: readonly string[], { deniedMessage, clientId }?: Pick<GoogleTokenOptions, 'deniedMessage' | 'clientId'>): Promise<{
+    code: string;
+    scope: string;
+}>;
+/**
  * Stops using a token: pass the one Google rejected (a 401: revoked, or expired early) so the next
  * call asks again, or nothing to forget every token (signing out).
  */

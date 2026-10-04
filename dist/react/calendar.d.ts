@@ -2,7 +2,8 @@
  * Calendar search in React: the one-search-at-a-time hook, "Find in my calendar" inside a dialog,
  * the import dialog that lists events not yet in the app, the linked-event row, the one-line
  * hint before Google's first permission window, and suggestions of new events found when the app
- * opens. Built on `findCalendarEvents` in `../calendar`.
+ * opens. Built on `findCalendarEvents` in `../calendar`. And the other way: `AddToCalendar` puts one
+ * item into the person's own calendar (`../calendar-export`).
  *
  * `app` is the app's short name ("Baby"): it keys whether this browser has already been asked
  * (`<app>-calendar-allowed` in localStorage) and words the hint. Pass `name` (the app's name in the
@@ -10,6 +11,7 @@
  */
 import { type ReactNode } from 'react';
 import type { Auth } from 'firebase/auth';
+import { type CalendarEntry } from '../calendar-export';
 import { type CalendarMatch, type FindEventsOptions, type ImportedRecord } from '../calendar';
 /**
  * Whether calendar search can run: signed in, or a browser test standing in for Google with
@@ -132,4 +134,15 @@ export declare function CalendarSuggestions({ suggestions, onAdd, onDismiss, now
     onDismiss: (m: CalendarMatch) => void;
     /** For the day words ("Today", "Tue"); default the current time. */
     now?: number;
+}): import("react").JSX.Element;
+/**
+ * "Add to calendar" for one item: a menu with Google Calendar (its add-event page, in a new tab)
+ * and a .ics file that Apple Calendar, Outlook and the rest open. Pass the item as the app
+ * publishes it to the agenda (`CalendarEntry`); one on a schedule (`series`) goes in as the whole
+ * repeating series. `compact` shows only the icon (rows in a list); the label is its name.
+ */
+export declare function AddToCalendar({ entry, compact, className }: {
+    entry: CalendarEntry;
+    compact?: boolean;
+    className?: string;
 }): import("react").JSX.Element;

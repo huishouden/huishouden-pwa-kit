@@ -4,10 +4,12 @@ import { fitsRule, inferRule } from './schedule';
 import { addDays, formatDayShort, formatTime, startOfDay, toHhmm, toYmd, weekdayShort } from './time';
 import { capitalize, kt } from './i18n.js';
 import { dismissId, dismissedIds } from './suggestions';
+import { isExportedEvent } from './calendar-export.js';
 /**
  * Finds Google Calendar events that match a piece of household data (a task, an appointment), so
  * an app can fill in its date, time and place from the calendar instead of retyping them.
- * Read-only: the app never writes to the calendar.
+ * Read-only: the app never writes to the calendar. Events Huishouden's calendar export wrote (the
+ * person's "Huishouden" calendar) are never matched or suggested.
  */
 export const CALENDAR_SCOPES = [
     'https://www.googleapis.com/auth/calendar.events.readonly',
@@ -58,8 +60,13 @@ export function cachedCalendarToken(auth) {
     return cachedGoogleToken(auth, CALENDAR_SCOPES);
 }
 const localDay = (date) => (([y, m, d]) => new Date(y, m - 1, d).getTime())(date.split('-').map(Number));
+/**
+ * A Google event as a match, or null for one that isn't an event to bring in: cancelled, without a
+ * time, or written by Huishouden's own calendar export (`./calendar-export`, its private
+ * `huishouden` property), which would otherwise come back as a suggestion of itself.
+ */
 export function toMatch(e, calendarName, calendarId) {
-    if (e.status === 'cancelled' || (!e.start.dateTime && !e.start.date))
+    if (e.status === 'cancelled' || (!e.start.dateTime && !e.start.date) || isExportedEvent(e))
         return null;
     const allDay = !e.start.dateTime;
     const start = allDay ? localDay(e.start.date) : Date.parse(e.start.dateTime);

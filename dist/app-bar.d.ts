@@ -22,10 +22,14 @@ export declare function sameSite(url: string, base: string): boolean;
 export declare const PRIVACY_PATH = "/privacy";
 /** The portal's page for using Huishouden from an AI assistant (the connector), linked from every app's account menu. */
 export declare const ASSISTANT_PATH = "/assistant";
+/** The portal's page for seeing the household in the person's own calendar app (huishouden/calendar), linked from every app's account menu. */
+export declare const CALENDAR_SETTINGS_PATH = "/my-calendar";
 /** The privacy page on the portal `portalUrl` points at ("https://example-portal.web.app/privacy"). */
 export declare function privacyUrl(portalUrl: string, base: string): string;
 /** The AI-assistant page on the portal `portalUrl` points at ("https://example-portal.web.app/assistant"). */
 export declare function assistantUrl(portalUrl: string, base: string): string;
+/** The own-calendar page on the portal `portalUrl` points at ("https://example-portal.web.app/my-calendar"). */
+export declare function calendarSettingsUrl(portalUrl: string, base: string): string;
 declare const Base: typeof HTMLElement;
 export declare class HhAppBar extends Base {
     #private;

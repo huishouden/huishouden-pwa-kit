@@ -118,6 +118,51 @@ export async function googleAccessToken(auth, scopes, { persist = false, deniedM
     return request;
 }
 /**
+ * A one-time authorization code for `scopes`, from Google's code client in a popup, for a server
+ * to exchange for lasting (offline) access with the client's secret: huishouden/calendar's Google
+ * Calendar sync. The server exchanges it with `redirect_uri=postmessage`. Call from a tap. Rejects
+ * as `googleAccessToken` does when the window is closed, blocked, or a scope is left unticked.
+ */
+export async function googleAuthCode(auth, scopes, { deniedMessage = kt('googleToken.denied'), clientId } = {}) {
+    const user = auth.currentUser;
+    if (!user)
+        throw new Error(kt('feedback.signInFirst'));
+    const client_id = clientId || configuredClientId;
+    if (!client_id)
+        throw new GoogleTokenError(kt('googleToken.notConfigured'), 'not_configured');
+    const gsi = loadedGsi() ??
+        (await loadGsi().catch(() => {
+            throw new GoogleTokenError(kt('googleToken.unreachable'), 'unavailable');
+        }));
+    const answer = await new Promise((resolve, reject) => {
+        const client = gsi.oauth2.initCodeClient({
+            client_id,
+            scope: scopes.join(' '),
+            ux_mode: 'popup',
+            include_granted_scopes: true,
+            ...(user.email ? { login_hint: user.email } : {}),
+            callback: resolve,
+            error_callback: (e) => {
+                if (e.type === 'popup_closed')
+                    reject(new GoogleTokenError(kt('googleToken.closed'), 'popup_closed'));
+                else if (e.type === 'popup_failed_to_open')
+                    reject(new GoogleTokenError(kt('googleToken.blocked'), 'popup_failed_to_open'));
+                else
+                    reject(new GoogleTokenError(e.message || kt('googleToken.noAnswer'), 'unknown'));
+            },
+        });
+        client.requestCode();
+    });
+    if (answer.error === 'access_denied')
+        throw new GoogleTokenError(deniedMessage, 'access_denied');
+    if (answer.error || !answer.code)
+        throw new GoogleTokenError(kt('googleToken.answered', { error: answer.error_description || answer.error || '' }), 'unknown');
+    const granted = (answer.scope ?? '').split(/\s+/).filter(Boolean);
+    if (granted.length && !scopes.every((s) => granted.includes(s)))
+        throw new GoogleTokenError(deniedMessage, 'access_denied');
+    return { code: answer.code, scope: answer.scope ?? scopes.join(' ') };
+}
+/**
  * Stops using a token: pass the one Google rejected (a 401: revoked, or expired early) so the next
  * call asks again, or nothing to forget every token (signing out).
  */
