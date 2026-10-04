@@ -3,6 +3,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
 import { LANG_BOOT_SCRIPT } from './i18n.js';
 import { THEME_BOOT_SCRIPT } from './theme.js';
+import { SUITE_ORIGIN } from './site.js';
 import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource } from './share-sw.js';
 /**
  * Vite PWA plugin with the conventions every app here shares: auto-updating service worker,
@@ -88,7 +89,8 @@ const escapeAttr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').repla
  * Any description or og:/twitter: tags already in index.html are replaced.
  */
 export function linkPreview(options) {
-    const base = options.url?.replace(/\/$/, '') ?? normalizeBase(options.base).replace(/\/$/, '');
+    const url = options.url ?? (options.base !== undefined ? new URL(normalizeBase(options.base), SUITE_ORIGIN).href : undefined);
+    const base = url?.replace(/\/$/, '') ?? normalizeBase(options.base).replace(/\/$/, '');
     const tags = [
         ['name', 'description', options.description],
         ['property', 'og:type', 'website'],
@@ -103,7 +105,7 @@ export function linkPreview(options) {
         ['name', 'twitter:description', options.description],
         ['name', 'twitter:image', `${base}/og.png`],
     ];
-    if (options.url)
+    if (url)
         tags.push(['property', 'og:url', `${base}/`]);
     return {
         name: 'huishouden-link-preview',

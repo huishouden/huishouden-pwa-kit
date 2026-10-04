@@ -7,7 +7,8 @@ Every Huishouden app is served from one Firebase Hosting site, under its own pat
 | `/` | Portal | `portal` |
 | `/<app>/` (`/spending/`, `/baby/`, `/pet/`, `/home/`, `/car/`, `/bills/`, `/tasks/`, `/groceries/`, `/health/`) | that app | `<app>` |
 
-Production is `https://huishouden-piekstra.web.app/`, staging mirrors it on the staging sites.
+Production is `https://huishouden-piekstra.web.app/` (`SUITE_SITE` in `./site`), staging mirrors it on
+the staging sites.
 Repos, tests, staging runs and releases stay separate: only hosting is shared.
 
 ## Why
@@ -150,8 +151,8 @@ Google, is done on the staging portal's site, `https://huishouden-staging.web.ap
 per-app staging site the popup sign-in still works (Firebase Auth's list has it), One Tap and
 Google API tokens do not.
 
-The suite's site is the project's default Hosting site (`<project>.web.app`), so `signInOrigins(project)`
-from `./oauth-origins` derives both entries from the project id. The production `smoke` job, the
+The suite's site is `SUITE_SITE` from `./site` (today the project's default Hosting site), so
+`signInOrigins(project, SUITE_SITE)` from `./oauth-origins` derives both entries. The production `smoke` job, the
 staging job (allowed to fail: nothing automated needs it) and the bootstrap check exactly those and
 say what to add; an origin a check reports missing is added in the console under Google Auth
 Platform > Clients > "Web client (auto created by Google Service)".
@@ -160,6 +161,40 @@ Firebase Auth's authorized domains have no such limit, but the bootstrap still a
 used: production gets nothing per app (a new app adds nothing), staging gets each app's staging site
 (its pull requests sign in there) and `localhost` (local runs against staging). Anything else on the
 list is printed as not needed; `bootstrap.sh --prune-domains` removes it.
+
+## The suite's address
+
+`SUITE_SITE` in `src/site.ts` is the one place the production address is set. Derived from it:
+
+- the deploy target (`sharedSite`, `pwa-site assemble`, `pwa-site site`) and the reconcile run's
+  live-site check;
+- each app's link preview (`og:url`, `og:image`; `pwaApp({ base })` without `url`);
+- the smoke tests' and PR screenshots' live URL (`pwa.yml` without `site-url`);
+- absolute links built where there is no page (`SUITE_ORIGIN`, `suiteUrl(base, path)`: Playwright
+  defaults, fallbacks in agenda and reminder code, tests);
+- the sign-in checks (`pwa-oauth-origins`, `smoke`) and the bootstrap's authorized domains.
+
+The Workers (`notify`'s `LINK_HOSTS`, `calendar` and `connector`'s `SITE_URL`/`ALLOWED_ORIGINS`) and
+`VITE_FIREBASE_AUTH_DOMAIN` are deploy configuration, set outside the apps' code.
+
+### Moving the suite
+
+To serve the suite from another site of the same project (Hosting serves `/__/auth/*` on every
+site, so sign-in moves with it):
+
+1. Create the site; add `https://<new>.web.app` to the OAuth web client's Authorized JavaScript
+   origins and `https://<new>.web.app/__/auth/handler` to its redirect URIs (console only), and
+   `<new>.web.app` to Firebase Auth's authorized domains.
+2. Change `SUITE_SITE`, release the kit, bump every app; each deploy then goes to the new site and
+   the old one keeps its last build.
+3. Point the Workers' site settings at it, and `VITE_FIREBASE_AUTH_DOMAIN` if sign-in should show
+   the new host; rebuild.
+4. Mark the portal's entry in `apps.json` `"redirect": true`: the portal's runs then redirect the
+   former address to the new root, path and query kept, serving a retiring `sw.js` at `/` and at
+   every app's path (`retiringWorkers`) so installed copies leave their caches.
+
+The manifest `id` is relative to the origin, so browsers treat the new address as a new app:
+reinstall, and re-enable notifications (push subscriptions are per origin).
 
 ## Old addresses
 
