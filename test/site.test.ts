@@ -2,12 +2,18 @@ import { describe, expect, test } from 'bun:test';
 import { headersFor } from '../src/security-headers';
 import {
   REDIRECT_ALL_BUT_WORKER,
+  SUITE_ORIGIN,
+  SUITE_SITE,
+  allBut,
   appUrl,
   featuresOf,
   normalizePath,
   redirectConfig,
+  redirectingSites,
   retiredWorkerSource,
+  retiringWorkers,
   sharedSite,
+  suiteUrl,
   siteApps,
   siteConfig,
   staleApps,
@@ -25,7 +31,10 @@ const registry = [
 describe('registry', () => {
   test('apps with a path, the portal first, paths normalized', () => {
     expect(siteApps(registry).map((a) => [a.repo, a.path])).toEqual([['portal', '/'], ['pet', '/pet/'], ['baby', '/baby/']]);
-    expect(sharedSite(registry)).toBe('example-family');
+    expect(sharedSite(registry)).toBe(SUITE_SITE);
+    expect(SUITE_ORIGIN).toBe(`https://${SUITE_SITE}.web.app`);
+    expect(suiteUrl('/pet/', '?tab=care')).toBe(`${SUITE_ORIGIN}/pet/?tab=care`);
+    expect(suiteUrl('/')).toBe(`${SUITE_ORIGIN}/`);
   });
 
   test('refuses a registry the site cannot be built from', () => {
@@ -132,6 +141,33 @@ describe('old sites', () => {
     const c = redirectConfig('example-pet', 'https://example-family.web.app/pet/', 'legacy-example-pet');
     expect(c.redirects).toEqual([{ regex: REDIRECT_ALL_BUT_WORKER, destination: 'https://example-family.web.app/pet/:rest', type: 301 }]);
     expect(c.public).toBe('legacy-example-pet');
+  });
+
+  test('a moved suite: the former address redirects to the root and retires every app\'s worker', () => {
+    const moved = [{ ...registry[0], redirect: true }, ...registry.slice(1)];
+    expect(redirectingSites(moved).map((a) => a.site)).toEqual(['example-family', 'example-pet']);
+    expect(redirectingSites([{ ...registry[0], site: SUITE_SITE, redirect: true }, ...registry.slice(1)]).map((a) => a.site)).toEqual(['example-pet']);
+    const apps = siteApps(moved);
+    const workers = retiringWorkers(apps[0], apps);
+    expect(workers).toEqual(['sw.js', 'pet/sw.js', 'baby/sw.js']);
+    expect(retiringWorkers(apps[1], apps)).toEqual(['sw.js']);
+    const c = redirectConfig('example-family', 'https://example-new.web.app/', 'legacy-example-family', workers);
+    const re = new RegExp(c.redirects![0].regex!.replace('(?P<', '(?<'));
+    const rest = (p: string) => re.exec(p)?.groups?.rest ?? null;
+    for (const w of workers) expect(rest(`/${w}`)).toBeNull();
+    expect(rest('/')).toBe('');
+    expect(rest('/pet/')).toBe('pet/');
+    expect(rest('/pet/sw.jsx')).toBe('pet/sw.jsx');
+    expect(rest('/pet/sw.j')).toBe('pet/sw.j');
+    expect(rest('/baby/feeds')).toBe('baby/feeds');
+    expect(c.headers!.map((h) => h.source)).toEqual(['/sw.js', '/pet/sw.js', '/baby/sw.js']);
+    expect(c.redirects![0].destination).toBe('https://example-new.web.app/:rest');
+  });
+
+  test('allBut spells out the complement of a set of paths', () => {
+    const re = new RegExp(`^(?:${allBut(['a.b', 'ab'])})$`);
+    for (const s of ['a.b', 'ab']) expect(re.test(s), s).toBe(false);
+    for (const s of ['', 'a', 'a.', 'a.bc', 'abc', 'b', 'aXb']) expect(re.test(s), s).toBe(true);
   });
 
   test('the retiring worker clears caches, unregisters and reloads its windows', () => {

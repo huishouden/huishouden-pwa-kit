@@ -7,7 +7,7 @@
 #   infra/bootstrap.sh [--staging] --prune-domains path/to/apps.conf
 #
 # Sign-in lists (docs/one-site.md "Sign-in origins"): the OAuth client's Authorized JavaScript
-# origins need only the suite's site (the project's default site) and <project>.firebaseapp.com;
+# origins need only the suite's site (SUITE_SITE in src/site.ts) and <project>.firebaseapp.com;
 # Firebase Auth's authorized domains get those two, plus each app's staging site and localhost in
 # staging only. Other authorized domains are listed; --prune-domains removes them.
 #
@@ -80,6 +80,11 @@ if $STAGING; then
   unset VAPID_PUBLIC_KEY
 fi
 
+# The site that serves the suite: production's is SUITE_SITE in the kit's src/site.ts (the one place
+# the address is set), staging's the staging project's default site.
+SUITE_SITE=$(sed -n "s/^export const SUITE_SITE = '\([a-z0-9-]*\)';$/\1/p" "$(dirname "${BASH_SOURCE[0]}")/../src/site.ts")
+: "${SUITE_SITE:?SUITE_SITE not found in src/site.ts of the kit}"
+$STAGING && SUITE_SITE=$PROJECT
 firebase() { npx --yes firebase-tools@14 "$@"; }
 step() { printf '\n== %s\n' "$*"; }
 
@@ -165,6 +170,12 @@ gcloud iam workload-identity-pools providers update-oidc "$PROVIDER" --project "
   --workload-identity-pool "$POOL" --attribute-condition "$WIF_CONDITION" >/dev/null
 WIF_PROVIDER="projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$POOL/providers/$PROVIDER"
 
+if [[ "$SUITE_SITE" != "$PROJECT" ]]; then
+  step "Suite site $SUITE_SITE.web.app"
+  firebase hosting:sites:get "$SUITE_SITE" --project "$PROJECT" >/dev/null 2>&1 \
+    || firebase hosting:sites:create "$SUITE_SITE" --project "$PROJECT"
+fi
+
 for repo in "${DEPLOY_REPOS[@]}"; do APPS+=("$repo::"); done
 for entry in "${APPS[@]}"; do
   IFS=: read -r repo site app_name <<<"$entry"
@@ -246,7 +257,7 @@ if [[ -n "${client_id:-}" ]]; then
   # Only the suite's site and the auth handler: Google allows an unverified app 10 authorized
   # domains, each *.web.app counting separately, and the per-app sites never show Google's prompt.
   step "Sign-in origins on the OAuth web client"
-  bun "$(dirname "${BASH_SOURCE[0]}")/../scripts/oauth-origins.ts" "$client_id" --project="$PROJECT" || true
+  bun "$(dirname "${BASH_SOURCE[0]}")/../scripts/oauth-origins.ts" "$client_id" --project="$PROJECT" --site="$SUITE_SITE" || true
 fi
 
 step "Auth authorized domains"
@@ -258,7 +269,7 @@ auth_headers=(-H "Authorization: Bearer $(gcloud auth print-access-token)" -H "x
 current=$(curl -s "${auth_headers[@]}" "$AUTH_API")
 if jq -e '.authorizedDomains' >/dev/null <<<"$current"; then
   wanted=$(
-    echo "$PROJECT.web.app"
+    echo "$SUITE_SITE.web.app"
     echo "$PROJECT.firebaseapp.com"
     if $STAGING; then
       for entry in "${APPS[@]}"; do IFS=: read -r _ site _ <<<"$entry"; [[ -z "$site" ]] || echo "$site.web.app"; done
@@ -291,7 +302,7 @@ Manual steps the APIs don't cover (project $PROJECT):
   1. Firebase console > Authentication > Get started > Sign-in method > Google > Enable
      (initialises Auth on the free plan and creates the OAuth web client; no supported API does either)
   2. Google Cloud console > Google Auth Platform > Clients > the "Web client (auto created by Google
-     Service)" > Authorized JavaScript origins: add https://$PROJECT.web.app (the suite's site) and
+     Service)" > Authorized JavaScript origins: add https://$SUITE_SITE.web.app (the suite's site) and
      https://$PROJECT.firebaseapp.com, nothing per app (Google allows an unverified app 10 authorized
      domains); the origins step above lists any still missing. Then re-run this script so apps get
      ${VAR}VITE_GOOGLE_CLIENT_ID.

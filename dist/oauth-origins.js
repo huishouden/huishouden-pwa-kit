@@ -10,11 +10,12 @@
  * a registered origin gets the sign-in page (200), an unregistered one is redirected to an error.
  */
 /**
- * The origins a project's OAuth web client needs: the project's default Hosting site, which serves
- * the whole suite, and Firebase's auth handler domain (`authDomain`).
+ * The origins a project's OAuth web client needs: the Hosting site that serves the whole suite
+ * (production: `SUITE_SITE` from `./site`; staging: the project's default site, the default here)
+ * and Firebase's auth handler domain (`authDomain`).
  */
-export function signInOrigins(project) {
-    return [`https://${project}.web.app`, `https://${project}.firebaseapp.com`];
+export function signInOrigins(project, site = project) {
+    return [`https://${site}.web.app`, `https://${project}.firebaseapp.com`];
 }
 export function originProbeUrl(clientId, origin) {
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');

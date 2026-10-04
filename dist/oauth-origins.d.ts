@@ -11,10 +11,11 @@
  */
 export type OriginStatus = 'registered' | 'missing' | 'unknown';
 /**
- * The origins a project's OAuth web client needs: the project's default Hosting site, which serves
- * the whole suite, and Firebase's auth handler domain (`authDomain`).
+ * The origins a project's OAuth web client needs: the Hosting site that serves the whole suite
+ * (production: `SUITE_SITE` from `./site`; staging: the project's default site, the default here)
+ * and Firebase's auth handler domain (`authDomain`).
  */
-export declare function signInOrigins(project: string): string[];
+export declare function signInOrigins(project: string, site?: string): string[];
 export declare function originProbeUrl(clientId: string, origin: string): string;
 export declare function originStatus(clientId: string, origin: string, fetchImpl?: typeof fetch): Promise<OriginStatus>;
 export declare const ORIGINS_CONSOLE_URL: (project: string) => string;

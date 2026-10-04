@@ -7,15 +7,30 @@
  * In an app, only `appUrl` is for the browser.
  */
 import { type DeviceFeatures } from './security-headers.js';
+/**
+ * The suite's Firebase Hosting site (docs/one-site.md): every app is served at
+ * `https://<SUITE_SITE>.web.app/<app>/`. The one place the production address is set: deploys,
+ * link previews, smoke tests, sign-in origin checks and the bootstrap derive it from here
+ * (docs/one-site.md "Moving the suite").
+ */
+export declare const SUITE_SITE = "huishouden-piekstra";
+/** `<SUITE_SITE>.web.app` */
+export declare const SUITE_HOST = "huishouden-piekstra.web.app";
+/** `https://<SUITE_SITE>.web.app` */
+export declare const SUITE_ORIGIN = "https://huishouden-piekstra.web.app";
 /** One entry of the portal's `apps.json`, the suite's list of apps. */
 export interface RegistryEntry {
     name?: string;
     repo: string;
-    /** The app's own Firebase Hosting site: the old address, and its staging site's name. The portal's is the shared site. */
+    /**
+     * The app's own Firebase Hosting site: its old address, and its staging site's name. The
+     * portal's is the suite's former address (the project's default site); the suite itself is
+     * served from `SUITE_SITE`.
+     */
     site: string;
     /** Where it is served on the shared site: `/` for the portal, `/<app>/` for an app. Missing: not on it yet. */
     path?: string;
-    /** The old `<site>.web.app` redirects to the app's path on the shared site. */
+    /** The old `<site>.web.app` redirects to the app's path on the shared site (the portal's: to its root). */
     redirect?: boolean;
     [key: string]: unknown;
 }
@@ -33,8 +48,14 @@ export declare function appUrl(base: string, path?: string, origin?: string): st
 export declare function siteApps(registry: unknown): (RegistryEntry & {
     path: string;
 })[];
-/** The shared site's Firebase Hosting name: the portal's site. */
+/** The shared site's Firebase Hosting name, `SUITE_SITE`, once the registry checks out. */
 export declare function sharedSite(registry: unknown): string;
+/** An absolute link into an app on the production suite site: `suiteUrl('/pet/', '?tab=care')`. For code with no page (tests, scripts, Workers). */
+export declare function suiteUrl(base: string, path?: string): string;
+/** Old sites that redirect to the suite: each app's, and the portal's (the suite's former address). */
+export declare function redirectingSites(registry: unknown): (RegistryEntry & {
+    path: string;
+})[];
 /** Which device features a `Permissions-Policy` value turns on. */
 export declare function featuresOf(policy: string | undefined): DeviceFeatures;
 /** Files that must be fetched fresh for an update to reach a device. */
@@ -82,8 +103,23 @@ export declare function siteConfig(site: string, entries: SiteEntry[], publicDir
  * before files, and RE2 has no lookahead, so the exception is spelled out.
  */
 export declare const REDIRECT_ALL_BUT_WORKER = "^/(?P<rest>(?:[^s]|s[^w]|sw[^.]|sw\\.[^j]|sw\\.j[^s]|sw\\.js.).*|s|sw|sw\\.|sw\\.j)?$";
-/** The hosting config of an old per-app site: everything 301s to `target` (`https://<shared>/pet/`), query kept by Hosting. */
-export declare function redirectConfig(site: string, target: string, publicDir: string): HostingSite;
+/**
+ * An RE2 pattern (no anchors) for every string except those in `except`, which must be non-empty
+ * strings. RE2 has no lookahead, so the complement is spelled out along a trie of the exceptions.
+ */
+export declare function allBut(except: string[]): string;
+/**
+ * The hosting config of an old site: everything 301s to `target` (`https://<shared>/pet/`), query
+ * kept by Hosting, except the workers in `workers` (paths under the site's root, default `sw.js`),
+ * which it serves from `publicDir`: the retiring worker, so an installed copy leaves its cache.
+ */
+export declare function redirectConfig(site: string, target: string, publicDir: string, workers?: string[]): HostingSite;
+/** The workers an old site retires: the portal's former address held every app's, an app's site only its own. */
+export declare function retiringWorkers(app: {
+    path: string;
+}, apps: {
+    path: string;
+}[]): string[];
 /** Marks the retiring worker, so a check can tell it is the one being served. */
 export declare const RETIRED_WORKER_MARK = "huishouden: this address moved";
 /**

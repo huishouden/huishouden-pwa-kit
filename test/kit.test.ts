@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { firebaseConfigFromEnv } from '../src/firebase';
+import { SUITE_ORIGIN } from '../src/site';
 import { FIREBASE_RESERVED_PATHS, linkPreview, navigationDenylist, normalizeBase, pwaApp, pwaWorkbox, sitePath, telemetryChunks, TELEMETRY_CHUNKS, webManifest } from '../src/vite';
 
 describe('firebaseConfigFromEnv', () => {
@@ -84,9 +85,15 @@ describe('base path (docs/one-site.md)', () => {
     expect(pwaWorkbox({ ...app, otherApps: ['pet'] }).navigateFallbackDenylist).toEqual(deny.slice(0, 1).concat(navigationDenylist({ otherApps: ['pet'] }).slice(1)));
   });
 
-  test('link previews without a url point at the app path', () => {
+  test('link previews with a base and no url point at the app on the suite site', () => {
     const out = linkPreview({ ...app, base: '/pet/' }).transformIndexHtml('<head></head>');
-    expect(out).toContain('<meta property="og:image" content="/pet/og.png" />');
+    expect(out).toContain(`<meta property="og:image" content="${SUITE_ORIGIN}/pet/og.png" />`);
+    expect(out).toContain(`<meta property="og:url" content="${SUITE_ORIGIN}/pet/" />`);
+  });
+
+  test('link previews with neither stay relative', () => {
+    const out = linkPreview({ name: app.name, description: app.description }).transformIndexHtml('<head></head>');
+    expect(out).toContain('<meta property="og:image" content="/og.png" />');
     expect(out).not.toContain('og:url');
   });
 
