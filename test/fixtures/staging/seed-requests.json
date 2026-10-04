@@ -4,32 +4,123 @@
     "url": "https://identitytoolkit.googleapis.com/v1/projects/huishouden-staging/accounts:batchCreate",
     "body": {
       "users": [
-        { "localId": "test-a", "email": "test-a@example.com", "emailVerified": true, "displayName": "Test A" },
-        { "localId": "test-b", "email": "test-b@example.com", "emailVerified": true, "displayName": "Test B" },
-        { "localId": "test-helper", "email": "test-helper@example.com", "emailVerified": true, "displayName": "Test Helper" }
+        {
+          "localId": "e2e-pet-18000000000-1-signed-in-admin",
+          "email": "e2e-pet-18000000000-1-signed-in-admin@example.com",
+          "emailVerified": true,
+          "displayName": "Test Admin"
+        },
+        {
+          "localId": "e2e-pet-18000000000-1-signed-in-member",
+          "email": "e2e-pet-18000000000-1-signed-in-member@example.com",
+          "emailVerified": true,
+          "displayName": "Test Member"
+        },
+        {
+          "localId": "e2e-pet-18000000000-1-signed-in-helper",
+          "email": "e2e-pet-18000000000-1-signed-in-helper@example.com",
+          "emailVerified": true,
+          "displayName": "Test Helper"
+        },
+        {
+          "localId": "e2e-pet-18000000000-1-signed-in-kid",
+          "email": "e2e-pet-18000000000-1-signed-in-kid@example.com",
+          "emailVerified": true,
+          "displayName": "Test Kid"
+        }
       ],
       "allowOverwrite": true
     }
   },
   {
-    "method": "PATCH",
-    "url": "https://firestore.googleapis.com/v1/projects/huishouden-staging/databases/(default)/documents/households/test-household",
+    "method": "POST",
+    "url": "https://firestore.googleapis.com/v1/projects/huishouden-staging/databases/(default)/documents:commit",
     "body": {
-      "fields": {
-        "name": { "stringValue": "Test household" },
-        "members": { "arrayValue": { "values": [{ "stringValue": "test-a@example.com" }, { "stringValue": "test-b@example.com" }, { "stringValue": "test-helper@example.com" }] } },
-        "joined": { "arrayValue": { "values": [{ "stringValue": "test-a@example.com" }, { "stringValue": "test-b@example.com" }, { "stringValue": "test-helper@example.com" }] } },
-        "roles": {
-          "mapValue": {
+      "writes": [
+        {
+          "update": {
+            "name": "projects/huishouden-staging/databases/(default)/documents/households/e2e-pet-18000000000-1-signed-in",
             "fields": {
-              "test-a@example.com": { "stringValue": "admin" },
-              "test-b@example.com": { "stringValue": "member" },
-              "test-helper@example.com": { "stringValue": "helper" }
+              "name": {
+                "stringValue": "Test household"
+              },
+              "members": {
+                "arrayValue": {
+                  "values": [
+                    {
+                      "stringValue": "e2e-pet-18000000000-1-signed-in-admin@example.com"
+                    },
+                    {
+                      "stringValue": "e2e-pet-18000000000-1-signed-in-member@example.com"
+                    },
+                    {
+                      "stringValue": "e2e-pet-18000000000-1-signed-in-helper@example.com"
+                    },
+                    {
+                      "stringValue": "e2e-pet-18000000000-1-signed-in-kid@example.com"
+                    }
+                  ]
+                }
+              },
+              "joined": {
+                "arrayValue": {
+                  "values": [
+                    {
+                      "stringValue": "e2e-pet-18000000000-1-signed-in-admin@example.com"
+                    },
+                    {
+                      "stringValue": "e2e-pet-18000000000-1-signed-in-member@example.com"
+                    },
+                    {
+                      "stringValue": "e2e-pet-18000000000-1-signed-in-helper@example.com"
+                    },
+                    {
+                      "stringValue": "e2e-pet-18000000000-1-signed-in-kid@example.com"
+                    }
+                  ]
+                }
+              },
+              "roles": {
+                "mapValue": {
+                  "fields": {
+                    "e2e-pet-18000000000-1-signed-in-admin@example.com": {
+                      "stringValue": "admin"
+                    },
+                    "e2e-pet-18000000000-1-signed-in-member@example.com": {
+                      "stringValue": "member"
+                    },
+                    "e2e-pet-18000000000-1-signed-in-helper@example.com": {
+                      "stringValue": "helper"
+                    },
+                    "e2e-pet-18000000000-1-signed-in-kid@example.com": {
+                      "stringValue": "kid"
+                    }
+                  }
+                }
+              },
+              "createdAt": {
+                "integerValue": "1767225600000"
+              },
+              "seededAt": {
+                "integerValue": "1790000000000"
+              }
             }
           }
         },
-        "createdAt": { "integerValue": "1767225600000" }
-      }
+        {
+          "update": {
+            "name": "projects/huishouden-staging/databases/(default)/documents/households/e2e-pet-18000000000-1-signed-in/agenda/e1",
+            "fields": {
+              "title": {
+                "stringValue": "E2E bins"
+              },
+              "start": {
+                "integerValue": "5"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 ]
