@@ -9,6 +9,7 @@ export default {
     'appBar.you': 'ti',
     'appBar.account': 'Cuenta',
     'appBar.allApps': 'Todas las apps',
+    'appBar.assistant': 'Usar con tu asistente de IA',
     'appBar.privacy': 'Privacidad',
     'appBar.signOut': 'Cerrar sesión',
     'appBar.theme': 'Tema',
