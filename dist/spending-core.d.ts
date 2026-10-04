@@ -154,7 +154,63 @@ export interface ParseOptions {
     /** The household's time zone (IANA), for the alert's date. Default: where the code runs. */
     timeZone?: string;
 }
-/** One alert email as a transaction, or null when it isn't a purchase or refund (a payment notice, say). */
+/**
+ * What an email is, read as a card alert:
+ *
+ * - `purchase`: a purchase or refund rule found both the amount and the merchant (`rule` says which).
+ * - `not-purchase`: a payment, a declined charge, a statement, a security notice, or mail sent to a
+ *   list (newsletters, offers, an investing account's notices) that says nothing of a purchase.
+ *   Nothing is written and nobody is asked.
+ * - `unreadable`: it looks like a purchase (an amount, a purchase word) but no rule found a merchant
+ *   it can trust. Nothing is written: the member is asked ("Couldn't read N emails").
+ *
+ * Only `purchase` becomes a transaction. A merchant is never a guess from loose wording ("at a
+ * reasonable price"), and the amount is the one the rule matched, not the first in the email.
+ */
+export type AlertReading = {
+    kind: 'purchase';
+    tx: ParsedAlert;
+    rule: string;
+} | {
+    kind: 'not-purchase';
+    reason: NotPurchaseReason;
+} | {
+    kind: 'unreadable';
+    reason: UnreadableReason;
+    date: string;
+    amount?: number;
+};
+export type NotPurchaseReason = 'payment' | 'declined' | 'statement' | 'security' | 'bulk' | 'no-amount';
+export type UnreadableReason = 'no-merchant' | 'generic-merchant';
+interface PurchaseRule {
+    name: string;
+    pattern: RegExp;
+    /** Indexes of the amount and merchant groups, and the card's digits when the rule has them. */
+    amount: number;
+    merchant: number;
+    digits?: number;
+    refund?: boolean;
+    /** Trusted even in mail sent to a list (its wording is an issuer's alert, not prose). */
+    strict?: boolean;
+}
+/**
+ * The purchase rules, most specific first. Issuer wordings (Visa Purchase Alerts, "You made a $X
+ * transaction with M") are tried before the generic "purchase/transaction/charge of $X at M".
+ */
+export declare const PURCHASE_RULES: PurchaseRule[];
+/** Why a merchant can't be trusted, or null when it can. */
+export declare function merchantProblem(merchant: string): UnreadableReason | null;
+/** A written date as YYYY-MM-DD (US month first for slashes), or null. */
+export declare function writtenDay(token: string): string | null;
+/**
+ * The transaction's day: a date the email writes for it ("Date: Oct 2, 2031", "on 10/02/2031" in
+ * the purchase's sentence), when it is at most 10 days before the email and not after it; otherwise
+ * the day the email was sent, in the household's time zone.
+ */
+export declare function alertDay(text: string, sentence: string, sent: number, timeZone?: string): string;
+/** One email, read as a card alert (see `AlertReading`). */
+export declare function readAlert(msg: MailMessage, cards: AlertCard[], rules: CategoryRule[], options?: ParseOptions): AlertReading;
+/** One alert email as a transaction, or null when it isn't one it can trust (`readAlert` says why). */
 export declare function parseAlertEmail(msg: MailMessage, cards: AlertCard[], rules: CategoryRule[], options?: ParseOptions): ParsedAlert | null;
 /**
  * One email check: search the mail for the household's card alerts, read the ones not seen before,
@@ -170,6 +226,18 @@ export interface AlertTx extends ParsedAlert {
     id: string;
     emailId: string;
 }
+/** An email that looked like a purchase but couldn't be read with confidence: the member is asked about it. */
+export interface AlertReview {
+    emailId: string;
+    subject: string;
+    /** When the email was sent (ms). */
+    sent: number;
+    /** The household's day it was sent. */
+    date: string;
+    reason: UnreadableReason;
+    /** The first amount the email writes, to start "Enter it" with. */
+    amount?: number;
+}
 export interface AlertCheck {
     query: string;
     /** Emails the search found. */
@@ -180,6 +248,8 @@ export interface AlertCheck {
     duplicates: number;
     /** Emails that matched the search but weren't a purchase or refund. */
     notPurchases: number;
+    /** Emails that looked like purchases but couldn't be read: nothing is written for them. */
+    review: AlertReview[];
     /** Message ids read this time, to skip next time. */
     read: string[];
 }
@@ -194,11 +264,11 @@ export interface AlertInput extends ParseOptions {
     existing: Existing[];
     seen?: Set<string>;
 }
-/** Messages to the alerts to write: parsed, oldest first, matched against what the household has. */
-export declare function planAlerts(messages: MailMessage[], input: Omit<AlertInput, 'labels' | 'seen'>): Pick<AlertCheck, 'create' | 'duplicates' | 'notPurchases'>;
+/** Messages to the alerts to write: read, oldest first, matched against what the household has. Unconfident ones go to `review`, never to `create`. */
+export declare function planAlerts(messages: MailMessage[], input: Omit<AlertInput, 'labels' | 'seen'>): Pick<AlertCheck, 'create' | 'duplicates' | 'notPurchases' | 'review'>;
 export declare function checkAlerts(mailbox: Pick<Mailbox, 'search' | 'get'>, input: AlertInput): Promise<AlertCheck>;
 /** The fields huishouden/rules allows on `spendingTransactions`. */
-export declare const TRANSACTION_FIELDS: readonly ["date", "description", "amount", "category", "card", "type", "source", "last4", "emailId", "createdAt", "updatedAt", "by"];
+export declare const TRANSACTION_FIELDS: readonly ["date", "description", "amount", "category", "card", "type", "source", "last4", "emailId", "importId", "createdAt", "updatedAt", "by"];
 export interface NewTransaction {
     date: string;
     description: string;
@@ -208,12 +278,15 @@ export interface NewTransaction {
     type: string;
     last4?: string;
     emailId?: string;
+    /** The mail checker's import that wrote it: "Undo last import" removes that import's rows. */
+    importId?: string;
 }
 /** A transaction document as a member writes it: only the allowed fields, no empty optional ones. */
 export declare function transactionDoc(tx: NewTransaction, source: Source, by: string, createdAt: number, updatedAt?: number): {
     by: string;
     updatedAt?: number | undefined;
     createdAt: number;
+    importId?: string | undefined;
     emailId?: string | undefined;
     last4?: string | undefined;
     date: string;
@@ -244,3 +317,4 @@ export interface AlertInbox {
     error?: InboxError;
 }
 export declare function toAlertInbox(id: string, d: Record<string, unknown>): AlertInbox;
+export {};
