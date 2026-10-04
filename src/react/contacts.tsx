@@ -3,7 +3,7 @@
  * the phone's contact picker, a contact card file or Google Contacts; an OpenStreetMap business
  * search that fills in the address, phone and website, and for businesses the map lacks, filling
  * from a listing screenshot or pasted listing text) and the contact card with tap-to-call, email,
- * website and map links. Saves go through `contactInput` in `../contacts`, so every app trims and
+ * website and map links, and the select that names one of them on a record. Saves go through `contactInput` in `../contacts`, so every app trims and
  * links the same way.
  */
 import { useRef, useState } from 'react';
@@ -16,7 +16,7 @@ import { googleAccessMessage, popupCancelled } from '../feedback';
 import { mapsSearchUrl, parsePlaceText, readPlaceScreenshot, searchPlaces, telHref, type ParsedPlace, type Place } from '../places';
 import { capitalize, formatList, kt as kitT, type KitKey } from '../i18n';
 import { useKitT } from './i18n';
-import { Checkbox, Chip, Dialog, ErrorNotice, Field, cardClass, deleteButton, ghostButton, iconButton, inputClass, linkClass, overline, primaryButton, secondaryButton } from './ui';
+import { Checkbox, Chip, Dialog, ErrorNotice, Field, cardClass, deleteButton, ghostButton, iconButton, inputClass, linkClass, overline, primaryButton, secondaryButton, selectClass } from './ui';
 
 type PlaceSearch = { status: 'idle' } | { status: 'searching' } | { status: 'done'; places: Place[]; query: string } | { status: 'error' };
 
@@ -693,5 +693,44 @@ export function ContactCard({ contact: c, role, onEdit, onDelete }: { contact: C
       )}
       {c.notes && <p className="mt-2 text-base whitespace-pre-line text-muted">{c.notes}</p>}
     </section>
+  );
+}
+
+/**
+ * Names one of the household's contacts on a record (who a bill is paid to, who does a job): a
+ * select of `contacts` with their roles, "No one" (or `empty`) first. A contact that was removed
+ * stays chosen and shows as removed, so saving doesn't drop it unseen.
+ */
+export function ContactSelect({
+  id,
+  value,
+  contacts,
+  onChange,
+  empty,
+  roleLabel = (r) => r,
+  label,
+}: {
+  id?: string;
+  /** The chosen contact's id, or '' for none. */
+  value: string;
+  contacts: readonly Contact[];
+  onChange: (id: string) => void;
+  empty?: string;
+  roleLabel?: (role: string) => string;
+  /** Its accessible name, when no visible label wraps it. */
+  label?: string;
+}) {
+  const kt = useKitT();
+  const removed = value && !contacts.some((c) => c.id === value);
+  return (
+    <select id={id} className={selectClass} value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+      <option value="">{empty ?? kt('contacts.noOne')}</option>
+      {contacts.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.role ? kt('contacts.withRole', { name: c.name, role: roleLabel(c.role) }) : c.name}
+        </option>
+      ))}
+      {removed && <option value={value}>{kt('contacts.removedContact')}</option>}
+    </select>
   );
 }

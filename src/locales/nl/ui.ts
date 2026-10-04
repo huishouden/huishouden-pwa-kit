@@ -17,4 +17,6 @@ export default {
   'ui.loggedBy': 'Genoteerd door {name}',
   'ui.addSuggestion': '{label} toevoegen',
   'ui.dontSuggest': '{label} niet meer voorstellen',
+  'ui.copy': '{what} kopiëren',
+  'ui.copied': 'Gekopieerd',
 } satisfies CatalogueOf<typeof en>;

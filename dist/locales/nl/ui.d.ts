@@ -14,5 +14,7 @@ declare const _default: {
     'ui.loggedBy': string;
     'ui.addSuggestion': string;
     'ui.dontSuggest': string;
+    'ui.copy': string;
+    'ui.copied': string;
 };
 export default _default;

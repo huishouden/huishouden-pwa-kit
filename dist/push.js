@@ -1,5 +1,5 @@
-import { collection, doc, getDoc } from 'firebase/firestore';
-import { deleteDoc, setDoc, updateDoc } from './firestore.js';
+import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, deleteDoc, setDoc, updateDoc } from './firestore.js';
 import { getLang, isLang, kt, onLangChange } from './i18n.js';
 export const PUSH_SUBSCRIPTION_FIELDS = ['email', 'app', 'endpoint', 'keys', 'ua', 'lang', 'createdAt'];
 const MESSAGE_KEYS = {
@@ -169,4 +169,22 @@ export async function disablePush(db, householdId, user, { unsubscribeDevice = f
     await deleteDoc(doc(subscriptionsOf(db, householdId), await pushSubscriptionId(user.email, subscription.endpoint)));
     if (unsubscribeDevice)
         await subscription.unsubscribe();
+}
+export const NOTIFICATION_PREFS = 'notificationPrefs';
+export const NOTIFICATION_PREFS_FIELDS = ['muted', 'updatedAt'];
+const prefsOf = (db, householdId, email) => doc(db, 'households', householdId, NOTIFICATION_PREFS, email.trim().toLowerCase());
+/** The apps a stored preferences document mutes: short names only, without repeats. */
+export function mutedApps(data) {
+    const muted = data?.muted;
+    return Array.isArray(muted) ? [...new Set(muted.filter((a) => typeof a === 'string' && /^[a-z][a-z0-9-]{0,39}$/.test(a)))] : [];
+}
+/** Follows which apps the member has muted for themselves (none until they mute one). */
+export function watchMutedApps(db, householdId, email, onChange, onError) {
+    return onSnapshot(prefsOf(db, householdId, email), (snap) => onChange(mutedApps(snap.data())), (error) => onError?.(error));
+}
+/** Mutes or unmutes one app's reminders for the member, on all their devices. */
+export async function setAppMuted(db, householdId, email, app, muted) {
+    if (!email)
+        throw new Error(kt('feedback.signInFirst'));
+    await setDoc(prefsOf(db, householdId, email), { muted: muted ? arrayUnion(app) : arrayRemove(app), updatedAt: Date.now() }, { merge: true });
 }
