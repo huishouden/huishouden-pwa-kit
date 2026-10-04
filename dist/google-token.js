@@ -117,13 +117,7 @@ export async function googleAccessToken(auth, scopes, { persist = false, deniedM
     pending.set(key, request);
     return request;
 }
-/**
- * A one-time authorization code for `scopes`, from Google's code client in a popup, for a server
- * to exchange for lasting (offline) access with the client's secret: huishouden/calendar's Google
- * Calendar sync. The server exchanges it with `redirect_uri=postmessage`. Call from a tap. Rejects
- * as `googleAccessToken` does when the window is closed, blocked, or a scope is left unticked.
- */
-export async function googleAuthCode(auth, scopes, { deniedMessage = kt('googleToken.denied'), clientId } = {}) {
+export async function googleAuthCode(auth, scopes, { deniedMessage = kt('googleToken.denied'), clientId, selectAccount = false } = {}) {
     const user = auth.currentUser;
     if (!user)
         throw new Error(kt('feedback.signInFirst'));
@@ -139,8 +133,8 @@ export async function googleAuthCode(auth, scopes, { deniedMessage = kt('googleT
             client_id,
             scope: scopes.join(' '),
             ux_mode: 'popup',
-            include_granted_scopes: true,
-            ...(user.email ? { login_hint: user.email } : {}),
+            include_granted_scopes: !selectAccount,
+            ...(selectAccount ? { select_account: true } : user.email ? { login_hint: user.email } : {}),
             callback: resolve,
             error_callback: (e) => {
                 if (e.type === 'popup_closed')

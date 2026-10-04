@@ -33,10 +33,18 @@ export declare function googleAccessToken(auth: Auth, scopes: readonly string[],
 /**
  * A one-time authorization code for `scopes`, from Google's code client in a popup, for a server
  * to exchange for lasting (offline) access with the client's secret: huishouden/calendar's Google
- * Calendar sync. The server exchanges it with `redirect_uri=postmessage`. Call from a tap. Rejects
+ * Calendar sync, Spending's alert inbox. The server exchanges it with `redirect_uri=postmessage`. Call from a tap. Rejects
  * as `googleAccessToken` does when the window is closed, blocked, or a scope is left unticked.
  */
-export declare function googleAuthCode(auth: Auth, scopes: readonly string[], { deniedMessage, clientId }?: Pick<GoogleTokenOptions, 'deniedMessage' | 'clientId'>): Promise<{
+export interface GoogleAuthCodeOptions extends Pick<GoogleTokenOptions, 'deniedMessage' | 'clientId'> {
+    /**
+     * Let the person pick any Google account (Google's account chooser), not the one they signed in
+     * with: Spending's alert inbox, where card alerts arrive at another Gmail address. Asks only for
+     * `scopes` (no earlier grants added), so the code is for that account alone.
+     */
+    selectAccount?: boolean;
+}
+export declare function googleAuthCode(auth: Auth, scopes: readonly string[], { deniedMessage, clientId, selectAccount }?: GoogleAuthCodeOptions): Promise<{
     code: string;
     scope: string;
 }>;
