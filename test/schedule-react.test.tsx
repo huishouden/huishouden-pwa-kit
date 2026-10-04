@@ -78,5 +78,17 @@ describe('PrepPicker', () => {
     click('Days before');
     expect(seen.mock.lastCall![0]?.offset).toEqual({ daysBefore: 2, time: '07:00' });
   });
+
+  test('a time ending in a period (Spanish "p.m.") ends the sentence once', async () => {
+    const { setLangForTests, resetI18nForTests } = await import('../src/i18n');
+    await setLangForTests('es', ['es-MX']);
+    try {
+      render(<PrepPicker prep={{ title: 'Sacar la basura', offset: { daysBefore: 1, time: '19:00' }, remind: true }} suggestedTitle="" onChange={() => {}} />);
+      expect(text()).toContain('7 p.m.');
+      expect(text()).not.toContain('p.m..');
+    } finally {
+      resetI18nForTests();
+    }
+  });
 });
 

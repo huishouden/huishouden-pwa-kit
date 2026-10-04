@@ -189,6 +189,9 @@ export function findJsxLiterals(source, attributes = TEXT_ATTRIBUTES) {
             return false;
         if (/[\w$)\]]/.test(prev) && !['return', 'case', 'default', 'yield', 'await', 'in', 'of', 'else', 'do', '&&', '||', '??'].includes(prevWord))
             return false;
+        // A generic arrow function's type parameters in a .tsx file (`<T extends X>(...) =>`, `<T,>(...) =>`), not an element.
+        if (/^<[A-Za-z_$][\w$]*\s*(extends\b|,)/.test(source.slice(i, i + 80)))
+            return false;
         return true;
     };
     /** JavaScript until `close` (unbalanced), noting JSX inside it. */
