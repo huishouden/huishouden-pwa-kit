@@ -1,0 +1,47 @@
+{
+  "household": "h-demo",
+  "timeZone": "Europe/Amsterdam",
+  "members": {
+    "admin@example.com": "admin",
+    "member@example.com": "member",
+    "carer@example.com": "member",
+    "helper@example.com": "helper",
+    "kid@example.com": "kid"
+  },
+  "agenda": [
+    { "id": "home_event_bins_2031-10-02", "app": "home", "ref": "event:bins", "kind": "other", "title": "Garbage pickup", "start": "2031-10-02T07:00:00+02:00", "allDay": false, "detail": "Every Thursday", "url": "https://example.com/home/#regular", "private": false,
+      "series": { "rule": { "freq": "week", "every": 1, "start": "2031-09-04" }, "time": "07:00", "minutes": 30, "original": "2031-10-02", "through": "2031-10-30" },
+      "texts": { "es": { "title": "Recogida de basura", "detail": "Todos los jueves" }, "nl": { "title": "Afval ophalen", "detail": "Elke donderdag" } },
+      "edit": {
+        "reschedule": { "ops": [{ "col": "homeEvents", "id": "bins", "data": { "exceptions": { "2031-10-02": { "moved": { "date": "$date", "time": "$time" } } }, "updatedAt": "$now" }, "merge": true }], "roles": ["admin", "member"] },
+        "skip": { "ops": [{ "col": "homeEvents", "id": "bins", "data": { "exceptions": { "2031-10-02": { "skipped": true } }, "updatedAt": "$now" }, "merge": true }], "roles": ["admin", "member"] },
+        "rename": { "ops": [{ "col": "homeEvents", "id": "bins", "data": { "title": "$title", "updatedAt": "$now" }, "merge": true }], "roles": ["admin", "member"] }
+      },
+      "updatedAt": 1949000000000, "by": "admin@example.com" },
+    { "id": "home_event_bins_2031-10-09", "app": "home", "ref": "event:bins", "kind": "other", "title": "Garbage pickup", "start": "2031-10-09T07:00:00+02:00", "allDay": false, "detail": "Every Thursday", "url": "https://example.com/home/#regular", "private": false,
+      "series": { "rule": { "freq": "week", "every": 1, "start": "2031-09-04" }, "time": "07:00", "minutes": 30, "original": "2031-10-09", "through": "2031-10-30" },
+      "updatedAt": 1949000000000, "by": "admin@example.com" },
+    { "id": "home_event_bins_2031-10-24", "app": "home", "ref": "event:bins", "kind": "other", "title": "Garbage pickup", "start": "2031-10-24T08:00:00+02:00", "allDay": false, "detail": "Moved from Thursday", "url": "https://example.com/home/#regular", "private": false,
+      "series": { "rule": { "freq": "week", "every": 1, "start": "2031-09-04" }, "time": "07:00", "minutes": 30, "original": "2031-10-23", "through": "2031-10-30" },
+      "updatedAt": 1949000100000, "by": "admin@example.com" },
+    { "id": "home_event_bins_2031-10-30", "app": "home", "ref": "event:bins", "kind": "other", "title": "Garbage pickup", "start": "2031-10-30T07:00:00+01:00", "allDay": false, "detail": "Every Thursday", "url": "https://example.com/home/#regular", "private": false,
+      "series": { "rule": { "freq": "week", "every": 1, "start": "2031-09-04" }, "time": "07:00", "minutes": 30, "original": "2031-10-30", "through": "2031-10-30" },
+      "updatedAt": 1949000000000, "by": "admin@example.com" },
+    { "id": "home_prep_bins_1", "app": "home", "ref": "prep:bins", "kind": "task", "title": "Take the bins out", "start": "2031-10-01T19:00:00+02:00", "end": "2031-10-01T23:59:00+02:00", "allDay": false, "detail": "Before Thursday's pickup", "url": "https://example.com/home/#regular", "status": "upcoming", "private": false, "updatedAt": 1949000000000, "by": "admin@example.com" },
+    { "id": "home_prep_bins_2", "app": "home", "ref": "prep:bins", "kind": "task", "title": "Take the bins out", "start": "2031-10-08T19:00:00+02:00", "end": "2031-10-08T23:59:00+02:00", "allDay": false, "detail": "Before Thursday's pickup", "url": "https://example.com/home/#regular", "status": "done", "private": false, "updatedAt": 1949000000000, "by": "admin@example.com" },
+    { "id": "home_job_filter", "app": "home", "ref": "job:filter", "kind": "due", "title": "Change the furnace filter", "start": "2031-10-15T00:00:00+02:00", "allDay": true, "detail": "Every 3 months", "url": "https://example.com/home/#upkeep", "status": "upcoming", "private": false, "updatedAt": 1949000000000, "by": "member@example.com" },
+    { "id": "bills_bill_power", "app": "bills", "ref": "bill:power", "kind": "bill", "title": "Power bill", "start": "2031-10-20T00:00:00+02:00", "allDay": true, "detail": "€84.10", "url": "https://example.com/bills/", "status": "upcoming", "private": true, "updatedAt": 1949000000000, "by": "admin@example.com" },
+    { "id": "baby_appt_checkup", "app": "baby", "ref": "appointment:checkup", "kind": "appointment", "title": "Checkup", "start": "2031-10-07T10:30:00+02:00", "end": "2031-10-07T11:00:00+02:00", "allDay": false, "detail": "Clinic, Main Street", "url": "https://example.com/baby/", "private": false, "updatedAt": 1949000000000, "by": "member@example.com" },
+    { "id": "pet_appt_vet", "app": "pet", "ref": "appointment:vet", "kind": "appointment", "title": "Vet: surgery follow-up", "start": "2031-10-10T16:00:00+02:00", "allDay": false, "url": "https://example.com/pet/", "private": true, "updatedAt": 1949000000000, "by": "member@example.com" },
+    { "id": "car_renewal", "app": "car", "ref": "renewal:insurance", "kind": "renewal", "title": "Car insurance renews", "start": "2031-10-28T00:00:00+01:00", "end": "2031-10-30T00:00:00+01:00", "allDay": true, "url": "https://example.com/car/", "private": false, "updatedAt": 1949000000000, "by": "member@example.com" },
+    { "id": "health_dose_ana", "app": "health", "ref": "dose:ana:2031-10-05T08:00", "kind": "medicine", "title": "Medicine for Ana", "start": "2031-10-05T08:00:00+02:00", "allDay": false, "detail": "Amoxicillin 250 mg", "who": "Ana", "url": "https://example.com/health/#ana", "status": "upcoming", "private": true, "audience": ["admin@example.com", "carer@example.com"],
+      "texts": { "es": { "title": "Medicina para Ana", "detail": "Amoxicilina 250 mg" } },
+      "updatedAt": 1949000000000, "by": "carer@example.com" }
+  ],
+  "todos": [
+    { "id": "tasks:item:paint", "app": "tasks", "ref": "item:paint", "title": "Buy paint", "createdAt": 1948000000000, "due": "2031-10-12T00:00:00+02:00", "url": "https://example.com/tasks/", "status": "open", "private": false, "updatedAt": 1949000000000, "by": "member@example.com" },
+    { "id": "tasks:item:nodue", "app": "tasks", "ref": "item:nodue", "title": "Call the plumber", "createdAt": 1948000000000, "url": "https://example.com/tasks/", "status": "open", "private": false, "updatedAt": 1949000000000, "by": "member@example.com" },
+    { "id": "bills:bill:power", "app": "bills", "ref": "bill:power", "title": "Pay the power bill", "createdAt": 1948000000000, "due": "2031-10-20T00:00:00+02:00", "url": "https://example.com/bills/", "status": "open", "private": true, "updatedAt": 1949000000000, "by": "admin@example.com" },
+    { "id": "groceries:summary", "app": "groceries", "ref": "summary", "title": "Groceries: 6 on the list", "createdAt": 1948000000000, "due": "2031-10-03T00:00:00+02:00", "url": "https://example.com/groceries/", "status": "info", "private": false, "updatedAt": 1949000000000, "by": "member@example.com" }
+  ]
+}

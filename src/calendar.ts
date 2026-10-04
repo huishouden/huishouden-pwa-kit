@@ -5,11 +5,13 @@ import { fitsRule, inferRule, type EventRule, type PrepOffset } from './schedule
 import { addDays, formatDayShort, formatTime, startOfDay, toHhmm, toYmd, weekdayShort, type Hhmm } from './time';
 import { capitalize, kt } from './i18n.js';
 import { dismissId, dismissedIds } from './suggestions';
+import { isExportedEvent } from './calendar-export.js';
 
 /**
  * Finds Google Calendar events that match a piece of household data (a task, an appointment), so
  * an app can fill in its date, time and place from the calendar instead of retyping them.
- * Read-only: the app never writes to the calendar.
+ * Read-only: the app never writes to the calendar. Events Huishouden's calendar export wrote (the
+ * person's "Huishouden" calendar) are never matched or suggested.
  */
 
 export const CALENDAR_SCOPES = [
@@ -103,12 +105,19 @@ interface GoogleEvent {
   recurringEventId?: string;
   start: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
+  extendedProperties?: { private?: Record<string, string>; shared?: Record<string, string> };
+  iCalUID?: string;
 }
 
 const localDay = (date: string) => (([y, m, d]) => new Date(y, m - 1, d).getTime())(date.split('-').map(Number));
 
+/**
+ * A Google event as a match, or null for one that isn't an event to bring in: cancelled, without a
+ * time, or written by Huishouden's own calendar export (`./calendar-export`, its private
+ * `huishouden` property), which would otherwise come back as a suggestion of itself.
+ */
 export function toMatch(e: GoogleEvent, calendarName: string, calendarId?: string): CalendarMatch | null {
-  if (e.status === 'cancelled' || (!e.start.dateTime && !e.start.date)) return null;
+  if (e.status === 'cancelled' || (!e.start.dateTime && !e.start.date) || isExportedEvent(e)) return null;
   const allDay = !e.start.dateTime;
   const start = allDay ? localDay(e.start.date!) : Date.parse(e.start.dateTime!);
   const end = e.end?.dateTime ? Date.parse(e.end.dateTime) : e.end?.date ? localDay(e.end.date) : undefined;

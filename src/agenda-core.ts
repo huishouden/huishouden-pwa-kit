@@ -2,6 +2,10 @@ import { MONEY_APPS } from './role-core.js';
 import { cleanAudience, inAudience } from './audience.js';
 import { HOUR, daysBetween, dueText, dueWords, formatTime, longDate, startOfDay, toYmd, type Ymd, ymdToTime, addDays } from './time.js';
 import { capitalize, cleanLocalTexts, kt, localizeRecords, localized, type LocalTexts } from './i18n.js';
+import { cleanRule, isEventRule, type EventRule } from './schedule.js';
+import { isHhmm, isYmd, type Hhmm } from './time.js';
+import { ROLES, type Role } from './role-core.js';
+import type { Op } from './store.js';
 
 /**
  * The household's agenda: dated things from every app in one collection,
@@ -54,6 +58,18 @@ export interface AgendaItem {
   audience?: string[];
   /** The title and detail in every language (`localizeAgenda`); `title`/`detail` are the writer's and the fallback. */
   texts?: AgendaTexts;
+  /**
+   * One occurrence of something on a schedule (garbage pickup every Thursday): the schedule, so a
+   * calendar can show the whole series as one repeating event (`./calendar-export`), and which of
+   * its days this one is.
+   */
+  series?: AgendaSeries;
+  /**
+   * How a change made elsewhere (the item moved or renamed in the person's own calendar) is written
+   * back to the record it came from: declarative writes on the app's own collections, as a to-do's
+   * Done (`./todo-core`), made as the person so the app's rules still decide.
+   */
+  edit?: AgendaEdit;
   updatedAt: number;
   /** Lowercase email of the member whose app wrote it. */
   by: string;
@@ -62,7 +78,75 @@ export interface AgendaItem {
 /** What an agenda item says, per language. */
 export type AgendaTexts = LocalTexts<'title' | 'detail'>;
 
-export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'private', 'texts', 'updatedAt', 'by'] as const;
+export const AGENDA_FIELDS = ['app', 'ref', 'kind', 'title', 'start', 'end', 'allDay', 'detail', 'url', 'who', 'status', 'private', 'texts', 'series', 'edit', 'updatedAt', 'by'] as const;
+
+/**
+ * An occurrence's schedule. Each occurrence of the series carries the same `rule`, `time` and
+ * `through`; `original` is the day the schedule put this one on (the key of a move or skip in the
+ * app's own record), which differs from the item's day when it was moved. A day of the rule up to
+ * `through` with no item is skipped; after `through` nothing is known yet, so the schedule stands.
+ */
+export interface AgendaSeries {
+  rule: EventRule;
+  /** Its usual time of day; all day without one. */
+  time?: Hhmm;
+  /** How long a timed occurrence lasts, in minutes (default `SERIES_DEFAULT_MINUTES`). */
+  minutes?: number;
+  original: Ymd;
+  /** The last day the app published occurrences for. */
+  through: Ymd;
+}
+
+export const SERIES_FIELDS = ['rule', 'time', 'minutes', 'original', 'through'] as const;
+export const SERIES_DEFAULT_MINUTES = 60;
+
+/**
+ * Writes that change the source record, each with the roles that may (the same as the app's rules).
+ * `reschedule`: the item moved to another day or time. `retime`: a series' usual time changed for
+ * every occurrence. `rename`: a new title (for a series, the whole series'). `notes`: new notes.
+ * `skip`: this occurrence of a series won't happen. `cancel`: a one-off item was deleted.
+ *
+ * Op data may use the to-do placeholders (`'$now'`, `'$today'`, `'$me'`) and these, filled in from
+ * the change: `'$start'` and `'$end'` (ms), `'$date'` (YYYY-MM-DD) and `'$time'` (HH:MM, or the
+ * field is removed when the item became all day), `'$title'` and `'$notes'`.
+ */
+export interface AgendaEdit {
+  reschedule?: AgendaAction;
+  retime?: AgendaAction;
+  rename?: AgendaAction;
+  notes?: AgendaAction;
+  skip?: AgendaAction;
+  cancel?: AgendaAction;
+}
+
+export type AgendaEditKind = keyof AgendaEdit;
+export const AGENDA_EDIT_KINDS: readonly AgendaEditKind[] = ['reschedule', 'retime', 'rename', 'notes', 'skip', 'cancel'];
+
+export interface AgendaAction {
+  /** Writes under `households/{id}`, on collections the app may change (`AGENDA_EDIT_COLLECTIONS`). */
+  ops: Op[];
+  roles: Role[];
+  /** Also these members (lowercase emails): whoever added the record, a medicine's carers. */
+  emails?: string[];
+}
+
+/** The most writes one action may make, and members it may name. */
+export const AGENDA_EDIT_LIMITS = { ops: 4, emails: 12 } as const;
+
+/**
+ * The collections each app's agenda edits may write. A change from a calendar that would touch
+ * anything else is refused, so an item can't be made to change money or settings.
+ */
+export const AGENDA_EDIT_COLLECTIONS: Record<string, readonly string[]> = {
+  home: ['homeTasks', 'homeServiceLog', 'homeEvents'],
+  baby: ['babyAppointments', 'babyChecklists'],
+  pet: ['petAppointments', 'petReminders'],
+  car: ['carAppointments', 'carRenewals', 'carServiceItems'],
+  tasks: ['items'],
+  health: [],
+  bills: [],
+  groceries: [],
+};
 
 /** The collection of items for named members only (`./audience`). */
 export const PERSONAL_AGENDA = 'personalAgenda';
@@ -130,6 +214,9 @@ export function agendaDoc(app: string, input: AgendaInput, by: string, now = Dat
   const detail = clip(input.detail, AGENDA_LIMITS.detail);
   const who = clip(input.who, AGENDA_LIMITS.who);
   const texts = cleanLocalTexts(input.texts, AGENDA_TEXT_LIMITS);
+  const series = input.series === undefined ? undefined : cleanSeries(input.series);
+  if (input.series !== undefined && !series) throw new Error('Agenda series is not a schedule the rules accept.');
+  const edit = input.edit === undefined ? undefined : cleanEdit(app, input.edit);
   return {
     app,
     ref: input.ref.slice(0, AGENDA_LIMITS.ref),
@@ -144,6 +231,8 @@ export function agendaDoc(app: string, input: AgendaInput, by: string, now = Dat
     ...(input.status ? { status: input.status } : {}),
     private: input.private === true || MONEY_APPS.includes(app),
     ...(texts ? { texts } : {}),
+    ...(series ? { series } : {}),
+    ...(edit ? { edit } : {}),
     updatedAt: now,
     by: by.trim().toLowerCase(),
   };
@@ -174,6 +263,159 @@ export function inAgendaWindow(item: Pick<AgendaItem, 'start' | 'end' | 'status'
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 
+/** A series as stored: known keys only, or undefined when it isn't one. */
+export function cleanSeries(v: unknown): AgendaSeries | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const s = v as Record<string, unknown>;
+  if (!isEventRule(s.rule) || !isYmd(s.original) || !isYmd(s.through)) return undefined;
+  if (s.time !== undefined && !isHhmm(s.time)) return undefined;
+  const minutes = typeof s.minutes === 'number' && Number.isInteger(s.minutes) && s.minutes > 0 && s.minutes <= 24 * 60 ? s.minutes : undefined;
+  return {
+    rule: cleanRule(s.rule),
+    ...(s.time ? { time: s.time as Hhmm } : {}),
+    ...(minutes ? { minutes } : {}),
+    original: s.original as Ymd,
+    through: s.through as Ymd,
+  };
+}
+
+/** Whether a collection path matches an entry of `AGENDA_EDIT_COLLECTIONS` (`*` is one id). */
+function collectionMatches(pattern: string, col: string): boolean {
+  const want = pattern.split('/');
+  const have = col.split('/');
+  return want.length === have.length && want.every((w, i) => (w === '*' ? /^[^/]{1,200}$/.test(have[i]) && have[i] !== '.' && have[i] !== '..' : w === have[i]));
+}
+
+/** Whether every op writes only collections `app`'s edits may (`AGENDA_EDIT_COLLECTIONS`), and at most `AGENDA_EDIT_LIMITS.ops`. */
+export function agendaOpsAllowed(app: string, ops: readonly Op[]): boolean {
+  const allowed = AGENDA_EDIT_COLLECTIONS[app] ?? [];
+  return (
+    ops.length > 0 &&
+    ops.length <= AGENDA_EDIT_LIMITS.ops &&
+    ops.every(
+      (op) =>
+        allowed.some((p) => collectionMatches(p, op.col)) &&
+        typeof op.id === 'string' &&
+        /^[^/]{1,200}$/.test(op.id) &&
+        op.id !== '.' &&
+        op.id !== '..' &&
+        (op.data === null || (typeof op.data === 'object' && !Array.isArray(op.data))),
+    )
+  );
+}
+
+const plain = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+function readAction(app: string, v: unknown): AgendaAction | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const a = v as Record<string, unknown>;
+  if (!Array.isArray(a.ops)) return undefined;
+  const ops = a.ops.flatMap((o): Op[] => {
+    if (!o || typeof o !== 'object') return [];
+    const { col, id, data, merge } = o as Record<string, unknown>;
+    if (typeof col !== 'string' || typeof id !== 'string') return [];
+    if (data !== null && (typeof data !== 'object' || Array.isArray(data))) return [];
+    return [{ col, id, data: data === null ? null : plain(data as object), ...(merge === true ? { merge: true } : {}) }];
+  });
+  if (!agendaOpsAllowed(app, ops)) return undefined;
+  const roles = Array.isArray(a.roles) ? ROLES.filter((r) => (a.roles as unknown[]).includes(r)) : [];
+  const emails = Array.isArray(a.emails)
+    ? [...new Set(a.emails.filter((e): e is string => typeof e === 'string').map((e) => e.trim().toLowerCase()))].slice(0, AGENDA_EDIT_LIMITS.emails)
+    : [];
+  if (roles.length === 0 && emails.length === 0) return undefined;
+  return { ops, roles, ...(emails.length ? { emails } : {}) };
+}
+
+function readEdit(app: string, v: unknown): AgendaEdit | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const e = v as Record<string, unknown>;
+  const out: AgendaEdit = {};
+  for (const kind of AGENDA_EDIT_KINDS) {
+    const action = readAction(app, e[kind]);
+    if (action) out[kind] = action;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** An item's edits as stored; throws on one that writes outside the app's collections (`AGENDA_EDIT_COLLECTIONS`). */
+export function cleanEdit(app: string, edit: AgendaEdit): AgendaEdit | undefined {
+  for (const kind of Object.keys(edit)) {
+    if (!(AGENDA_EDIT_KINDS as readonly string[]).includes(kind)) throw new Error(`Unknown agenda edit: ${kind}`);
+    const action = edit[kind as AgendaEditKind];
+    if (action && !agendaOpsAllowed(app, action.ops)) throw new Error(`Agenda ${kind} writes outside ${app}'s collections.`);
+  }
+  return readEdit(app, edit);
+}
+
+/** Whether `me` with `role` may make the item's `kind` edit: it exists, is allowed for the app, and names their role or them. */
+export function canEdit(item: Pick<AgendaItem, 'app' | 'edit'>, kind: AgendaEditKind, role: Role | null | undefined, me: string | null | undefined): boolean {
+  const action = item.edit?.[kind];
+  if (!action || !role || !agendaOpsAllowed(item.app, action.ops)) return false;
+  if (MONEY_APPS.includes(item.app) && role !== 'admin' && role !== 'member') return false;
+  if (action.roles.includes(role)) return true;
+  const email = me?.trim().toLowerCase() ?? '';
+  return !!email && (action.emails ?? []).includes(email);
+}
+
+/** What fills an edit's placeholders: the change as the calendar has it. */
+export interface EditValues {
+  start?: number;
+  end?: number;
+  /** YYYY-MM-DD, the item's day where it happens. */
+  date?: Ymd;
+  /** HH:MM, or null when it became all day (the field is removed). */
+  time?: Hhmm | null;
+  title?: string;
+  notes?: string;
+}
+
+/** Sentinel the writer turns into a field delete (Firestore REST: the field left out of a merge's values). */
+export const DELETE_FIELD = '$delete';
+
+function fillValue(v: unknown, values: EditValues): unknown {
+  if (typeof v === 'string') {
+    switch (v) {
+      case '$start':
+        return values.start ?? v;
+      case '$end':
+        return values.end ?? v;
+      case '$date':
+        return values.date ?? v;
+      case '$time':
+        return values.time === null ? DELETE_FIELD : (values.time ?? v);
+      case '$title':
+        return values.title ?? v;
+      case '$notes':
+        return values.notes ?? v;
+      default:
+        return v;
+    }
+  }
+  if (Array.isArray(v)) return v.map((x) => fillValue(x, values));
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fillValue(x, values)]));
+  return v;
+}
+
+const EDIT_PLACEHOLDER = /^\$(start|end|date|time|title|notes)$/;
+
+function hasUnfilled(v: unknown): boolean {
+  if (typeof v === 'string') return EDIT_PLACEHOLDER.test(v);
+  if (Array.isArray(v)) return v.some(hasUnfilled);
+  if (v && typeof v === 'object') return Object.values(v).some(hasUnfilled);
+  return false;
+}
+
+/**
+ * An edit's ops with the change's values in place of `'$start'`, `'$date'`, `'$time'`, `'$title'`
+ * and so on (the to-do placeholders such as `'$now'` are left for `resolveOps`). Throws when the
+ * change lacks a value an op needs. `'$time'` for an item that became all day is `DELETE_FIELD`.
+ */
+export function fillEditOps(ops: readonly Op[], values: EditValues): Op[] {
+  const out = ops.map((op) => ({ ...op, data: op.data === null ? null : (fillValue(op.data, values) as object) }));
+  if (out.some((op) => hasUnfilled(op.data))) throw new Error('The change is missing a value this edit needs.');
+  return out;
+}
+
 /** A stored document as an item, read defensively. */
 export function toAgendaItem(id: string, data: Record<string, unknown>): AgendaItem {
   const kind = AGENDA_KINDS.includes(data.kind as AgendaKind) ? (data.kind as AgendaKind) : 'other';
@@ -182,6 +424,8 @@ export function toAgendaItem(id: string, data: Record<string, unknown>): AgendaI
   const detail = str(data.detail);
   const who = str(data.who);
   const texts = cleanLocalTexts(data.texts, AGENDA_TEXT_LIMITS);
+  const series = cleanSeries(data.series);
+  const edit = readEdit(str(data.app) ?? '', data.edit);
   return {
     id,
     app: str(data.app) ?? '',
@@ -199,6 +443,8 @@ export function toAgendaItem(id: string, data: Record<string, unknown>): AgendaI
     ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
     ...(Array.isArray(data.audience) ? { audience: data.audience.filter((e): e is string => typeof e === 'string') } : {}),
     ...(texts ? { texts } : {}),
+    ...(series ? { series } : {}),
+    ...(edit ? { edit } : {}),
     updatedAt: num(data.updatedAt) ?? 0,
     by: str(data.by) ?? '',
   };
