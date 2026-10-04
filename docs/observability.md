@@ -38,7 +38,7 @@ and `track`, `trackView`'s count and the household hash are skipped silently; er
 still go. There is no opt-out screen.
 
 Not collected: names, emails, household ids, entries or anything typed, query strings and
-fragments, city (dropped at ingest by a drop rule), IP addresses (New Relic does not store them for
+fragments, city (dropped at ingest by a pipeline cloud rule), IP addresses (New Relic does not store them for
 Browser), session ids, replays, traces, AJAX URLs, clicks. `redact` and the agent's `obfuscate`
 rules strip emails, `households/…` and `profiles/…` path ids, query strings and long numbers from
 every message, stack trace and URL before it is sent.
@@ -109,8 +109,9 @@ The workflow runs when `apps.json` changes on `main`, weekly (repairs drift: a m
 deleted by hand), and on demand. It:
 
 1. Creates or updates, by name: a Browser app per app (`Huishouden Baby`, …), a ping monitor per
-   app at its path on the suite's site (`https://<site>.web.app/<app>/`), the drop rules, the alert
-   policy, conditions, email destination, channel and workflow, and the dashboard. A family ping
+   app at its path on the suite's site (`https://<site>.web.app/<app>/`), the alert policy,
+   conditions, email destination, channel and workflow, the dashboard, and a pipeline cloud rule
+   per browser event type that drops city and coordinates (NRQL drop rules ended 2026-06-30). A family ping
    monitor whose name is not one of the apps' (a removed app) is deleted; an existing monitor at an
    old per-app address is moved to the path.
 2. Writes each app's browser settings (account id, app id, browser key `NRJS-…`; public by design,
@@ -172,7 +173,7 @@ app's repo instead (apps served from a site of their own; needs `gh` with admin 
 | Full platform users | 1 | 1 |
 | Ping monitors | Unlimited | 10 apps × 2 locations × 4/hour ≈ 58,000 checks/month, not billed |
 | Other synthetic checks | 500/month | 0 |
-| Alerts, dashboards, drop rules | Included | 5 conditions, 1 dashboard |
+| Alerts, dashboards, pipeline cloud rules | Included | 5 conditions, 1 dashboard, 5 rules |
 
 Browser events are kept for New Relic's default retention (8 days for raw events at the time of
 writing), so the dashboard's month-long charts fill in over time and older detail ages out.
