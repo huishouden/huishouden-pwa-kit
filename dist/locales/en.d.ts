@@ -129,10 +129,10 @@ declare const _default: {
     readonly 'roles.alwaysGive': "Admins and members can always give it; kids can’t.";
     readonly 'reminders.medicine': "Medicine";
     readonly 'reminders.titleFor': "{who}: {name}";
-    readonly 'reminders.bodyDoseFood': "{dose} at {time}, {food, select, with {with food} other {on an empty stomach}}";
-    readonly 'reminders.bodyDose': "{dose} at {time}";
+    readonly 'reminders.bodyDoseFood': "{dose} {at}, {food, select, with {with food} other {on an empty stomach}}";
+    readonly 'reminders.bodyDose': "{dose} {at}";
     readonly 'reminders.bodyFood': "{food, select, with {with food} other {on an empty stomach}}";
-    readonly 'reminders.bodyTime': "Dose at {time}";
+    readonly 'reminders.bodyTime': "Dose {at}";
     readonly 'push.iosNotInstalled': "On iPhone and iPad, notifications work once the app is on the Home Screen: tap Share, then \"Add to Home Screen\", and open it from there.";
     readonly 'push.iosTooOld': "Notifications need iOS or iPadOS 16.4 or later.";
     readonly 'push.unsupported': "This browser can't show notifications from web apps.";
