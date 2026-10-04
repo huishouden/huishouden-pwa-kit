@@ -117,6 +117,10 @@ export interface SiteManifest {
         sha?: string;
         version?: string;
     }>;
+    /** The portal's `observability.json` release asset behind `/hh-observability.json` (production only). */
+    observability?: number | null;
 }
 /** Paths whose published build differs from what `manifest` holds (a newer one, or one it lacks). */
 export declare function staleApps(manifest: SiteManifest | null, latest: Record<string, number | null>): string[];
+/** Whether the published observability settings (`latest`, an asset id) differ from what `manifest` holds. */
+export declare function staleObservability(manifest: SiteManifest | null, latest: number | null): boolean;

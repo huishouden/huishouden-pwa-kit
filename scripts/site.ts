@@ -6,7 +6,7 @@
 //   pwa-site pack <dist> <out.tar.gz> --path /pet/        stamp a build and pack it for a release asset
 //   pwa-site assemble --flavor production|staging --out <dir> [--site <name>] [--own /pet/=dist] [--redirects]
 //                                                         every app's latest build under its path, plus firebase.json
-//   pwa-site stale --manifest <file|url> --flavor <f>     which apps published since that deploy
+//   pwa-site stale --manifest <file|url> --flavor <f>     which apps (or the observability settings) published since that deploy
 //   pwa-site redirects-check                              whether every old site redirects as apps.json says
 //
 // Common options: --registry <file|url> (default ./apps.json, else <owner>/portal's on main),
@@ -31,7 +31,9 @@ import {
   type BuildStamp,
   type HostingSite,
   type SiteManifest,
+  staleObservability,
 } from '../src/site';
+import { SITE_OBSERVABILITY, parseSiteObservability } from '../src/observability';
 
 const RELEASE_TAG = 'hosting';
 const assetName = (flavor: string) => (flavor === 'staging' ? 'site-staging.tar.gz' : 'site.tar.gz');
@@ -86,16 +88,41 @@ async function loadRegistry(): Promise<unknown> {
 }
 
 /** The latest published build of `repo` for `flavor`: its asset id, or null when it has none. */
-async function latestAsset(repo: string, flavor: string): Promise<number | null> {
+async function latestAsset(repo: string, flavor: string, tag = RELEASE_TAG, name = assetName(flavor)): Promise<number | null> {
   for (let attempt = 1; ; attempt++) {
-    const release = (await getJson(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${RELEASE_TAG}`, true)) as { assets?: { id: number; name: string }[] } | null;
+    const release = (await getJson(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`, true)) as { assets?: { id: number; name: string }[] } | null;
     if (!release) return null;
-    const id = release.assets?.find((a) => a.name === assetName(flavor))?.id;
+    const id = release.assets?.find((a) => a.name === name)?.id;
     if (id !== undefined) return id;
     // A release without the asset is most likely mid-replacement (upload --clobber deletes first).
     if (attempt >= 4) return null;
     await Bun.sleep(5000);
   }
+}
+
+// The browser-agent settings for every app, published by the portal's monitoring workflow
+// (docs/observability.md) as an asset of its `observability` release.
+const OBSERVABILITY_TAG = 'observability';
+const OBSERVABILITY_ASSET = 'observability.json';
+const portalRepo = (registry: unknown) => siteApps(registry)[0].repo;
+
+/** Writes `<pub>/hh-observability.json` for the apps in this deploy; returns the asset id used, or null. */
+async function writeObservability(repo: string, pub: string, paths: string[]): Promise<number | null> {
+  const id = await latestAsset(repo, 'production', OBSERVABILITY_TAG, OBSERVABILITY_ASSET);
+  if (id === null) {
+    console.log(`${SITE_OBSERVABILITY}: ${repo} has published no ${OBSERVABILITY_ASSET}; apps fall back to their build variables`);
+    return null;
+  }
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/assets/${id}`, {
+    headers: { Accept: 'application/octet-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  }).catch(() => null);
+  const parsed = res?.ok ? parseSiteObservability(await res.json().catch(() => null)) : null;
+  // A file that isn't exactly account and app ids and browser keys is never published.
+  if (!parsed) fail(`${repo}'s ${OBSERVABILITY_ASSET} (asset ${id}) is missing or not valid; not publishing it`);
+  const apps = Object.fromEntries(Object.entries(parsed.apps).filter(([path]) => paths.includes(path)));
+  writeFileSync(join(pub, SITE_OBSERVABILITY), `${JSON.stringify({ accountId: parsed.accountId, apps }, null, 2)}\n`);
+  console.log(`${SITE_OBSERVABILITY}: asset ${id}, ${Object.keys(apps).length} of ${paths.length} apps configured`);
+  return id;
 }
 
 function tar(args: string[]) {
@@ -213,6 +240,7 @@ async function assemble() {
   for (const path of included.filter((p) => p !== '/')) {
     if (!existsSync(join(pub, path, 'index.html'))) fail(`${path} has no index.html`);
   }
+  if (flavor === 'production') manifest.observability = await writeObservability(portalRepo(registry), pub, included);
   writeFileSync(join(pub, SITE_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
 
   const hosting: HostingSite[] = [siteConfig(site, included.map((path, i) => ({ path, features: featuresOf(policies[i]) })))];
@@ -235,10 +263,13 @@ async function stale() {
   const from = opt('manifest');
   if (!from) fail('usage: pwa-site stale --manifest <file|url> [--flavor production|staging]');
   const manifest = (/^https:\/\//.test(from) ? await getJson(`${from}${from.includes('?') ? '&' : '?'}t=${Date.now()}`) : existsSync(from) ? JSON.parse(readFileSync(from, 'utf8')) : null) as SiteManifest | null;
-  const apps = siteApps(await loadRegistry());
+  const registry = await loadRegistry();
+  const apps = siteApps(registry);
   const latest: Record<string, number | null> = {};
   for (const app of apps) latest[app.path] = await latestAsset(app.repo, flavor);
   const paths = staleApps(manifest, latest);
+  if (flavor === 'production' && staleObservability(manifest, await latestAsset(portalRepo(registry), flavor, OBSERVABILITY_TAG, OBSERVABILITY_ASSET)))
+    paths.push(`/${SITE_OBSERVABILITY}`);
   if (paths.length) console.log(`newer builds than ${from}: ${paths.join(' ')}`);
   else console.log(`${from} holds every app's latest build`);
   output('stale', paths.length ? 'true' : 'false');

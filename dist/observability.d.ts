@@ -12,7 +12,8 @@
  * the agent's obfuscation rules run over every message, stack trace and URL).
  *
  * Nothing at all is sent from automated browsers (Playwright, CI), local builds, hosts other than
- * the apps' own, or builds without the New Relic variables. The portal's /privacy page says this in
+ * the apps' own, or apps the site's `hh-observability.json` (or the New Relic variables) don't
+ * configure. The portal's /privacy page says this in
  * plain words.
  */
 export interface NewRelicConfig {
@@ -24,12 +25,37 @@ export interface NewRelicConfig {
 }
 /** `VITE_NEWRELIC_ACCOUNT_ID`, `VITE_NEWRELIC_APP_ID`, `VITE_NEWRELIC_BROWSER_KEY`; null when any is missing. */
 export declare function newRelicConfigFromEnv(env: Record<string, unknown>): NewRelicConfig | null;
+/**
+ * Served at the root of the suite's one site: the browser-agent settings for every app on it, by the
+ * app's path. Written by the deploy from the portal's `observability` release asset, which the
+ * portal's monitoring workflow publishes (docs/observability.md), so no app needs repo variables
+ * and a new app reports from its first deploy. Every value in it is public by design.
+ */
+export declare const SITE_OBSERVABILITY = "hh-observability.json";
+export interface SiteObservability {
+    accountId: string;
+    /** By path (`/`, `/pet/`). */
+    apps: Record<string, {
+        appId: string;
+        browserKey: string;
+    }>;
+}
+/**
+ * Checks a `hh-observability.json` and returns it with nothing but the expected fields, or null when
+ * anything in it is not an account id, app id or browser key (`NRJS-…`). The check is what keeps a
+ * user key (`NRAK-…`) or anything else from ever being published to the site.
+ */
+export declare function parseSiteObservability(value: unknown): SiteObservability | null;
+/** This app's settings from the site's `hh-observability.json`, by its base (`import.meta.env.BASE_URL`). */
+export declare function newRelicConfigFromSite(file: unknown, base: string): NewRelicConfig | null;
 /** Hosting sites the apps are served from. Anything else (localhost, previews) sends nothing. */
 export declare const DEFAULT_HOSTS: RegExp;
 /** Why nothing is sent from this page. */
 export type ObservabilityBlock = 'not-configured' | 'automation' | 'host';
 /** Why nothing would be sent from this page, or null when errors and performance would be. */
 export declare function observabilityBlock(config: NewRelicConfig | null, hosts?: RegExp): ObservabilityBlock | null;
+/** Fetches the site's `hh-observability.json`; null when there is none or it can't be read. */
+export type SiteObservabilityFetch = () => Promise<unknown | null>;
 /** Whether usage counts may be sent: not when the browser sends Global Privacy Control or Do Not Track. */
 export declare function usageAllowed(): boolean;
 /**
@@ -107,19 +133,27 @@ export declare const AGENT_INIT: {
 export interface ObservabilityOptions {
     /** The app's short name (`baby`, `portal`), the `app` attribute on everything sent. */
     app: string;
-    /** `import.meta.env`: the New Relic variables, `VITE_APP_VERSION` and `VITE_BUILD_SHA`. */
+    /**
+     * `import.meta.env`: `BASE_URL` (the app's path, to find it in the site's `hh-observability.json`),
+     * `VITE_APP_VERSION`, `VITE_BUILD_SHA`, and the `VITE_NEWRELIC_*` variables for builds served
+     * without the file (a site of their own).
+     */
     env: Record<string, unknown>;
     /** Hostnames allowed to send (default `*.web.app` and `*.firebaseapp.com`). */
     hosts?: RegExp;
     /** Replaces the New Relic loader (tests). */
     loader?: AgentLoader;
+    /** Replaces the request for the site's `hh-observability.json` (tests). */
+    siteConfig?: SiteObservabilityFetch;
 }
 /** Whether this page sends errors and performance. */
 export declare function observabilityActive(): boolean;
 /**
  * Starts reporting for this app, once, as early as possible (in `firebase.ts` or `main.tsx`, before
- * rendering). Does nothing when `observabilityBlock` gives a reason; the agent is downloaded only
- * when it will be used.
+ * rendering). Does nothing on pages `observabilityBlock` rules out (automated browsers, other
+ * hosts). Otherwise the settings come from the site's `hh-observability.json` (the entry for
+ * `env.BASE_URL`), else from the `VITE_NEWRELIC_*` variables; with neither, nothing is sent and
+ * anything queued meanwhile is dropped. The agent is downloaded only when it will be used.
  */
 export declare function startObservability(options: ObservabilityOptions): ObservabilityBlock | null;
 /**

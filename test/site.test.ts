@@ -11,6 +11,7 @@ import {
   siteApps,
   siteConfig,
   staleApps,
+  staleObservability,
 } from '../src/site';
 import { globToRegExp } from '../src/security-headers';
 
@@ -150,5 +151,22 @@ describe('staleApps', () => {
     expect(staleApps(manifest, { '/': 1, '/pet/': 3 })).toEqual(['/pet/']);
     expect(staleApps(manifest, { '/': 1, '/pet/': 2, '/baby/': 7 })).toEqual(['/baby/']);
     expect(staleApps(null, { '/': 1 })).toEqual(['/']);
+  });
+});
+
+describe('staleObservability', () => {
+  const manifest = { site: 's', flavor: 'production' as const, deployedAt: '', apps: {}, observability: 5 };
+  test('a newer settings asset, or one the deploy lacks, is stale; none published is not', () => {
+    expect(staleObservability(manifest, 5)).toBe(false);
+    expect(staleObservability(manifest, 6)).toBe(true);
+    expect(staleObservability({ ...manifest, observability: undefined }, 5)).toBe(true);
+    expect(staleObservability(manifest, null)).toBe(false);
+    expect(staleObservability(null, 1)).toBe(true);
+  });
+
+  test('the settings file is fetched fresh', () => {
+    const config = siteConfig('example-family', [{ path: '/' }]);
+    const fresh = config.headers!.filter((h) => h.headers.some((x) => x.value === 'no-cache')).map((h) => h.source ?? h.regex);
+    expect(fresh.some((p) => p && globToRegExp(p).test('/hh-observability.json'))).toBe(true);
   });
 });
