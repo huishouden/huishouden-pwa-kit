@@ -65,9 +65,17 @@
       "types": "./dist/firebase.d.ts",
       "default": "./dist/firebase.js"
     },
+    "./firebase-auth-rest": {
+      "types": "./dist/firebase-auth-rest.d.ts",
+      "default": "./dist/firebase-auth-rest.js"
+    },
     "./firestore": {
       "types": "./dist/firestore.d.ts",
       "default": "./dist/firestore.js"
+    },
+    "./firestore-rest": {
+      "types": "./dist/firestore-rest.d.ts",
+      "default": "./dist/firestore-rest.js"
     },
     "./food": {
       "types": "./dist/food.d.ts",
@@ -104,6 +112,10 @@
     "./log": {
       "types": "./dist/log.d.ts",
       "default": "./dist/log.js"
+    },
+    "./local-clock": {
+      "types": "./dist/local-clock.d.ts",
+      "default": "./dist/local-clock.js"
     },
     "./logo": {
       "types": "./dist/logo.d.ts",
@@ -228,6 +240,10 @@
     "./site": {
       "types": "./dist/site.d.ts",
       "default": "./dist/site.js"
+    },
+    "./signin-handoff": {
+      "types": "./dist/signin-handoff.d.ts",
+      "default": "./dist/signin-handoff.js"
     },
     "./staging": {
       "types": "./dist/staging.d.ts",
