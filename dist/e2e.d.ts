@@ -83,8 +83,14 @@ export declare function expectHuishoudenFrame(page: Page, { app, portalUrl, path
  * Opens the app's own settings from the app bar's menu (the avatar signed in, the sliders button
  * signed out): the bar holds them since apps dropped their own gear. `name` is the item's text,
  * e.g. "Tasks settings".
+ *
+ * Safe to call straight after `goto` or a sign-in: it waits for the bar to settle (the session
+ * restored, the avatar or sliders button shown) and for the app to name its settings, which a
+ * loading screen's bar lacks, and opens the menu again if the bar was replaced under it.
  */
-export declare function openAppSettings(page: Page, name: string | RegExp): Promise<void>;
+export declare function openAppSettings(page: Page, name: string | RegExp, { timeout }?: {
+    timeout?: number;
+}): Promise<void>;
 /**
  * The app bar's logo, name and account controls on one row at the current viewport (a phone's
  * 360–412px, in a long language): nothing pushed onto a second line. The nav row is not counted.

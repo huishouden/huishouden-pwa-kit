@@ -271,11 +271,21 @@ export async function expectHuishoudenFrame(page: Page, { app, portalUrl, path }
  * Opens the app's own settings from the app bar's menu (the avatar signed in, the sliders button
  * signed out): the bar holds them since apps dropped their own gear. `name` is the item's text,
  * e.g. "Tasks settings".
+ *
+ * Safe to call straight after `goto` or a sign-in: it waits for the bar to settle (the session
+ * restored, the avatar or sliders button shown) and for the app to name its settings, which a
+ * loading screen's bar lacks, and opens the menu again if the bar was replaced under it.
  */
-export async function openAppSettings(page: Page, name: string | RegExp) {
+export async function openAppSettings(page: Page, name: string | RegExp, { timeout = 20_000 }: { timeout?: number } = {}) {
   const bar = page.locator('hh-app-bar');
-  await bar.locator('[data-trigger]').click();
-  await bar.getByRole('button', { name, exact: typeof name === 'string' }).click();
+  const trigger = bar.locator('[data-trigger]');
+  const item = bar.getByRole('button', { name, exact: typeof name === 'string', includeHidden: true });
+  await expect(trigger, 'the app bar settled: its avatar (signed in) or sliders button (signed out)').toBeVisible({ timeout });
+  await expect(item, `"${name}" in the app bar's menu: the app has not named its settings (still loading, or no \`settings\` on <hh-app-bar>)`).toBeAttached({ timeout });
+  await expect(async () => {
+    if (!(await item.isVisible())) await trigger.click();
+    await item.click({ timeout: 2_000 });
+  }, `open "${name}" from the app bar's menu`).toPass({ timeout });
 }
 
 /**
