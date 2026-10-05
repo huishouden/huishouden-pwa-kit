@@ -199,3 +199,73 @@ describe('Health visits', () => {
     expect(alex.result.text).not.toContain('fillings');
   });
 });
+
+describe('Health conditions', () => {
+  const RADIC = `${NAN}/conditions/k1`;
+  const seeded = () =>
+    household({
+      [`${H}/contacts/c1`]: { name: 'Dr. Example Neuro', role: 'Neurologist', apps: ['health'], createdAt: 1, by: SAM },
+      [`${H}/contacts/c2`]: { name: 'Example Spine Clinic', role: 'Clinic', apps: ['health'], createdAt: 1, by: SAM },
+      [RADIC]: { personId: 'p1', name: 'Cervical radiculopathy', icd10: 'M54.12', specialty: 'neurology', status: 'active', diagnosed: '2030-03', doctorId: 'c1', clinicId: 'c2', medIds: ['m1'], createdAt: 1, by: SAM },
+      [`${NAN}/conditions/k2`]: { personId: 'p1', name: 'Migraine', icd10: 'G43.909', specialty: 'neurology', status: 'resolved', resolved: '2029', createdAt: 1, by: SAM },
+      [`${NAN}/conditions/k3`]: { personId: 'p1', name: 'Hypertension', icd10: 'I10', specialty: 'cardiology', status: 'managed', createdAt: 1, by: SAM },
+      [`${NAN}/visits/v1`]: { personId: 'p1', kind: 'specialist', at: Date.UTC(2031, 0, 8, 14), remindBefore: [1440], conditionId: 'k1', specialty: 'neurology', createdAt: 1, by: SAM },
+    });
+
+  test('health_conditions groups by medical area, active first, with who diagnosed it, where and what treats it', async () => {
+    const { db } = seeded();
+    const call = await run(SAM, db, 'health_conditions', { person: 'Nan', specialty: 'neurology' });
+    expect(call.result.error).toBeUndefined();
+    const people = call.result.data!.people as { groups: { specialty: string; current: number; conditions: { name: string; diagnosed_by?: { name: string }; where?: { name: string }; medicines: { name: string }[] }[] }[] }[];
+    expect(people[0].groups).toHaveLength(1);
+    expect(people[0].groups[0]).toMatchObject({ specialty: 'neurology', current: 1 });
+    expect(people[0].groups[0].conditions.map((c) => c.name)).toEqual(['Cervical radiculopathy', 'Migraine']);
+    expect(people[0].groups[0].conditions[0]).toMatchObject({ diagnosed_by: { name: 'Dr. Example Neuro' }, where: { name: 'Example Spine Clinic' }, medicines: [{ name: 'Examplamine 10 mg' }] });
+    expect(call.result.text).toContain('### Neurology (2)');
+    expect(call.result.text).toContain('diagnosed March 2030');
+    expect(call.result.text).not.toContain('Hypertension');
+  });
+
+  test('a helper carer sees no conditions anywhere: not listed, not on the doctor list, not on visits', async () => {
+    const { db } = seeded();
+    const named = await run(ALEX, db, 'health_conditions', { person: 'Nan' });
+    expect(named.result.error).toBe(true);
+    expect(named.result.text).not.toContain('radiculopathy');
+    const all = await run(ALEX, db, 'health_conditions', {});
+    expect(all.result.data!.people).toEqual([]);
+    const list = await run(ALEX, db, 'health_doctor_list', { person: 'Nan' });
+    expect(list.result.text).not.toContain('radiculopathy');
+    const visits = await run(ALEX, db, 'health_appointments', { person: 'Nan' });
+    expect(visits.result.text).not.toContain('radiculopathy');
+    expect(visits.result.text).toContain('Neurology');
+  });
+
+  test('the doctor list shows active and managed conditions by area; visits name theirs for keepers', async () => {
+    const { db } = seeded();
+    const list = await run(SAM, db, 'health_doctor_list', { person: 'Nan' });
+    expect(list.result.text).toContain('## Conditions');
+    expect(list.result.text).toContain('### Cardiology (1)');
+    expect(list.result.text).toContain('Cervical radiculopathy');
+    expect(list.result.text).not.toContain('Migraine');
+    const visits = await run(SAM, db, 'health_appointments', { person: 'Nan' });
+    expect((visits.result.data!.visits as { condition?: { name: string } }[])[0].condition).toEqual({ id: 'k1', name: 'Cervical radiculopathy' });
+  });
+
+  test('health_add_condition files it under the code, the name or the area given, and only for keepers', async () => {
+    const { db, docs } = seeded();
+    const call = await run(SAM, db, 'health_add_condition', { person: 'Nan', name: 'Radiculopathy, cervical region', icd10: 'M54.12', diagnosed: '2030', doctor: 'Dr. Example Neuro', place: 'Example Hospital', medicines: ['Examplamine'], idempotency_key: 'k-1' });
+    expect(call.result.error).toBeUndefined();
+    const id = (call.result.data as { id: string }).id;
+    expect(docs.get(`${NAN}/conditions/${id}`)).toEqual({ personId: 'p1', name: 'Radiculopathy, cervical region', icd10: 'M54.12', specialty: 'neurology', status: 'active', diagnosed: '2030', doctorId: 'c1', place: 'Example Hospital', medIds: ['m1'], createdAt: NOW, by: SAM });
+    expect(call.result.text).toContain('under Neurology');
+    const again = await run(SAM, db, 'health_add_condition', { person: 'Nan', name: 'Radiculopathy, cervical region', icd10: 'M54.12', idempotency_key: 'k-1' });
+    expect(again.result.data).toMatchObject({ id, repeated: true });
+    const named = await run(SAM, db, 'health_add_condition', { person: 'Nan', name: 'Type 2 diabetes' });
+    expect((named.result.data as { condition: { specialty: string } }).condition.specialty).toBe('endocrinology');
+    const chosen = await run(SAM, db, 'health_add_condition', { person: 'Nan', name: 'Neck pain', icd10: 'M54.2', specialty: 'neurology' });
+    expect((chosen.result.data as { condition: { specialty: string } }).condition.specialty).toBe('neurology');
+    const helper = await run(ALEX, db, 'health_add_condition', { person: 'Nan', name: 'Anything' });
+    expect(helper.result.error).toBe(true);
+    expect(helper.result.text).toContain('Only admins, and members who care for this person');
+  });
+});

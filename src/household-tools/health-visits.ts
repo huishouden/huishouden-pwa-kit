@@ -13,7 +13,8 @@ import { UserError } from './context.js';
 import { common, defineTool, render, type ToolContext } from './registry.js';
 import { clip, pick } from './shared.js';
 import { create } from './home.js';
-import { loadPeople, type Person } from './health-data.js';
+import { loadConditions, loadPeople, type Person } from './health-data.js';
+import { specialtyLabel } from '../condition.js';
 
 /**
  * Health's visits (`../visit`), as this person may read and write them: every
@@ -141,7 +142,7 @@ export const healthAppointments = defineTool({
   name: 'health_appointments',
   title: "A person's visits in Health",
   description:
-    "The doctor's, dentist's, eye, lab, vaccine and therapy appointments (visits) of the people this person looks after in Huishouden Health: coming up, and past ones with whether they went (attended or missed). Each has its kind, time, doctor or clinic, place or video link, what to do or bring, reminders and follow-up; the notes only for admins and members who care for the person (helpers never get them). Leave out `person` for everyone.",
+    "The doctor's, dentist's, eye, lab, vaccine and therapy appointments (visits) of the people this person looks after in Huishouden Health: coming up, and past ones with whether they went (attended or missed). Each has its kind, time, doctor or clinic, place or video link, what to do or bring, reminders and follow-up; its medical area, and the condition it is about and the notes only for admins and members who care for the person (helpers never get them). Leave out `person` for everyone.",
   kind: 'read',
   health: true,
   input: {
@@ -169,21 +170,26 @@ export const healthAppointments = defineTool({
         const under = `households/${ctx.here.id}/healthPeople/${p.id}`;
         const visits = (await ctx.session.db.query(under, VISITS)).map((d) => toVisit(d.id, d.data, p.id)).filter((v) => v.at >= from && v.at <= to);
         const notes = keeps(ctx, p) ? new Map((await ctx.session.db.query(under, VISIT_NOTES).catch(() => [])).map((d) => [d.id, String(d.data.text ?? '')])) : new Map<string, string>();
-        return { person: p, visits: visits.sort((a, b) => a.at - b.at), notes };
+        // The condition a visit is about, by name, only for those who may read conditions.
+        const conditions = new Map((await loadConditions(ctx, p).catch(() => [])).map((c) => [c.id, c.name]));
+        return { person: p, visits: visits.sort((a, b) => a.at - b.at), notes, conditions };
       }),
     );
     return render(ctx.lang, () => {
-      const rows = lists.flatMap(({ person, visits, notes }) =>
+      const rows = lists.flatMap(({ person, visits, notes, conditions }) =>
         visits.map((v) => {
           const c = contactOf(contacts, v.contactId);
           const state = visitState(v, now);
           const note = notes.get(v.id);
+          const condition = v.conditionId ? conditions.get(v.conditionId) : undefined;
           const fact = {
             id: v.id,
             person: { id: person.id, name: person.name },
             kind: v.kind,
             kind_label: visitKindLabel(v.kind),
             title: visitTitle(v),
+            ...(v.specialty ? { specialty: v.specialty, specialty_label: specialtyLabel(v.specialty) } : {}),
+            ...(condition ? { condition: { id: v.conditionId, name: condition } } : {}),
             start: ctx.clock.isoLocal(v.at),
             all_day: !!v.allDay,
             ...(v.allDay ? {} : { minutes: v.minutes ?? 60 }),
@@ -199,7 +205,7 @@ export const healthAppointments = defineTool({
             ...(note ? { notes: note } : {}),
             url: visitUrl(ctx, v),
           };
-          const bits = [visitKindLabel(v.kind), when(ctx, v), c?.name ?? '', v.location ?? c?.address ?? '', v.link ? t('visits.video') : '', ...(v.prep ?? []), v.medList ? t('visits.medList') : '', t(`visits.state.${state}`)].filter(Boolean);
+          const bits = [visitKindLabel(v.kind), v.specialty ? specialtyLabel(v.specialty) : '', condition ?? '', when(ctx, v), c?.name ?? '', v.location ?? c?.address ?? '', v.link ? t('visits.video') : '', ...(v.prep ?? []), v.medList ? t('visits.medList') : '', t(`visits.state.${state}`)].filter(Boolean);
           const line = `- **[${fact.title}](${fact.url})** (${person.name}) · ${bits.join(' · ')}${note ? ` · ${t('visits.notes', { notes: note })}` : ''} · id \`${v.id}\``;
           return { fact, line };
         }),

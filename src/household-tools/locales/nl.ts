@@ -255,6 +255,20 @@ const nl: Record<keyof typeof en, string> = {
   'print.stoppedItem': '{med}, gestopt op {date}',
   'print.adherence': 'Gegeven doses in de laatste 30 dagen: {percent}.',
   'print.doctors': 'Artsen en apotheek',
+  'print.conditions': 'Aandoeningen',
+  'conditions.title': 'Aandoeningen',
+  'conditions.titleIn': 'Aandoeningen: {area}',
+  'conditions.none': 'Geen aandoeningen vastgelegd.',
+  'conditions.noneIn': 'Geen aandoeningen onder {area}.',
+  'conditions.nobody': 'Je ziet van niemand de aandoeningen in Gezondheid: alleen beheerders, leden die voor iemand zorgen en de persoon zelf zien ze.',
+  'conditions.notShared': 'De aandoeningen van {name} zijn alleen voor beheerders, leden die voor {name} zorgen en {name} zelf.',
+  'conditions.keepersOnly': 'Alleen beheerders en leden die voor deze persoon zorgen kunnen aandoeningen toevoegen.',
+  'conditions.diagnosed': 'vastgesteld {date}',
+  'conditions.by': 'door {name}',
+  'conditions.at': 'bij {place}',
+  'conditions.resolvedOn': 'genezen {date}',
+  'conditions.treatedWith': 'behandeld met {meds}',
+  'conditions.added': '{condition} toegevoegd voor {name}, onder {area}. [Gezondheid]({url})',
 
 };
 

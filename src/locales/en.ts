@@ -5,6 +5,7 @@ import calendar from './en/calendar.js';
 import calendarExport from './en/calendarExport.js';
 import chart from './en/chart.js';
 import common from './en/common.js';
+import condition from './en/condition.js';
 import contacts from './en/contacts.js';
 import dose from './en/dose.js';
 import feedback from './en/feedback.js';
@@ -37,6 +38,7 @@ export default {
   ...calendarExport,
   ...chart,
   ...common,
+  ...condition,
   ...contacts,
   ...dose,
   ...feedback,

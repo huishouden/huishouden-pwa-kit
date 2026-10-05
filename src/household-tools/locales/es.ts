@@ -255,6 +255,20 @@ const es: Record<keyof typeof en, string> = {
   'print.stoppedItem': '{med}, dejado el {date}',
   'print.adherence': 'Dosis dadas en los últimos 30 días: {percent}.',
   'print.doctors': 'Médicos y farmacia',
+  'print.conditions': 'Afecciones',
+  'conditions.title': 'Afecciones',
+  'conditions.titleIn': 'Afecciones: {area}',
+  'conditions.none': 'No hay afecciones registradas.',
+  'conditions.noneIn': 'No hay afecciones en {area}.',
+  'conditions.nobody': 'No ves las afecciones de nadie en Salud: solo las ven los administradores, los miembros que cuidan a la persona y la propia persona.',
+  'conditions.notShared': 'Las afecciones de {name} son solo para los administradores, los miembros que la cuidan y {name}.',
+  'conditions.keepersOnly': 'Solo los administradores y los miembros que cuidan a esta persona pueden añadir sus afecciones.',
+  'conditions.diagnosed': 'diagnosticada {date}',
+  'conditions.by': 'por {name}',
+  'conditions.at': 'en {place}',
+  'conditions.resolvedOn': 'resuelta {date}',
+  'conditions.treatedWith': 'tratada con {meds}',
+  'conditions.added': 'Añadí {condition} para {name}, en {area}. [Salud]({url})',
 
 };
 

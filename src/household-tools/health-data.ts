@@ -2,6 +2,7 @@ import { asNeededCheck, adherence, doseSlots, doubleDoseWindowMs, recentlyGiven,
 import { cleanRule, describeRule, isEventRule, type EventRule } from '../schedule.js';
 import { addDays, agoWords, clockWords, DAY, toHhmm, toYmd, ymdToTime, type Ymd } from '../time.js';
 import { formatList } from '../i18n.js';
+import { CONDITIONS, toCondition, type Condition } from '../condition.js';
 import { t } from './i18n.js';
 import type { ToolContext } from './registry.js';
 
@@ -135,6 +136,26 @@ export async function loadMeds(ctx: ToolContext, person: Person): Promise<Med[]>
 export async function loadDoses(ctx: ToolContext, person: Person, since: number): Promise<Dose[]> {
   return (await ctx.session.db.query(personPath(ctx, person.id), 'doses', { where: [{ field: 'at', op: 'GREATER_THAN_OR_EQUAL', value: since }] })).map((d) => toDose(d.id, d.data));
 }
+
+/**
+ * Whether this person may read someone's conditions (huishouden/rules `conditionReader`): admins,
+ * the person's member carers, and the person themself. Helper carers and kids never.
+ */
+export function readsConditions(ctx: ToolContext, p: Pick<Person, 'readers' | 'email'>): boolean {
+  const role = ctx.here.role;
+  if (role === 'admin') return true;
+  if (role === 'member' && p.readers.includes(ctx.session.email)) return true;
+  return role !== 'kid' && !!p.email && p.email === ctx.session.email;
+}
+
+/** The person's conditions, or none when this person may not read them (never asked, so never refused). */
+export async function loadConditions(ctx: ToolContext, person: Person): Promise<Condition[]> {
+  if (!readsConditions(ctx, person)) return [];
+  return (await ctx.session.db.query(personPath(ctx, person.id), CONDITIONS)).map((d) => toCondition(d.id, d.data, person.id));
+}
+
+export const conditionUrl = (ctx: ToolContext, c: Pick<Condition, 'id' | 'personId'>) =>
+  ctx.session.link('health', `?tab=conditions&person=${encodeURIComponent(c.personId)}&condition=${encodeURIComponent(c.id)}`);
 
 export const personUrl = (ctx: ToolContext, personId: string, tab = 'today') => ctx.session.link('health', `?tab=${tab}&person=${encodeURIComponent(personId)}`);
 export const medUrl = (ctx: ToolContext, med: Pick<Med, 'id' | 'personId'>) => ctx.session.link('health', `?tab=medicines&person=${encodeURIComponent(med.personId)}&med=${encodeURIComponent(med.id)}`);
