@@ -20,6 +20,7 @@ import {
   type CollectionReference,
   type DocumentData,
   type DocumentReference,
+  type DocumentSnapshot,
   type FieldValue,
   type Firestore,
   type FirestoreSettings,
@@ -31,18 +32,16 @@ import {
 import {
   decode,
   encode,
-  hasTag,
-  shows,
   type Json,
   pendingEntries,
   remember,
-  sameJson,
   TAG,
   Unencodable,
   type Op,
   type OutboxEntry,
   type StorageLike,
 } from './outbox-codec.js';
+import { opsToRepeat } from './outbox-plan.js';
 import type { Op as StoreOp } from './store.js';
 
 /**
@@ -56,7 +55,8 @@ import type { Op as StoreOp } from './store.js';
  * So the write functions here also note each write synchronously in localStorage, which is written
  * before the page can go away, and forget it once the server has it (or has refused it). A note
  * still there when the app next opens, signed in as the same person, is written again, unless the
- * local cache shows the write already landed or was overtaken (see `stillNeeded`). Notes older
+ * server (or, offline, the local cache) shows the write already landed or was overtaken by a newer
+ * one (see `stillNeeded`). Notes older
  * than a week are dropped unread.
  *
  * Use `initFirestore` in place of `initializeFirestore`, and import `setDoc`, `updateDoc`,
@@ -350,65 +350,56 @@ async function replayNow(box: Outbox, uid: string): Promise<boolean> {
 }
 
 /**
- * The note's writes that this device doesn't show as done, queued or overtaken. A set whose data is
- * already there landed before the page closed (only the forgetting was cut short). A document whose
- * `updatedAt` is at or after the note was changed since, by someone or something newer: repeating
- * a set, update or delete would undo that. A document the cache knows only as missing (it may never
- * have existed: the cache can't tell) gets a set or delete, and an update to it, which would fail,
- * is left out. A document the cache has never seen (a memory cache, after a reload) gets a set or
- * delete; for an update the server is asked whether it exists, and while it can't be reached the
- * whole note waits (null).
+ * The note's writes that aren't done, queued or overtaken (`opsToRepeat`), judged one document at a
+ * time against the freshest view of it this device can get:
+ * - Firestore's own queue still holds a write to it (the persistent cache, kept across the reload):
+ *   the local cache, which shows that queue, since the queue will send it anyway.
+ * - Otherwise the server's copy, so a replay is judged against what other members wrote since and
+ *   not a stale cache (or, with a memory cache, no cache at all). Out of reach (offline) or
+ *   refused, the local cache, as before; an update to a document neither has seen waits (null).
+ *   Offline with no copy at all, a set or delete is written unchecked, as Firestore's own queue
+ *   would: a feed logged offline must still show after an offline reload.
  */
 async function stillNeeded(db: Firestore, entry: OutboxEntry, replayed: ReadonlySet<string> = new Set()): Promise<Op[] | null> {
-  const out: Op[] = [];
-  for (const op of entry.ops) {
-    const ref = doc(db, op.path);
-    let snap = await getDocFromCache(ref).catch(() => null);
-    if (!snap && op.kind === 'update') {
-      // Only the rules' refusal is final (a role lowered, someone removed: the update would be
-      // refused too); anything else may pass, and the note waits.
-      const asked = await getDocFromServer(ref).then(
-        (s) => s,
-        (e: { code?: string }) => (e.code === 'permission-denied' ? ('refused' as const) : null),
-      );
-      if (!asked) return null;
-      if (asked === 'refused') continue;
-      snap = asked;
-    }
-    if (!snap?.exists()) {
-      if (op.kind !== 'update') out.push(op);
-      continue;
-    }
-    const data = snap.data();
-    if (typeof data.updatedAt === 'number' && data.updatedAt >= entry.at) continue;
-    if (op.kind === 'update' || (op.kind === 'set' && (op.merge || op.mergeFields))) {
-      // An increment with a write to the document still in Firestore's own queue (the persistent
-      // cache, kept across the reload) is left to that queue: repeated, it would count twice.
-      if (snap.metadata.hasPendingWrites && !replayed.has(op.path) && hasTag(op.data, 'increment')) continue;
-      // Every field already as the note sets it: landed or queued. Anything else is written again
-      // (a plain value, arrayUnion, arrayRemove or deleteField twice is harmless).
-      let cached: Json | null;
+  const keep = new Set<Op>();
+  for (const path of new Set(entry.ops.map((op) => op.path))) {
+    const ops = entry.ops.filter((op) => op.path === path);
+    const view = await currentDoc(db, path, replayed, ops.some((op) => op.kind === 'update'));
+    if (view === 'wait') return null;
+    if (view === 'refused') continue;
+    const data = view.snap?.exists() ? view.snap.data() : undefined;
+    let cached: Json | null = null;
+    if (data) {
       try {
         cached = encode(data);
       } catch {
         cached = null;
       }
-      if (cached !== null && shows(cached, op.data, op.kind === 'update')) continue;
-      out.push(op);
-      continue;
     }
-    if (op.kind === 'set' && !op.merge && !op.mergeFields) {
-      let cached;
-      try {
-        cached = encode(data);
-      } catch {
-        cached = null;
-      }
-      if (cached !== null && sameJson(cached, op.data)) continue;
-    }
-    out.push(op);
+    const updatedAt = typeof data?.updatedAt === 'number' ? data.updatedAt : undefined;
+    for (const op of opsToRepeat(ops, { exists: !!data, data: cached, updatedAt, queued: view.queued }, entry.at)) keep.add(op);
   }
-  return out;
+  return entry.ops.filter((op) => keep.has(op));
+}
+
+type DocView = { snap: DocumentSnapshot | null; queued: boolean } | 'wait' | 'refused';
+
+/** See `stillNeeded`. `queued`: the cache shows writes in Firestore's own queue (not this replay's). */
+async function currentDoc(db: Firestore, path: string, replayed: ReadonlySet<string>, hasUpdate: boolean): Promise<DocView> {
+  const ref = doc(db, path);
+  const cached = await getDocFromCache(ref).catch(() => null);
+  if (replayed.has(path)) return { snap: cached, queued: false };
+  if (cached?.metadata.hasPendingWrites) return { snap: cached, queued: true };
+  // Only the rules' refusal is final (a role lowered, someone removed: an update would be refused
+  // too); anything else may pass.
+  const asked = await getDocFromServer(ref).then(
+    (s) => s,
+    (e: { code?: string }) => (e.code === 'permission-denied' ? ('refused' as const) : null),
+  );
+  if (asked && asked !== 'refused') return { snap: asked, queued: false };
+  if (cached) return { snap: cached, queued: false };
+  if (!hasUpdate) return { snap: null, queued: false };
+  return asked === 'refused' ? 'refused' : 'wait';
 }
 
 type RawBatch = ReturnType<typeof fsWriteBatch>;
