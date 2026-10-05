@@ -6,6 +6,7 @@ import { kt } from './i18n.js';
 import { atClock } from './time.js';
 import { readSource } from './reminder-source.js';
 import { cleanTexts, localizeReminders, PERSONAL_REMINDERS, personalReminderDoc, reminderDoc, reminderId, toReminder, type PersonalReminderInput, type Reminder, type ReminderInput, type ReminderTexts } from './reminder-core.js';
+import { alreadyPublished, fingerprint, forgetPublishedApp, publishedKey, rememberPublished } from './published.js';
 
 export type { ReminderSource, SourceCheck, SourceCondition, SourceValue } from './reminder-source.js';
 export * from './reminder-core.js';
@@ -81,7 +82,13 @@ export async function cancelReminder(db: Firestore, householdId: string, id: str
 export async function cancelReminders(db: Firestore, householdId: string, ref: string, { restricted }: ReminderWriteOptions = {}): Promise<number> {
   const snap = await getDocs(visible(db, householdId, restricted, where('ref', '==', ref)));
   await commit(db, snap.docs.map((d) => (b) => b.delete(d.ref)), restricted);
+  forgetApps(db, householdId, snap.docs.map((d) => d.data().app));
   return snap.size;
+}
+
+/** A per-record write changed what is stored for these apps: their next sync on this device reads again. */
+function forgetApps(db: Firestore, householdId: string, apps: unknown[]) {
+  for (const app of new Set(apps.filter((a): a is string => typeof a === 'string'))) forgetPublishedApp(db, householdId, 'reminders', app);
 }
 
 /**
@@ -111,6 +118,7 @@ export async function replaceReminders(
   }
   for (const [id, data] of wanted) ops.push((b) => b.set(doc(remindersOf(db, householdId), id), data));
   await commit(db, ops, restricted);
+  forgetApps(db, householdId, [...existing.docs.map((d) => d.data().app), ...[...wanted.values()].map((d) => d.app)]);
   return [...wanted.keys()];
 }
 
@@ -126,6 +134,8 @@ export interface SyncRemindersResult {
   written: number;
   deleted: number;
   unchanged: number;
+  /** Nothing read or written: this device scheduled exactly these reminders a short while ago (`./published`). */
+  skipped?: true;
 }
 
 /**
@@ -152,6 +162,10 @@ export async function syncReminders(
         return [r.id ?? reminderId(r.ref ?? app, data.at), data] as const;
       }),
   );
+  // The same reminders this device scheduled a short while ago: nothing to read or write (`./published`).
+  const key = publishedKey(db, householdId, 'reminders', app, by);
+  const print = fingerprint(wanted, String(!!restricted));
+  if (alreadyPublished(key, print, now)) return { written: 0, deleted: 0, unchanged: wanted.size, skipped: true };
   const existing = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
   const have = new Map(existing.docs.map((d) => [d.id, d.data() as Record<string, unknown>]));
   const ops: Op[] = [];

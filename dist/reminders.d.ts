@@ -43,6 +43,8 @@ export interface SyncRemindersResult {
     written: number;
     deleted: number;
     unchanged: number;
+    /** Nothing read or written: this device scheduled exactly these reminders a short while ago (`./published`). */
+    skipped?: true;
 }
 /**
  * Makes everything this app has scheduled from now on exactly `inputs` (each with its own `ref`):

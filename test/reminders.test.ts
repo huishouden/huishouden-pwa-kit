@@ -37,6 +37,7 @@ mock.module('firebase/firestore', () => ({
 }));
 
 const { PERSONAL_REMINDER_FIELDS, personalReminderDoc, syncPersonalReminders, REMINDER_FIELDS, cancelReminders, reminderDoc, reminderId, remindersForCourse, replaceReminders, syncReminders, toReminder, upsertReminder } = await import('../src/reminders');
+(await import('../src/published')).setPublishedStorage(null);
 
 const db = {} as real.Firestore;
 const NOW = new Date(2026, 2, 14, 12, 0).getTime();

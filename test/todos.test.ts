@@ -53,6 +53,7 @@ const {
   TODO_FIELDS, TODO_ACTION_FIELDS, addedText, applyTodo, canDo, olderThan, resolveOps, sortTodos, syncTodos, todoDoc, todoDueText, todoId,
   todoOpsAllowed, todoOverdue, toTodoItem, watchTodos, TodoActionError, personalTodoDoc, syncPersonalTodos, PERSONAL_TODO_FIELDS,
 } = await import('../src/todos');
+(await import('../src/published')).setPublishedStorage(null);
 type TodoInput = import('../src/todos').TodoInput;
 type TodoItem = import('../src/todos').TodoItem;
 
@@ -158,6 +159,21 @@ describe('syncTodos and watchTodos', () => {
     expect(await syncTodos(db, H, 'tasks', [input()], { by: SAM, now: NOW + 5000 })).toEqual({ written: 0, deleted: 1, unchanged: 1 });
     expect(writes).toBe(1);
     expect(stored().map((t) => t.id).sort()).toEqual(['home:job:j1', 'tasks:item:i1']);
+  });
+
+  test('the same to-dos again from this device skip the read until they change', async () => {
+    reset();
+    const { setPublishedStorage } = await import('../src/published');
+    const m = new Map<string, string>();
+    setPublishedStorage({ getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v), removeItem: (k) => void m.delete(k) });
+    try {
+      const items = [input(), input({ ref: 'item:i2', title: 'Return library books' })];
+      expect(await syncTodos(db, H, 'tasks', items, { by: ALEX, now: NOW })).toEqual({ written: 2, deleted: 0, unchanged: 0 });
+      expect(await syncTodos(db, H, 'tasks', items, { by: ALEX, now: NOW + 1000 })).toEqual({ written: 0, deleted: 0, unchanged: 2, skipped: true });
+      expect(await syncTodos(db, H, 'tasks', [input()], { by: ALEX, now: NOW + 2000 })).toEqual({ written: 0, deleted: 1, unchanged: 1 });
+    } finally {
+      setPublishedStorage(null);
+    }
   });
 
   test('a helper never writes or removes private items, and a refused write is skipped', async () => {

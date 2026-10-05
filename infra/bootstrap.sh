@@ -31,6 +31,8 @@
 #   they get the WIF binding, the deploy variables and the environment.
 #   STAGING_PROJECT (only huishouden-staging, the default), STAGING_DISPLAY_NAME,
 #   STAGING_FIRESTORE_LOCATION (default us-east1; the staging Firestore database is created if missing).
+#   ALERT_EMAIL=<address> (environment) — production only: an email when Firestore reads in 24 hours
+#   pass 60% of the free plan's 50,000 (infra/read-alert.sh, docs/one-site.md "Budgets").
 #
 # Prerequisites (once per machine), all as the same Google account:
 #   npx firebase-tools login ; gcloud auth login ; gh auth login
@@ -294,6 +296,15 @@ if jq -e '.authorizedDomains' >/dev/null <<<"$current"; then
   fi
 else
   echo "Auth not initialised yet; do console step 1, then re-run."
+fi
+
+if ! $STAGING; then
+  step "Firestore read alert"
+  if [[ -n "${ALERT_EMAIL:-}" ]]; then
+    "$(dirname "$0")/read-alert.sh" "$PROJECT"
+  else
+    echo "  ALERT_EMAIL not set: no email when reads near the free plan's daily limit (infra/read-alert.sh)"
+  fi
 fi
 
 step "Done"
