@@ -95,8 +95,6 @@ export declare function planAssetOrigin(files: {
     naming: number;
     error?: string;
 };
-/** The app path (`/pet/`, the portal `/`) whose folder holds `path`: the longest of `appPaths` it starts with. */
-export declare function appOf(path: string, appPaths: string[]): string | undefined;
 /** `planAssetOrigin`'s `offCdn` for the apps `offApps` (of `appPaths`): whether a file is in one of their folders. */
 export declare function offCdnPredicate(offApps: string[], appPaths: string[]): (path: string) => boolean;
 /**

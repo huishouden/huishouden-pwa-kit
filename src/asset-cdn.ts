@@ -11,7 +11,7 @@
  * and the reusable workflow deploys it with wrangler, before Firebase deploys the HTML.
  */
 
-import { SUITE_ORIGIN } from './suite.js';
+import { SUITE_ORIGIN, appOf } from './suite.js';
 
 export type Flavor = 'production' | 'staging';
 
@@ -195,11 +195,6 @@ export function planAssetOrigin(
     else if (path.endsWith('/index.html')) writes.push({ path: path.replace(/index\.html$/, SITE_PAGE), text: stripCdn(text) });
   }
   return { writes, naming };
-}
-
-/** The app path (`/pet/`, the portal `/`) whose folder holds `path`: the longest of `appPaths` it starts with. */
-export function appOf(path: string, appPaths: string[]): string | undefined {
-  return appPaths.filter((p) => path.startsWith(p)).sort((a, b) => b.length - a.length)[0];
 }
 
 /** `planAssetOrigin`'s `offCdn` for the apps `offApps` (of `appPaths`): whether a file is in one of their folders. */

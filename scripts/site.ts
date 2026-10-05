@@ -274,8 +274,12 @@ async function assemble() {
   if (flavor === 'production') manifest.observability = await writeObservability(portalRepo(registry), pub, included);
   const origin = assetOriginOpt(flavor);
   const offCdn = origin && flag('cdn-held') ? appsOffCdn(walk(pub).filter(isCdnAsset), included, await liveAssets(origin)) : [];
-  manifest.assetOrigin = applyAssetOrigin(pub, origin, offCdn, offCdnPredicate(offCdn, included));
-  if (offCdn.length) manifest.offCdn = offCdn;
+  manifest.assetOrigin = applyAssetOrigin(pub, origin, offCdnPredicate(offCdn, included));
+  if (offCdn.length) {
+    manifest.offCdn = offCdn;
+    console.log(`not on the CDN yet, served from the site until a deploy with the Cloudflare token (the portal's): ${offCdn.join(' ')}`);
+    output('off-cdn', offCdn.join(' '));
+  }
   writeFileSync(join(pub, SITE_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
 
   const hosting: HostingSite[] = [siteConfig(site, included.map((path, i) => ({ path, features: featuresOf(policies[i]) })))];
@@ -320,16 +324,12 @@ function assetOriginOpt(flavor: string): string | null {
 }
 
 /** Applies `planAssetOrigin` (src/asset-cdn.ts) to the assembled site; returns what the manifest records. */
-function applyAssetOrigin(pub: string, origin: string | null, offCdn: string[] = [], isOffCdn: (path: string) => boolean = () => false): string | null {
+function applyAssetOrigin(pub: string, origin: string | null, isOffCdn?: (path: string) => boolean): string | null {
   const files = walk(pub).filter(namesCdn).map((path) => ({ path, text: readFileSync(join(pub, path), 'utf8') }));
   const plan = planAssetOrigin(files, origin, isOffCdn);
   if (plan.error) fail(plan.error);
   for (const w of plan.writes) writeFileSync(join(pub, w.path), w.text);
   console.log(origin ? `asset CDN ${origin}: ${plan.naming} pages and workers name it; ${plan.writes.length} rewritten (fallback pages, and apps off it)` : `asset CDN off: ${plan.writes.length} pages and workers load the site's own assets`);
-  if (offCdn.length) {
-    console.log(`not on the CDN yet, served from the site until a deploy with the Cloudflare token (the portal's): ${offCdn.join(' ')}`);
-    output('off-cdn', offCdn.join(' '));
-  }
   return origin;
 }
 

@@ -12,3 +12,8 @@ export const SUITE_SITE = 'huishouden-piekstra';
 export const SUITE_HOST = `${SUITE_SITE}.web.app`;
 /** `https://<SUITE_SITE>.web.app` */
 export const SUITE_ORIGIN = `https://${SUITE_HOST}`;
+
+/** The app path (`/pet/`, the portal `/`) whose folder holds `path`: the longest of `appPaths` it starts with. */
+export function appOf(path: string, appPaths: string[]): string | undefined {
+  return appPaths.filter((p) => path.startsWith(p)).sort((a, b) => b.length - a.length)[0];
+}

@@ -3,7 +3,6 @@ import {
   ASSET_FILE_LIMIT,
   ASSET_ORIGINS,
   ASSET_WORKERS,
-  appOf,
   appsOffCdn,
   offCdnPredicate,
   cdnFallbackScript,
@@ -24,6 +23,7 @@ import {
 import { cspBlocksAssets, checkSecurityHeaders, APP_PATHS_REGEX, securityHeaders } from '../src/security-headers';
 import { assetCdn, assetOriginOf, cdnPrecache, navigationDenylist, pwaWorkbox } from '../src/vite';
 import { FRESH_FILES, SUITE_ORIGIN } from '../src/site';
+import { appOf } from '../src/suite';
 
 const now = new Date('2026-10-05T12:00:00Z');
 const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000).toISOString();

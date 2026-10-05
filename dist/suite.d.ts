@@ -9,3 +9,5 @@ export declare const SUITE_SITE = "huishouden-piekstra";
 export declare const SUITE_HOST = "huishouden-piekstra.web.app";
 /** `https://<SUITE_SITE>.web.app` */
 export declare const SUITE_ORIGIN = "https://huishouden-piekstra.web.app";
+/** The app path (`/pet/`, the portal `/`) whose folder holds `path`: the longest of `appPaths` it starts with. */
+export declare function appOf(path: string, appPaths: string[]): string | undefined;
