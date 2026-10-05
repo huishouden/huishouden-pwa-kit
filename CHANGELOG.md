@@ -3,6 +3,13 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## 0.102.0 (2026-10-05)
+
+### Bug Fixes
+
+* **firestore:** a replayed write never puts back an older value. A note is judged per document against the server's copy; it falls back to the local cache when offline, when the rules refuse the read, or when Firestore's own queue still holds a write to the document. A document whose `updatedAt` is at or after the note keeps the newer change, also another member's. Several writes to one document in a note are repeated together, in order, from the first that isn't there. Before, Spending's first save (the defaults, then the person's budget, in one batch) could be replayed back to the default 2000, and a note left after its write landed was written over another member's newer change whenever the cache was empty or older than the server.
+* Replay planning is `opsToRepeat` in `src/outbox-plan.ts` (internal), unit-tested in `test/outbox-plan.test.ts`.
+
 ## 0.101.0 (2026-10-05)
 
 ### Features

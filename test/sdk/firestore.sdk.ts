@@ -10,7 +10,9 @@ import {
   doc,
   GeoPoint,
   getDocFromCache,
+  getDocFromServer,
   memoryLocalCache,
+  waitForPendingWrites,
   terminate,
   Timestamp,
   type Firestore,
@@ -283,6 +285,38 @@ describe('durable writes', () => {
     expect(storage.length).toBe(0);
   });
 
+  test('two writes to one document in a note: an earlier one is not repeated over the later one the document shows', async () => {
+    // Spending's first save: the defaults (budget 2000), then the person's budget, in one batch.
+    const storage = new MemoryStorage();
+    const t = Date.now() - 60_000;
+    leave(storage, { at: t + 2, ops: [
+      { kind: 'set', path: 'c/settings', data: { budget: 2000, words: ['rent'], updatedAt: t }, merge: true },
+      { kind: 'set', path: 'c/settings', data: { budget: 2750, updatedAt: t }, merge: true },
+    ] });
+    const { db, auth } = await setup(null, storage);
+    void rawSetDoc(doc(db, 'c/settings'), { budget: 2750, words: ['rent'], updatedAt: t });
+    await settle();
+    auth.signIn('u1');
+    await settle();
+    expect(storage.length).toBe(0);
+    expect((await getDocFromCache(doc(db, 'c/settings'))).data()).toEqual({ budget: 2750, words: ['rent'], updatedAt: t });
+  });
+
+  test('two writes to one document in a note, the later one not yet there: both are repeated, in order', async () => {
+    const storage = new MemoryStorage();
+    const t = Date.now() - 60_000;
+    leave(storage, { at: t + 2, ops: [
+      { kind: 'set', path: 'c/order', data: { budget: 2000, words: ['rent'], updatedAt: t }, merge: true },
+      { kind: 'update', path: 'c/order', data: { budget: 2750 } },
+    ] });
+    const { db, auth } = await setup(null, storage);
+    void rawSetDoc(doc(db, 'c/order'), { budget: 1000, updatedAt: t - 5000 });
+    await settle();
+    auth.signIn('u1');
+    await settle();
+    expect((await getDocFromCache(doc(db, 'c/order'))).data()).toEqual({ budget: 2750, words: ['rent'], updatedAt: t });
+  });
+
   test("signing out gives the person's writes a moment, then removes their notes and no one else's", async () => {
     const storage = new MemoryStorage();
     leave(storage, { uid: 'u2', ops: [{ kind: 'set', path: 'c/theirs', data: { v: 1 } }] });
@@ -452,6 +486,87 @@ describe.skipIf(!emulator)('with the server', () => {
     for (let i = 0; i < 40 && storage.length; i++) await settle();
     expect(storage.length).toBe(0);
     expect((await getDocFromCache(doc(next.db, path))).data()).toEqual({ v: 2, keep: true });
+  });
+});
+
+describe.skipIf(!emulator)('two members, two devices', () => {
+  const run = `m${Date.now().toString(36)}`;
+
+  test("what one member writes is what the other member's device reads", async () => {
+    const path = `runs/${run}/spendingSettings/main`;
+    const a = await setup('member-a', new MemoryStorage(), null, emulator);
+    await setDoc(doc(a.db, path), { monthlyBudget: 2750, updatedAt: Date.now(), updatedBy: 'a' }, { merge: true });
+    const b = await setup('member-b', new MemoryStorage(), null, emulator);
+    expect((await getDocFromServer(doc(b.db, path))).data()?.monthlyBudget).toBe(2750);
+  });
+
+  // A's write reached the server but the page closed before the answer, so A's note stayed. B then
+  // changed the document. A opening the app again (a memory cache: nothing cached) must not put
+  // A's older value back: the server's updatedAt, newer than the note, says so.
+  test("a note left after the write landed is not replayed over another member's newer write", async () => {
+    const path = `runs/${run}/spendingSettings/stale`;
+    const storage = new MemoryStorage();
+    const a = await setup('member-a', storage, null, emulator);
+    const at = Date.now() - 5_000;
+    const mine = { monthlyBudget: 2000, updatedAt: at };
+    await setDoc(doc(a.db, path), mine, { merge: true });
+    leave(storage, { uid: 'member-a', at, ops: [{ kind: 'set', path, data: mine, merge: true }] });
+    const b = await setup('member-b', new MemoryStorage(), null, emulator);
+    await setDoc(doc(b.db, path), { monthlyBudget: 2750, updatedAt: Date.now() }, { merge: true });
+    const again = await setup('member-a', storage, null, emulator);
+    for (let i = 0; i < 40 && storage.length; i++) await settle();
+    await waitForPendingWrites(again.db);
+    expect(storage.length).toBe(0);
+    expect((await getDocFromServer(doc(b.db, path))).data()?.monthlyBudget).toBe(2750);
+    expect((await getDocFromServer(doc(again.db, path))).data()?.monthlyBudget).toBe(2750);
+  });
+
+  // The same with a persistent cache that still holds A's own copy from before B's change.
+  test("a note is judged against the server, not this device's older copy of the document", async () => {
+    const path = `runs/${run}/spendingSettings/cached`;
+    const storage = new MemoryStorage();
+    const at = Date.now() - 5_000;
+    const mine = { monthlyBudget: 2000, updatedAt: at };
+    const b = await setup('member-b', new MemoryStorage(), null, emulator);
+    await setDoc(doc(b.db, path), { monthlyBudget: 2750, updatedAt: Date.now() }, { merge: true });
+    leave(storage, { uid: 'member-a', at, ops: [{ kind: 'set', path, data: mine, merge: true }] });
+    const again = await setup(null, storage, null, emulator);
+    await disableNetwork(again.db);
+    // This device's cache: A's own older copy, no write queued.
+    void rawSetDoc(doc(again.db, path), { monthlyBudget: 1500, updatedAt: at - 60_000 });
+    await enableNetwork(again.db);
+    await waitForPendingWrites(again.db);
+    await setDoc(doc(b.db, path), { monthlyBudget: 2750, updatedAt: Date.now() }, { merge: true });
+    again.auth.signIn('member-a');
+    for (let i = 0; i < 40 && storage.length; i++) await settle();
+    await waitForPendingWrites(again.db);
+    expect((await getDocFromServer(doc(b.db, path))).data()?.monthlyBudget).toBe(2750);
+  });
+
+  test('a note whose write the server already shows is forgotten without writing it again', async () => {
+    const path = `runs/${run}/c/landed`;
+    const storage = new MemoryStorage();
+    const a = await setup('member-a', storage, null, emulator);
+    await setDoc(doc(a.db, path), { v: 1 });
+    leave(storage, { uid: 'member-a', ops: [{ kind: 'set', path, data: { v: 1 } }] });
+    const b = await setup('member-b', new MemoryStorage(), null, emulator);
+    const before = (await getDocFromServer(doc(b.db, path))).data();
+    await setup('member-a', storage, null, emulator);
+    for (let i = 0; i < 40 && storage.length; i++) await settle();
+    expect(storage.length).toBe(0);
+    expect((await getDocFromServer(doc(b.db, path))).data()).toEqual(before);
+  });
+
+  test("a note from offline is written when it's newer than the server's copy", async () => {
+    const path = `runs/${run}/c/offline`;
+    const b = await setup('member-b', new MemoryStorage(), null, emulator);
+    await setDoc(doc(b.db, path), { v: 'b', updatedAt: Date.now() - 60_000 });
+    const storage = new MemoryStorage();
+    leave(storage, { uid: 'member-a', at: Date.now() - 1_000, ops: [{ kind: 'set', path, data: { v: 'a', updatedAt: Date.now() - 1_000 }, merge: true }] });
+    await setup('member-a', storage, null, emulator);
+    for (let i = 0; i < 40 && storage.length; i++) await settle();
+    expect(storage.length).toBe(0);
+    expect((await getDocFromServer(doc(b.db, path))).data()?.v).toBe('a');
   });
 });
 
