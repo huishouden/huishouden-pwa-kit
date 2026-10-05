@@ -437,7 +437,7 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
   `GCP_DEPLOY_SA`, `VITE_FIREBASE_*` (the bootstrap sets them). Apps on the suite's site need no
   `VITE_NEWRELIC_*`: the deploy serves their New Relic settings (see Observability).
 - Deploy waits on `leak-scan` and `build`. `concurrency: cancel-in-progress` on every workflow.
-- Pull requests run no jobs, by decision: hosted CI runs only on `main`, where a failing build or
+- Pull requests run no jobs, by decision: hosted CI runs only on `main` (and on manual `staging-ref` runs); on `main` a failing build or
   unit test stops the deploy. Before a PR is ready its author verifies it: the leak scan in the
   pre-commit hook (`templates/githooks/pre-commit`, gitleaks, fails closed), build and tests
   locally, and browser tests and screenshots on the app's staging site (see Staging). `leak-scan`
@@ -452,7 +452,7 @@ Firebase project, `huishouden-staging` (Spark, free), with its own Firestore, ru
 nothing deployed or tested there can read or write real household data.
 
 - **Sites**: each app has `huishouden-staging-<app>.web.app`; the portal is
-  `huishouden-staging.web.app`. A PR deploys the whole suite there, as production is laid out: its
+  `huishouden-staging.web.app`. A staging deploy (by the PR's author, or a manual `staging-ref` run) puts the whole suite there, as production is laid out: its
   own build under its path, every other app's latest staging build (`site-staging.tar.gz`) under
   theirs, so `https://huishouden-staging-pet.web.app/pet/` is the PR and `/` its portal. One site
   per app, so two repos' PRs never overwrite each other; a PR deploy replaces the app's previous
