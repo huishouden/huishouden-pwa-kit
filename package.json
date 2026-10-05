@@ -210,6 +210,10 @@
       "types": "./dist/react/google-tasks.d.ts",
       "default": "./dist/react/google-tasks.js"
     },
+    "./react/image-picker": {
+      "types": "./dist/react/image-picker.d.ts",
+      "default": "./dist/react/image-picker.js"
+    },
     "./react/photo": {
       "types": "./dist/react/photo.d.ts",
       "default": "./dist/react/photo.js"
@@ -273,6 +277,10 @@
     "./site": {
       "types": "./dist/site.d.ts",
       "default": "./dist/site.js"
+    },
+    "./shared-images": {
+      "types": "./dist/shared-images.d.ts",
+      "default": "./dist/shared-images.js"
     },
     "./signin-handoff": {
       "types": "./dist/signin-handoff.d.ts",

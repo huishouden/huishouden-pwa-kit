@@ -218,6 +218,15 @@ declare const _default: {
     'invite.open': string;
     'invite.install': string;
     'invite.denied': string;
+    'image.take': string;
+    'image.choose': string;
+    'image.chooseMany': string;
+    'image.paste': string;
+    'image.cameraInput': string;
+    'image.dropHint': string;
+    'image.noImage': string;
+    'image.noneOnClipboard': string;
+    'image.pasteDenied': string;
     'household.notEmail': string;
     'household.alreadyIn': string;
     'hours.closed': string;
@@ -324,7 +333,7 @@ declare const _default: {
     'dose.scanIntro': string;
     'dose.labelPhoto': string;
     'dose.reading': string;
-    'dose.scanAgain': string;
+    'dose.readingMany': string;
     'dose.scan': string;
     'dose.readError': string;
     'dose.nothingFilled': string;

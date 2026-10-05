@@ -54,9 +54,14 @@ export interface PwaAppOptions {
      * becomes a POST that the service worker receives (`hh-share-sw.js`), keeping the card for
      * `readSharedContact()` in `@huishouden/pwa-kit/contacts` (`?share=contact`) and sending shared
      * places on to the same `?share_title=…` address as before.
+     *
+     * `{ images: true }` takes photos the same way (Gallery → Share → the app, Android): the service
+     * worker keeps them for `readSharedImages()` in `@huishouden/pwa-kit/shared-images`
+     * (`?share=image`), which "Scan the label" (`LabelScan`'s `images`) reads.
      */
     shareTarget?: boolean | {
         contacts?: boolean;
+        images?: boolean;
     };
     /** Overrides merged last, for anything app-specific. */
     overrides?: Partial<VitePWAOptions>;
@@ -215,9 +220,6 @@ export declare function webManifest(options: PwaAppOptions): {
         purpose: string;
     }[];
     share_target?: {
-        action: string;
-        method: "POST";
-        enctype: string;
         params: {
             files: {
                 name: string;
@@ -227,6 +229,9 @@ export declare function webManifest(options: PwaAppOptions): {
             text: string;
             url: string;
         };
+        action: string;
+        method: "POST";
+        enctype: string;
     } | {
         action: string;
         method: "GET";
@@ -357,6 +362,21 @@ export declare function stableChunks(): {
             };
         };
     };
+};
+/** `SHARE_TARGET_FILES` narrowed to the kinds of file the app asked for. */
+export declare function shareTargetFiles(options: Pick<PwaAppOptions, 'shareTarget'>): {
+    params: {
+        files: {
+            name: string;
+            accept: string[];
+        }[];
+        title: string;
+        text: string;
+        url: string;
+    };
+    action: string;
+    method: "POST";
+    enctype: string;
 };
 /**
  * GET share targets replace the action URL's query, so the parameter names carry the marker.

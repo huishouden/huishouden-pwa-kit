@@ -17,6 +17,7 @@ import googleToken from './nl/googleToken.js';
 import home from './nl/home.js';
 import hours from './nl/hours.js';
 import household from './nl/household.js';
+import image from './nl/image.js';
 import invite from './nl/invite.js';
 import people from './nl/people.js';
 import photo from './nl/photo.js';
@@ -48,6 +49,7 @@ export default {
   ...home,
   ...hours,
   ...household,
+  ...image,
   ...invite,
   ...people,
   ...photo,

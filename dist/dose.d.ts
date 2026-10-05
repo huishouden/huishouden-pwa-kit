@@ -17,6 +17,12 @@ export type ReadLabelOptions = Omit<ReadTextOptions, 'screenshot'>;
  * depends on the photo: flat, well lit and in focus.
  */
 export declare function readLabel(image: Blob, options?: ReadLabelOptions): Promise<string>;
+/**
+ * The text of several photos of one label (the front and the back of a box) as one text for
+ * `parseDirections`, in the order given. A line a later photo repeats (an overlap, or the same
+ * photo twice) is read once; repeats inside a single photo are left alone.
+ */
+export declare function combineLabelTexts(texts: string[]): string;
 export type TimeOfDay = 'morning' | 'midday' | 'evening' | 'bedtime';
 export interface ParsedCourse {
     /** Medicine name from the label's drug line ("Carprofen"). */

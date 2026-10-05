@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  combineLabelTexts,
   confidenceOf,
   courseDays,
   doseSlots,
@@ -225,4 +226,16 @@ describe('recorded doses', () => {
     expect(asNeededCheck([given(1), given(6), given(11)], at(11, 2), limits).ok).toBe(true);
     expect(asNeededCheck([given(6), { at: at(10, 7), status: 'skipped' }], at(10, 11), limits).ok).toBe(true);
   });
+});
+
+describe('combineLabelTexts', () => {
+  test('joins photos in order and reads a line a later photo repeats once', () => {
+    expect(combineLabelTexts(['Lisinopril 10 mg\nQty: 30', 'qty:  30\nTake 1 tablet daily\nTake 1 tablet daily'])).toBe('Lisinopril 10 mg\nQty: 30\nTake 1 tablet daily\nTake 1 tablet daily');
+    expect(parseDirections(combineLabelTexts(['Lisinopril 10 mg tablets', 'Take 1 tablet by mouth once daily'])).name).toBe('Lisinopril');
+    expect(combineLabelTexts([])).toBe('');
+  });
+});
+
+test('a mis-read interval never makes more than 24 dose times', () => {
+  expect(doseTimes({ intervalHours: 1e-7 }).length).toBeLessThanOrEqual(24);
 });
