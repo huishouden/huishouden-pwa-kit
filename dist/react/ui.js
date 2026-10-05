@@ -4,7 +4,8 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
  * checkbox, section tabs (a bottom bar on phones), member badge, "Sample data" banner every app shows, and
  * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`, a copy button,
- * and the note offering to bring back Google's window when it may have opened out of sight.
+ * the note offering to bring back Google's window when it may have opened out of sight, and the
+ * completion pattern (`CompleteButton`, `CompletionRow`, `CompletionList`: DESIGN.md "Completion").
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -13,9 +14,11 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Copy, Ellipsis, EyeOff, Plus, X } from 'lucide-react';
+import { Check, ChevronDown, Copy, Ellipsis, EyeOff, Plus, SkipForward, X } from 'lucide-react';
 import { personColour, personInitial, personName } from '../people';
+import { clockWords, toHhmm } from '../time';
 import { useKitT } from './i18n';
+import { kt } from '../i18n';
 export const inputClass = 'w-full min-h-11 rounded-xl border border-line bg-white px-3 py-2.5 text-base text-ink outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:bg-forest-900 dark:focus:ring-forest-700';
 /** A select styled like the inputs. */
 export const selectClass = `${inputClass} appearance-auto`;
@@ -302,4 +305,98 @@ export function GoogleWindowWait({ waiting, onShow, blocked = false, onContinueH
     if (!waiting || !late)
         return null;
     return (_jsxs("p", { role: "status", className: "flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted", children: [_jsx("span", { children: kt(onContinueHere ? 'feedback.windowWaitingHere' : 'feedback.windowWaiting') }), _jsx("button", { type: "button", className: linkClass, onClick: onShow, children: kt('feedback.windowShow') }), here] }));
+}
+/** How long something done keeps its Undo (DESIGN.md "Completion"): six hours, or less when the next one comes sooner. */
+export const UNDO_DONE_MS = 6 * 3_600_000;
+/**
+ * Whether something done at `at` still offers Undo at `now`: within `windowMs` (six hours) and
+ * before `until` (the next occurrence, when there is one). Undone later, it goes through the
+ * item's own editor or history.
+ */
+export function canUndoDone(at, now, { windowMs = UNDO_DONE_MS, until } = {}) {
+    if (at === undefined || !Number.isFinite(at))
+        return false;
+    if (until !== undefined && now >= until)
+        return false;
+    return now - at < windowMs;
+}
+/** Open items first, done ones after, each group keeping its order. */
+export function openFirst(items, isDone) {
+    return [...items.filter((x) => !isDone(x)), ...items.filter(isDone)];
+}
+/** The outlined "Mark done" button (DESIGN.md "Completion"): forest outline, never a fill. */
+export const completeButton = 'inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-primary bg-surface px-4 py-2 font-semibold text-link transition-colors duration-150 hover:bg-tint disabled:opacity-50';
+const completeButtonLg = 'min-h-14 px-5 text-lg';
+/** The quiet Undo beside something done: small text, no border, a 44px target. */
+export const undoDoneButton = 'inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl px-3 text-sm font-medium text-muted underline-offset-4 transition-colors duration-150 hover:bg-stone-100 hover:underline dark:hover:bg-forest-700';
+/** The filled forest check (or, skipped, a quiet skip mark) that says a row is done. Decorative: the row's words say it too. */
+export function DoneBadge({ skipped, size = 'md' }) {
+    const box = size === 'lg' ? 'h-12 w-12' : 'h-9 w-9';
+    const icon = size === 'lg' ? 26 : 20;
+    return (_jsx("span", { "aria-hidden": "true", "data-done-badge": skipped ? 'skipped' : 'done', className: `inline-flex ${box} shrink-0 items-center justify-center rounded-full ${skipped ? 'border border-line bg-sunken text-muted' : 'bg-primary text-on-primary'}`, children: skipped ? _jsx(SkipForward, { size: icon - 4, strokeWidth: 2.2 }) : _jsx(Check, { size: icon, strokeWidth: 3 }) }));
+}
+/**
+ * Not done: an outlined forest button with a verb ("Mark done", "Give", "Mark paid"). Done: no
+ * button that looks like an action, only a small "Undo" while `onUndo` is given (or nothing). The
+ * two states carry different names ("Mark Take the garbage out done" / "Undo done for Take the
+ * garbage out"), never `aria-pressed`. Pair with `DoneBadge` and a "Done by You · 8:10 PM" line, or
+ * use `CompletionRow`, which does.
+ */
+export function CompleteButton({ done, name, onDone, onUndo, verb, label, undoLabel, skipped, size = 'md', compact, disabled, className = '' }) {
+    const kt = useKitT();
+    if (done) {
+        if (!onUndo)
+            return null;
+        return (_jsx("button", { type: "button", "data-complete": "undo", className: `${undoDoneButton} ${className}`, onClick: onUndo, disabled: disabled, "aria-label": undoLabel ?? kt(skipped ? 'ui.undoSkipName' : 'ui.undoDoneName', { name }), children: kt('ui.undo') }));
+    }
+    return (_jsxs("button", { type: "button", "data-complete": "open", className: `${completeButton} ${size === 'lg' ? completeButtonLg : ''} ${className}`, onClick: onDone, disabled: disabled, "aria-label": label ?? kt('ui.markNameDone', { name }), children: [_jsx(Check, { size: size === 'lg' ? 22 : 18, strokeWidth: 2.4, "aria-hidden": "true" }), _jsx("span", { className: compact ? 'hidden sm:inline' : undefined, children: verb ?? kt('ui.markDone') })] }));
+}
+/** "Done by You · 8:10 PM" (or "Skipped by …"); `at` is a moment or words already said. */
+export function doneLine({ by, at, skipped }) {
+    const time = typeof at === 'number' ? clockWords(toHhmm(at)) : at;
+    if (skipped) {
+        if (by && time)
+            return kt('ui.skippedByAt', { name: by, at: time });
+        if (by)
+            return kt('ui.skippedBy', { name: by });
+        if (time)
+            return kt('ui.skippedAt', { at: time });
+        return kt('ui.skipped');
+    }
+    if (by && time)
+        return kt('ui.doneByAt', { name: by, at: time });
+    if (by)
+        return kt('ui.doneBy', { name: by });
+    if (time)
+        return kt('ui.doneAt', { at: time });
+    return kt('ui.done');
+}
+/**
+ * A completable item (DESIGN.md "Completion"). Open: the leading tile, the title, its meta (in
+ * terracotta when `attention`), any extra actions and the outlined "Mark done". Done: the filled
+ * check badge, the title muted (never struck through), "Done by You · 8:10 PM" and a small Undo.
+ * Renders an `<li>`; put it in a `<ul>`, or a `CompletionList` that sorts done after open.
+ */
+export function CompletionRow({ title, meta, attention, by, at, status, leading, onOpen, openLabel, actions, children, ...button }) {
+    useKitT();
+    const { done, skipped, size = 'md' } = button;
+    const lg = size === 'lg';
+    const heading = `${lg ? 'text-2xl sm:text-3xl tracking-tight' : 'text-lg'} leading-snug font-semibold [overflow-wrap:anywhere] ${done ? 'text-muted' : attention && lg ? 'text-attention' : 'text-ink'}`;
+    const line = done ? (status ?? doneLine({ by, at, skipped })) : meta;
+    const lineClass = `${lg ? 'text-lg' : 'text-base'} ${!done && attention ? 'font-semibold text-attention' : 'text-muted'}`;
+    const text = (_jsxs(_Fragment, { children: [_jsx("span", { className: `block ${heading}`, children: title }), line ? _jsx("span", { className: `block ${lineClass}`, children: line }) : null] }));
+    return (_jsxs("li", { "data-completion": done ? (skipped ? 'skipped' : 'done') : 'open', className: `flex items-center gap-3 py-2.5 sm:gap-4 ${lg ? 'flex-wrap' : ''}`, children: [done ? _jsx(DoneBadge, { skipped: skipped, size: size }) : leading, _jsxs("div", { className: "min-w-0 flex-1", children: [onOpen ? (_jsx("button", { type: "button", className: "-mx-2 flex min-h-11 w-[calc(100%+1rem)] flex-col justify-center rounded-xl px-2 text-left hover:bg-sunken", onClick: onOpen, "aria-label": openLabel, children: text })) : (text), children] }), _jsxs("div", { className: `flex shrink-0 items-center gap-1 ${lg ? 'w-full sm:w-auto' : ''}`, children: [!done && actions, _jsx(CompleteButton, { ...button })] })] }));
+}
+/**
+ * Completable rows with the done ones after the open ones. Once every item is done the list folds
+ * to one line, the check badge and "All done for tonight", which opens the rows again (to undo).
+ */
+export function CompletionList({ items, isDone, children, label, allDone, className = '' }) {
+    const kt = useKitT();
+    const [open, setOpen] = useState(false);
+    const every = items.length > 0 && items.every(isDone);
+    const rows = (_jsx("ul", { "aria-label": label, className: `divide-y divide-line ${every ? '' : className}`, children: openFirst(items, isDone).map(children) }));
+    if (!every)
+        return rows;
+    return (_jsxs("div", { "data-all-done": "", className: className, children: [_jsxs("button", { type: "button", "aria-expanded": open, onClick: () => setOpen((o) => !o), className: "-mx-2 flex min-h-12 w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-1.5 text-left hover:bg-sunken sm:gap-4", children: [_jsx(DoneBadge, {}), _jsx("span", { className: "min-w-0 flex-1 text-lg font-semibold text-ink", children: allDone ?? kt('ui.allDone') }), _jsx("span", { className: "text-sm text-muted", children: open ? kt('ui.hideDone') : kt('ui.showDone', { count: items.length }) }), _jsx(ChevronDown, { size: 18, "aria-hidden": "true", className: `shrink-0 text-muted transition-transform duration-150 ${open ? 'rotate-180' : ''}` })] }), open && rows] }));
 }

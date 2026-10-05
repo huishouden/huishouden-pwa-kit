@@ -3,7 +3,8 @@
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
  * checkbox, section tabs (a bottom bar on phones), member badge, "Sample data" banner every app shows, and
  * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`, a copy button,
- * and the note offering to bring back Google's window when it may have opened out of sight.
+ * the note offering to bring back Google's window when it may have opened out of sight, and the
+ * completion pattern (`CompleteButton`, `CompletionRow`, `CompletionList`: DESIGN.md "Completion").
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -206,3 +207,105 @@ export declare function GoogleWindowWait({ waiting, onShow, blocked, onContinueH
     onContinueHere?: () => void;
     delayMs?: number;
 }): import("react").JSX.Element | null;
+/** How long something done keeps its Undo (DESIGN.md "Completion"): six hours, or less when the next one comes sooner. */
+export declare const UNDO_DONE_MS: number;
+/**
+ * Whether something done at `at` still offers Undo at `now`: within `windowMs` (six hours) and
+ * before `until` (the next occurrence, when there is one). Undone later, it goes through the
+ * item's own editor or history.
+ */
+export declare function canUndoDone(at: number | undefined, now: number, { windowMs, until }?: {
+    windowMs?: number;
+    until?: number;
+}): boolean;
+/** Open items first, done ones after, each group keeping its order. */
+export declare function openFirst<T>(items: readonly T[], isDone: (item: T) => boolean): T[];
+/** The outlined "Mark done" button (DESIGN.md "Completion"): forest outline, never a fill. */
+export declare const completeButton = "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-primary bg-surface px-4 py-2 font-semibold text-link transition-colors duration-150 hover:bg-tint disabled:opacity-50";
+/** The quiet Undo beside something done: small text, no border, a 44px target. */
+export declare const undoDoneButton = "inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl px-3 text-sm font-medium text-muted underline-offset-4 transition-colors duration-150 hover:bg-stone-100 hover:underline dark:hover:bg-forest-700";
+/** The filled forest check (or, skipped, a quiet skip mark) that says a row is done. Decorative: the row's words say it too. */
+export declare function DoneBadge({ skipped, size }: {
+    skipped?: boolean;
+    size?: 'md' | 'lg';
+}): import("react").JSX.Element;
+export interface CompleteButtonProps {
+    done: boolean;
+    /** What is being done, for the buttons' names: "Take the garbage out". */
+    name: string;
+    onDone: () => void;
+    /** Offered while done; leave it out once Undo has run out (`canUndoDone`). */
+    onUndo?: () => void;
+    /** The open button's visible word: the domain verb ("Give", "Feed", "Mark paid"); "Mark done" by default. */
+    verb?: string;
+    /** The open button's name; "Mark {name} done" by default. Give one with a domain verb: "Give Heartgard to Biscuit". */
+    label?: string;
+    /** Undo's name; "Undo done for {name}" by default ("Undo skip for {name}" when skipped). */
+    undoLabel?: string;
+    skipped?: boolean;
+    size?: 'md' | 'lg';
+    /** Under 640px only the check shows (the name still says it all): for tight rows. */
+    compact?: boolean;
+    disabled?: boolean;
+    className?: string;
+}
+/**
+ * Not done: an outlined forest button with a verb ("Mark done", "Give", "Mark paid"). Done: no
+ * button that looks like an action, only a small "Undo" while `onUndo` is given (or nothing). The
+ * two states carry different names ("Mark Take the garbage out done" / "Undo done for Take the
+ * garbage out"), never `aria-pressed`. Pair with `DoneBadge` and a "Done by You · 8:10 PM" line, or
+ * use `CompletionRow`, which does.
+ */
+export declare function CompleteButton({ done, name, onDone, onUndo, verb, label, undoLabel, skipped, size, compact, disabled, className }: CompleteButtonProps): import("react").JSX.Element | null;
+/** "Done by You · 8:10 PM" (or "Skipped by …"); `at` is a moment or words already said. */
+export declare function doneLine({ by, at, skipped }: {
+    by?: string;
+    at?: number | string;
+    skipped?: boolean;
+}): string;
+export interface CompletionRowProps extends Omit<CompleteButtonProps, 'className'> {
+    /** The thing to do, as a person reads it. `name` (the buttons' names) defaults to it when it is a string. */
+    title: ReactNode;
+    name: string;
+    /** The line under the title while open: "Tonight by 7 PM", "Overdue by 5 days". */
+    meta?: ReactNode;
+    /** Late or due now: the open row's meta in the attention colour. The button stays the same. */
+    attention?: boolean;
+    /** Who did it, as shown ("You", "Sam"), and when (a moment, or words). */
+    by?: string;
+    at?: number | string;
+    /** The done line in other words ("Given late 11:02 AM by Jo"); `doneLine({ by, at })` by default. */
+    status?: ReactNode;
+    /** Shown before the title while open (a category or event tile); the done badge takes its place once done. */
+    leading?: ReactNode;
+    /** Tapping the title (to edit or open it). */
+    onOpen?: () => void;
+    openLabel?: string;
+    /** More actions while open, before the button: a quiet Skip. */
+    actions?: ReactNode;
+    /** Under the meta line, either state: notes, who to call. */
+    children?: ReactNode;
+}
+/**
+ * A completable item (DESIGN.md "Completion"). Open: the leading tile, the title, its meta (in
+ * terracotta when `attention`), any extra actions and the outlined "Mark done". Done: the filled
+ * check badge, the title muted (never struck through), "Done by You · 8:10 PM" and a small Undo.
+ * Renders an `<li>`; put it in a `<ul>`, or a `CompletionList` that sorts done after open.
+ */
+export declare function CompletionRow({ title, meta, attention, by, at, status, leading, onOpen, openLabel, actions, children, ...button }: CompletionRowProps): import("react").JSX.Element;
+export interface CompletionListProps<T> {
+    items: readonly T[];
+    isDone: (item: T) => boolean;
+    /** One `CompletionRow` (an `<li>`) per item. */
+    children: (item: T) => ReactNode;
+    /** The list's name. */
+    label: string;
+    /** The one line when everything is done: "All done for tonight"; "All done" by default. */
+    allDone?: string;
+    className?: string;
+}
+/**
+ * Completable rows with the done ones after the open ones. Once every item is done the list folds
+ * to one line, the check badge and "All done for tonight", which opens the rows again (to undo).
+ */
+export declare function CompletionList<T>({ items, isDone, children, label, allDone, className }: CompletionListProps<T>): import("react").JSX.Element;
