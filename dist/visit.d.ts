@@ -195,21 +195,37 @@ export declare function visitRecipients(p: {
     carers: readonly string[];
     email?: string;
 }, h: AudienceHousehold): string[];
+/**
+ * The doctor or clinic as a visit's published items may name it: a contact marked private (admins
+ * and members only; one without the flag counts as private) only when everyone in the audience may
+ * read private records, so a helper carer never learns it from a reminder or a calendar.
+ * `visitAgendaItem` and `visitReminders` apply it themselves.
+ */
+export declare function publishedContact(c: VisitContact | undefined, audience: readonly string[], h: AudienceHousehold): {
+    name: string;
+    address?: string;
+} | undefined;
 export interface VisitPerson {
     id: string;
     name: string;
+}
+/** A visit's doctor or clinic as the household's contacts hold it. */
+export interface VisitContact {
+    name: string;
+    address?: string;
+    /** Admins and members only; absent counts as private. */
+    private?: boolean;
 }
 export interface PublishVisitOptions {
     person: VisitPerson;
     /** Who may read what it publishes: `./audience` `personAudience`. */
     audience: readonly string[];
+    /** The household's members and roles: whether the audience may see a private doctor. */
+    household: AudienceHousehold;
     /** The deep link into Health for this visit. */
     url: string;
-    /** The doctor or clinic, when it has one. */
-    contact?: {
-        name: string;
-        address?: string;
-    };
+    /** The doctor or clinic, when it has one, as stored: named only as `publishedContact` allows. */
+    contact?: VisitContact;
     /** Absolute to the household's local frame, on a server. */
     local?: (t: number) => number;
 }
@@ -243,7 +259,7 @@ export declare function visitReminders(v: Visit, o: PublishVisitOptions & {
  * both mark the visit (`followUpDoneAt`), as the reader who taps them: `givers` (its readers among
  * the audience) and admins.
  */
-export declare function followUpTodo(v: Visit, visits: readonly Pick<Visit, 'followUpOf'>[], o: Omit<PublishVisitOptions, 'contact'> & {
+export declare function followUpTodo(v: Visit, visits: readonly Pick<Visit, 'followUpOf'>[], o: Omit<PublishVisitOptions, 'contact' | 'household'> & {
     givers: readonly string[];
     now: number;
 }): PersonalTodoInput | null;

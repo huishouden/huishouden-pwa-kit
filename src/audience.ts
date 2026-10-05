@@ -1,4 +1,4 @@
-import { householdRole, type Role } from './role-core.js';
+import { can, householdRole, type Role } from './role-core.js';
 
 /**
  * Items for named people only. The household agenda, to-do list and reminders are read by every
@@ -53,4 +53,9 @@ export const householdAdmins = (h: AudienceHousehold): string[] => h.members.fil
  */
 export function personAudience(p: { readers: readonly string[] }, h: AudienceHousehold): string[] {
   return cleanAudience([...householdAdmins(h), ...p.readers.filter((e) => audienceMember(h, e))]);
+}
+
+/** Whether everyone in `audience` may read records marked private (`./role-core` `can(role, 'see-private')`). */
+export function audienceSeesPrivate(h: AudienceHousehold, audience: readonly string[]): boolean {
+  return audience.every((e) => can(roleIn(h, e.trim().toLowerCase()), 'see-private'));
 }
