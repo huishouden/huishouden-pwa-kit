@@ -19,6 +19,24 @@ export { OCR_LANG_PATH, releaseOcr } from './ocr';
 export function readLabel(image, options = {}) {
     return readImageText(image, options);
 }
+/**
+ * The text of several photos of one label (the front and the back of a box) as one text for
+ * `parseDirections`, in the order given. A line a later photo repeats (an overlap, or the same
+ * photo twice) is read once; repeats inside a single photo are left alone.
+ */
+export function combineLabelTexts(texts) {
+    const key = (line) => line.trim().replace(/\s+/g, ' ').toLowerCase();
+    const seen = new Set();
+    const out = [];
+    for (const text of texts) {
+        const lines = text.split(/\n/).map((l) => l.trimEnd()).filter((l) => l.trim());
+        const fresh = lines.filter((l) => !seen.has(key(l)));
+        for (const l of lines)
+            seen.add(key(l));
+        out.push(...fresh);
+    }
+    return out.join('\n');
+}
 const NUMBER_WORDS = {
     a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
     eleven: 11, twelve: 12, fourteen: 14, fifteen: 15, twenty: 20, thirty: 30, half: 0.5, 'one-half': 0.5,
@@ -448,7 +466,8 @@ export function doseTimes(course, options = {}) {
     }
     const first = toMinutes(options.firstDose ?? day.morning);
     if (course.intervalHours && course.intervalHours < 24) {
-        const count = Math.max(1, Math.floor(24 / course.intervalHours));
+        // At most 24 doses a day: a mis-read interval ("every .0000001 hours") must not allocate millions.
+        const count = Math.min(24, Math.max(1, Math.floor(24 / course.intervalHours)));
         return sortTimes(Array.from({ length: count }, (_, i) => toHhmm(first + i * course.intervalHours * 60)));
     }
     const n = course.intervalHours && course.intervalHours >= 24 ? 1 : course.timesPerDay ?? 0;

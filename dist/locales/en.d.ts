@@ -218,6 +218,15 @@ declare const _default: {
     readonly 'invite.open': "Open {url} and sign in with Google as {to}. You'll have every app straight away.";
     readonly 'invite.install': "On a phone or tablet, use \"Install app\" or \"Add to Home screen\" in the browser menu to keep it on your home screen.";
     readonly 'invite.denied': "Google did not allow sending email.";
+    readonly 'image.take': "Take a photo";
+    readonly 'image.choose': "Choose a photo";
+    readonly 'image.chooseMany': "Choose photos";
+    readonly 'image.paste': "Paste";
+    readonly 'image.cameraInput': "Camera";
+    readonly 'image.dropHint': "You can also drop photos here, or paste them with Ctrl+V or Cmd+V.";
+    readonly 'image.noImage': "That is not a photo. Choose a picture instead.";
+    readonly 'image.noneOnClipboard': "There is no picture on the clipboard. Copy one first, then paste.";
+    readonly 'image.pasteDenied': "Couldn't read the clipboard. Allow it when asked, or paste with Ctrl+V or Cmd+V.";
     readonly 'household.notEmail': "Not an email address: {email}";
     readonly 'household.alreadyIn': "{email} is already in the household.";
     readonly 'hours.closed': "Closed";
@@ -321,10 +330,10 @@ declare const _default: {
     readonly 'dose.everyDays': "Every {n} days";
     readonly 'dose.everyHours': "Every {n} hours";
     readonly 'dose.underTheSkin': "Under the skin";
-    readonly 'dose.scanIntro': "Take a photo of the pharmacy label. It is read on this device and not kept.";
+    readonly 'dose.scanIntro': "Take a photo of the pharmacy label, or choose one you already have. A box with a front and a back: choose both photos at once. It is read on this device and not kept.";
     readonly 'dose.labelPhoto': "Label photo";
     readonly 'dose.reading': "Reading the label {percent}%";
-    readonly 'dose.scanAgain': "Scan again";
+    readonly 'dose.readingMany': "Reading photo {n} of {total}, {percent}%";
     readonly 'dose.scan': "Scan the label";
     readonly 'dose.readError': "Couldn't read that photo. Try again in good light with the label flat, or fill it in below.";
     readonly 'dose.nothingFilled': "Nothing on that photo could be filled in. Try again closer, or fill it in below.";

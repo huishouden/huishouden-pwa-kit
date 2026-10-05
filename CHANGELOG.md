@@ -3,6 +3,18 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## 0.99.0 (2026-10-05)
+
+### Features
+
+* `@huishouden/pwa-kit/react/image-picker`: `ImagePicker`, the one way an app gets photos: Take a photo (camera, touch devices) and Choose a photo (no `capture`: photo library or files), paste (Ctrl/Cmd+V and a Paste button), drag and drop, and several at once. Scan the label (`LabelScan`) used `capture="environment"` and so opened only the camera; it now uses `ImagePicker`, reads each photo (the front and the back of a box) and parses them as one (`combineLabelTexts`), and takes `images` to read photos handed in.
+* `pwaApp({ shareTarget: { images: true } })` and `@huishouden/pwa-kit/shared-images` (`readSharedImages`, `clearSharedImages`, `?share=image`): Gallery, Share, the app (Android). The share target ignores posts from other sites and keeps at most 10 files of 10 MB.
+
+### Bug Fixes
+
+* `doseTimes` makes at most 24 times a day from an interval, so a mis-read one ("every .0000001 hours") cannot freeze the page.
+* Scan the label's result titles are headings and its disclosure is a 44px target; `dose.scanAgain` is gone (`dose.readingMany` added).
+
 ## [0.98.2](https://github.com/huishouden/pwa-kit/compare/v0.98.0...v0.98.2) (2026-10-05)
 
 ### Features

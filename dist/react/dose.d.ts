@@ -13,9 +13,11 @@ export interface LabelFill {
 export interface LabelScanProps {
     /** Fills the app's form from what was read; returns what it filled, in the form's order. */
     onRead: (parsed: ParsedCourse, text: string) => LabelFill[];
-    /** The line under the button before a photo is taken. */
+    /** The line under the title before a photo is picked. */
     intro?: string;
     /** Reads the photo's text (tests); default `readLabel`, or `window.__mockLabelText` when set. */
     read?: (photo: Blob, onProgress: (progress: number) => void) => Promise<string>;
+    /** Photos to read as soon as this shows, such as ones shared in from the gallery (`../shared-images`). */
+    images?: File[];
 }
-export declare function LabelScan({ onRead, intro, read }: LabelScanProps): import("react").JSX.Element;
+export declare function LabelScan({ onRead, intro, read, images }: LabelScanProps): import("react").JSX.Element;
