@@ -184,6 +184,33 @@ rather than copying the class strings; the shapes are:
 - **Empty and loading states:** one sentence and, if useful, one action. No spinners longer than a
   second without text.
 
+## Completion
+
+Anything a person ticks off (a job, a dose, a meal, a bill, a prep step) shows whether it is done
+by the shape of the row, never by the same button in another colour. `CompleteButton`,
+`CompletionRow` and `CompletionList` from `/react/ui` do all of this; apps don't build their own.
+
+- **Not done:** an outlined button with a verb: forest-700 outline and text on the surface
+  (forest-400 outline, forest-300 text in dark), a check icon, "Mark done" or the domain's own verb
+  ("Give", "Feed", "Mark paid"). Never a filled primary button: the fill is for the screen's one
+  primary action, and a filled "Done" reads as already done. A late item keeps the same button;
+  the row says it is late (terracotta meta line, the tile in attention).
+- **Done:** no button that looks like an action. A filled forest check badge takes the tile's place,
+  the title turns `text-muted` (not struck through: a muted dose or job stays readable, and a strike
+  reads as cancelled), and the line under it says who and when, "Done by You · 8:10 PM" ("Given by
+  Jo · 8:10 AM", "Paid by Sam"). A small text Undo stays beside it for six hours or until the next
+  occurrence, whichever is sooner (`canUndoDone`); after that the item's own editor or history
+  changes it. Skipped is done in a quieter way: a stone skip badge and "Skipped by You · 7:02 PM".
+- **Lists that are checklists** (Tasks, Groceries, Baby's checklists) keep their checkbox and the
+  struck-through title: the box is the control and its tick the state, as people expect of a list.
+- **Order:** done items sort after the open ones in each card. When everything in a card is done
+  it folds to one line, the check badge and "All done for tonight", which opens the rows again.
+- **Names:** each state has its own accessible name: "Mark Take the garbage out done" while open,
+  "Undo done for Take the garbage out" once done. `aria-pressed` is not used for completion: a
+  pressed toggle doesn't say what pressing it again does. Every state meets 4.5:1 in light and dark.
+- **Feedback:** completing still raises the toast with Undo (DESIGN "Toast"); the row's Undo is for
+  later in the day, when the toast has gone.
+
 ## Motion and feedback
 
 - Transitions 120–200ms, ease-out, opacity/transform only; none when `prefers-reduced-motion`.
