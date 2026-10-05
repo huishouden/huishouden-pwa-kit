@@ -378,7 +378,7 @@ const label = (i: number) => `Person ${String.fromCharCode(65 + (i % 26))}${i >=
  * household (Gemini): each person becomes "Person A", "Person B", … by their place in the list, so
  * the stand-ins are stable while the list is, and diets, allergies and notes stay but are not tied
  * to anyone's name or email. In a note, every listed person's name, each word of it (split at spaces,
- * hyphens and apostrophes), their email and its first part are replaced by their stand-in, ignoring
+ * hyphens and apostrophes; single letters such as an initial stay, since "a" or "I" would go too), their email and its first part are replaced by their stand-in, ignoring
  * case and accents (the note goes without accents); a word two people share becomes "Person A or
  * Person B"; any other email becomes "someone". Pass every household member (email and full profile
  * name) as `others`, listed or not: `withMembers` lists members by first name only, so their
@@ -415,7 +415,7 @@ export function pseudonymousFood(food: Pick<FoodPreferences, 'people'>, others: 
   const pattern = sorted.length ? new RegExp(`(?<![\\p{L}\\p{N}])(?:${sorted.map(escapeRegExp).join('|')})(?![\\p{L}\\p{N}])`, 'giu') : null;
   const scrub = (text: string) => {
     const folded = fold(text).replace(EMAIL, (m) => swaps.get(m.toLowerCase()) ?? 'someone');
-    return pattern ? folded.replace(pattern, (m) => swaps.get(m.toLowerCase()) ?? m) : folded;
+    return pattern ? folded.replace(pattern, (m) => swaps.get(m.toLowerCase()) ?? 'someone') : folded;
   };
   const people = food.people.map((p, i): FoodPerson => ({
     id: `person-${i + 1}`,
