@@ -7,7 +7,7 @@ ones are described in their PR titles and tags.
 
 ### Bug Fixes
 
-* `health_log_dose`: giving a dose someone else already gave asks first with the double-dose guard, which names who gave it; only a skip or a confirmed give of their dose is refused.
+* `health_log_dose`: giving a dose someone else already gave asks first with the double-dose guard, which names who gave it; every other write over their mark (a skip, a confirmed give, a give over their skip) is refused.
 
 ## 0.95.0 (2026-10-05)
 

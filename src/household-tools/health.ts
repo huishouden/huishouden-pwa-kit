@@ -337,7 +337,8 @@ export const healthLogDose = defineTool({
     // doses): someone else's mark is theirs, and turning a given dose into a skipped one asks first.
     const existing = slot ? doses.find((d) => d.id === id) : undefined;
     // Giving it again without `confirm` gets the double-dose guard first, which names who gave it.
-    if (existing && existing.by !== ctx.session.email && (status !== 'given' || args.confirm)) throw new UserError('health.someoneElsesDose');
+    // Every other write over their mark is refused, so it is never re-signed.
+    if (existing && existing.by !== ctx.session.email && !(existing.status === 'given' && status === 'given' && !args.confirm)) throw new UserError('health.someoneElsesDose');
     if (existing?.status === 'given' && status === 'skipped' && !args.confirm) {
       const warning = render(ctx.lang, () => t('guard.unmark', { med: medLabel(med), time: formatTime(ctx.clock.local(existing.at)) }));
       ctx.touched('health', `healthPeople/${person.id}/meds/${med.id}`);
