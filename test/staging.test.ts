@@ -6,6 +6,7 @@ import authUsers from './fixtures/staging/auth-users.json';
 import {
   checkStagingQuota,
   ciRunId,
+  localRunId,
   cleanupTestRun,
   emulatorCustomToken,
   getTestDoc,
@@ -60,6 +61,8 @@ describe('each run its own household', () => {
 
   test('the kit jobs name runs by repo, run and attempt; anything else is refused', () => {
     expect(ciRunId('huishouden/pet', 18000000000, 2)).toBe('e2e-pet-18000000000-2');
+    expect(localRunId('Caleb.P', NOW)).toBe(`e2e-local-caleb-p-${NOW.toString(36)}`);
+    expect(testRunId({ HH_STAGING_RUN: localRunId('', NOW) })).toMatch(/^e2e-local-dev-/);
     expect(testRunId({})).toBe('e2e-local');
     expect(testRunId({ HH_E2E_TARGET: 'emulator' })).toBe('e2e-emulator');
     expect(() => testRunId({ HH_STAGING_RUN: 'test-household' })).toThrow(/must start with e2e-/);
