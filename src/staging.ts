@@ -216,8 +216,8 @@ function admin({ accessToken, env = processEnv(), fetchImpl = fetch }: AdminCred
     const host = env.HH_EMULATOR_HOST || '127.0.0.1';
     return {
       project,
-      firestore: `http://${host}:8080/v1/projects/${project}/databases/(default)/documents`,
-      identity: `http://${host}:9099/identitytoolkit.googleapis.com/v1/projects/${project}`,
+      firestore: `http://${host}:${env.HH_EMULATOR_FIRESTORE_PORT || 8080}/v1/projects/${project}/databases/(default)/documents`,
+      identity: `http://${host}:${env.HH_EMULATOR_AUTH_PORT || 9099}/identitytoolkit.googleapis.com/v1/projects/${project}`,
       headers: { authorization: 'Bearer owner', 'content-type': 'application/json' },
       fetchImpl,
     };

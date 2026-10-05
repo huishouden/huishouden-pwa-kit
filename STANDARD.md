@@ -530,7 +530,7 @@ nothing deployed or tested there can read or write real household data.
   skips the file where neither staging credentials nor the emulators are there.
 - **Emulators first**: the same specs run on the Auth and Firestore emulators with the household's
   real rules on the author's machine before the PR is ready (`HH_E2E_TARGET=emulator`; `initApp` connects to them in a
-  build with `VITE_USE_EMULATORS=true`), free and without a quota. An app with an `e2e:emulator`
+  build with `VITE_USE_EMULATORS=true`; ports 9099 and 8080 unless `VITE_EMULATOR_AUTH_PORT`/`VITE_EMULATOR_FIRESTORE_PORT` and `HH_EMULATOR_AUTH_PORT`/`HH_EMULATOR_FIRESTORE_PORT` say otherwise, so runs side by side don't collide), free and without a quota. An app with an `e2e:emulator`
   script (`playwright test e2e/signed-in.spec.ts --grep-invert @staging`) runs there everything
   but the tests tagged `@staging`, and staging runs only those: flows through another app on the
   site (the portal's To-do list, `runPortalTodo`), the Workers (calendar feed, connector), and the

@@ -151,3 +151,11 @@ describe('linkPreview', () => {
     expect(out).toContain('<meta name="twitter:card" content="summary_large_image" />');
   });
 });
+
+test('emulator ports: a valid number or the default', async () => {
+  const { emulatorPort } = await import('../src/emulator-port');
+  expect(emulatorPort('18080', 8080)).toBe(18080);
+  expect(emulatorPort(undefined, 8080)).toBe(8080);
+  expect(emulatorPort('x', 9099)).toBe(9099);
+  expect(emulatorPort('70000', 9099)).toBe(9099);
+});

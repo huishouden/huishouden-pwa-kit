@@ -3,6 +3,13 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## 0.93.0 (2026-10-05)
+
+### Features
+
+* Emulator ports are configurable, so emulator runs side by side on one machine don't collide: `VITE_EMULATOR_AUTH_PORT` and `VITE_EMULATOR_FIRESTORE_PORT` for the build (`initApp`), `HH_EMULATOR_AUTH_PORT` and `HH_EMULATOR_FIRESTORE_PORT` for the tests (`useTestHousehold`, `signInTestUser`); defaults 9099 and 8080. `hh dev verify` picks free ones.
+* `pwa.yml`'s version guard says exactly what to run when main has code without a version bump.
+
 ## 0.92.0 (2026-10-05)
 
 ### Features

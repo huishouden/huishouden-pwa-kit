@@ -12,6 +12,8 @@
 import { getApps, initializeApp } from 'firebase/app';
 import { GoogleAuthProvider, connectAuthEmulator, getAuth, signInWithPopup, signOut } from 'firebase/auth';
 import { connectFirestoreEmulator } from 'firebase/firestore';
+import { emulatorPort } from './emulator-port';
+export { emulatorPort } from './emulator-port';
 import { forgetSilentSignIn } from './auth.js';
 import { firebaseConfigFromEnv } from './firebase.js';
 import { initFirestore } from './firestore.js';
@@ -20,11 +22,13 @@ import { startObservability } from './observability.js';
 export function initApp({ app: name, env, fallback, preloadGoogle = true }) {
     const emulators = env.VITE_USE_EMULATORS === 'true' || env.VITE_USE_EMULATORS === true;
     const emulatorHost = typeof env.VITE_EMULATOR_HOST === 'string' && env.VITE_EMULATOR_HOST ? env.VITE_EMULATOR_HOST : '127.0.0.1';
+    const authPort = emulatorPort(env.VITE_EMULATOR_AUTH_PORT, 9099);
+    const firestorePort = emulatorPort(env.VITE_EMULATOR_FIRESTORE_PORT, 8080);
     // getApps: a hot reload or a second import reuses the app rather than failing on a duplicate.
     const app = getApps()[0] ?? initializeApp(firebaseConfigFromEnv(env, fallback));
     const auth = getAuth(app);
     if (emulators)
-        connectAuthEmulator(auth, `http://${emulatorHost}:9099`, { disableWarnings: true });
+        connectAuthEmulator(auth, `http://${emulatorHost}:${authPort}`, { disableWarnings: true });
     // Error, speed and anonymous usage reports (the portal's /privacy page); off without VITE_NEWRELIC_*.
     startObservability({ app: name, env });
     const googleClientId = typeof env.VITE_GOOGLE_CLIENT_ID === 'string' && env.VITE_GOOGLE_CLIENT_ID ? env.VITE_GOOGLE_CLIENT_ID : undefined;
@@ -38,7 +42,7 @@ export function initApp({ app: name, env, fallback, preloadGoogle = true }) {
             if (!db) {
                 db = initFirestore(app, { auth });
                 if (emulators)
-                    connectFirestoreEmulator(db, emulatorHost, 8080);
+                    connectFirestoreEmulator(db, emulatorHost, firestorePort);
             }
             return db;
         },
