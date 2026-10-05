@@ -17,16 +17,17 @@ export function memoryNotes(): PublishedStorage & { m: Map<string, string> } {
 }
 
 /**
- * Removes republish notes from the page's `localStorage`, which another test file's DOM may leave
- * behind: tests that don't pass `published` would otherwise skip syncs earlier tests made.
+ * Hides the page's `localStorage` (another test file's DOM, or a stub, may leave one behind) while a
+ * file's tests run, so syncs that don't pass `published` read every time, as they do outside a browser.
  */
-export function clearPageNotes(): void {
-  const store = (globalThis as { localStorage?: Storage }).localStorage;
-  if (!store) return;
-  const keys: string[] = [];
-  for (let i = 0; i < store.length; i++) {
-    const k = store.key(i);
-    if (k?.startsWith('hh-published:')) keys.push(k);
-  }
-  for (const k of keys) store.removeItem(k);
+export function withoutPageStorage(beforeAll: (f: () => void) => void, afterAll: (f: () => void) => void): void {
+  const g = globalThis as { localStorage?: unknown };
+  let saved: PropertyDescriptor | undefined;
+  beforeAll(() => {
+    saved = Object.getOwnPropertyDescriptor(g, 'localStorage');
+    if (saved) Object.defineProperty(g, 'localStorage', { value: undefined, configurable: true, writable: true });
+  });
+  afterAll(() => {
+    if (saved) Object.defineProperty(g, 'localStorage', saved);
+  });
 }
