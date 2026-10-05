@@ -824,6 +824,8 @@ export function CompletionRow({ title, meta, attention, by, byMe, at, status, le
   useKitT();
   const { done, skipped, size = 'md' } = button;
   const lg = size === 'lg';
+  // With extra actions (Skip, Late) a phone has no room for them beside the title: they take a row below.
+  const wrap = lg || (!done && !!actions);
   const heading = `${lg ? 'text-2xl sm:text-3xl tracking-tight' : 'text-lg'} leading-snug font-semibold [overflow-wrap:anywhere] ${done ? 'text-muted' : attention && lg ? 'text-attention' : 'text-ink'}`;
   const line = done ? (status ?? doneLine({ by, byMe, at, skipped })) : meta;
   const lineClass = `${lg ? 'text-lg' : 'text-base'} ${!done && attention ? 'font-semibold text-attention' : 'text-muted'}`;
@@ -834,7 +836,7 @@ export function CompletionRow({ title, meta, attention, by, byMe, at, status, le
     </>
   );
   return (
-    <li data-completion={done ? (skipped ? 'skipped' : 'done') : 'open'} className={`flex items-center gap-3 py-2.5 sm:gap-4 ${lg ? 'flex-wrap' : ''}`}>
+    <li data-completion={done ? (skipped ? 'skipped' : 'done') : 'open'} className={`flex items-center gap-3 py-2.5 sm:gap-4 ${wrap ? 'flex-wrap sm:flex-nowrap' : ''}`}>
       {done ? <DoneBadge skipped={skipped} size={size} /> : leading}
       <div className="min-w-0 flex-1">
         {onOpen ? (
@@ -846,7 +848,7 @@ export function CompletionRow({ title, meta, attention, by, byMe, at, status, le
         )}
         {children}
       </div>
-      <div className={`flex shrink-0 items-center gap-1 ${lg ? 'w-full sm:w-auto' : ''}`}>
+      <div className={`flex shrink-0 items-center gap-1 ${wrap ? 'w-full justify-end sm:w-auto' : ''}`}>
         {!done && actions}
         <CompleteButton {...button} />
       </div>
@@ -863,6 +865,8 @@ export interface CompletionListProps<T> {
   label: string;
   /** The one line when everything is done: "All done for tonight"; "All done" by default. */
   allDone?: string;
+  /** The folded line's "Show 3 done" in the domain's word ("Show 3 paid"); gets the count. */
+  showDone?: (count: number) => string;
   className?: string;
 }
 
@@ -870,7 +874,7 @@ export interface CompletionListProps<T> {
  * Completable rows with the done ones after the open ones. Once every item is done the list folds
  * to one line, the check badge and "All done for tonight", which opens the rows again (to undo).
  */
-export function CompletionList<T>({ items, isDone, children, label, allDone, className = '' }: CompletionListProps<T>) {
+export function CompletionList<T>({ items, isDone, children, label, allDone, showDone, className = '' }: CompletionListProps<T>) {
   const kt = useKitT();
   const [open, setOpen] = useState(false);
   const every = items.length > 0 && items.every(isDone);
@@ -890,7 +894,7 @@ export function CompletionList<T>({ items, isDone, children, label, allDone, cla
       >
         <DoneBadge />
         <span className="min-w-0 flex-1 text-lg font-semibold text-ink">{allDone ?? kt('ui.allDone')}</span>
-        <span className="text-sm text-muted">{open ? kt('ui.hideDone') : kt('ui.showDone', { count: items.length })}</span>
+        <span className="text-sm text-muted">{open ? kt('ui.hideDone') : (showDone ? showDone(items.length) : kt('ui.showDone', { count: items.length }))}</span>
         <ChevronDown size={18} aria-hidden="true" className={`shrink-0 text-muted transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && rows}

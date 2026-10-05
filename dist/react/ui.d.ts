@@ -309,10 +309,12 @@ export interface CompletionListProps<T> {
     label: string;
     /** The one line when everything is done: "All done for tonight"; "All done" by default. */
     allDone?: string;
+    /** The folded line's "Show 3 done" in the domain's word ("Show 3 paid"); gets the count. */
+    showDone?: (count: number) => string;
     className?: string;
 }
 /**
  * Completable rows with the done ones after the open ones. Once every item is done the list folds
  * to one line, the check badge and "All done for tonight", which opens the rows again (to undo).
  */
-export declare function CompletionList<T>({ items, isDone, children, label, allDone, className }: CompletionListProps<T>): import("react").JSX.Element;
+export declare function CompletionList<T>({ items, isDone, children, label, allDone, showDone, className }: CompletionListProps<T>): import("react").JSX.Element;
