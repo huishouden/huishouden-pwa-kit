@@ -248,7 +248,7 @@ describe('Health conditions', () => {
     expect(list.result.text).toContain('Cervical radiculopathy');
     expect(list.result.text).not.toContain('Migraine');
     const visits = await run(SAM, db, 'health_appointments', { person: 'Nan' });
-    expect((visits.result.data!.visits as { condition?: { name: string } }[])[0].condition).toEqual({ id: 'k1', name: 'Cervical radiculopathy' });
+    expect((visits.result.data!.visits as { condition?: { id?: string; name: string } }[])[0].condition).toEqual({ id: 'k1', name: 'Cervical radiculopathy' });
   });
 
   test('health_add_condition files it under the code, the name or the area given, and only for keepers', async () => {
