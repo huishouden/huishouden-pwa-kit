@@ -105,13 +105,12 @@ Policy **Huishouden**, emailed through the workflow **Huishouden alerts** (desti
 | Condition | Fires when |
 |---|---|
 | App errors spike | More than 10 errors in one app within 30 minutes (one incident per app) |
-| Site down | An app's uptime check (its path on the suite's site) failed twice within 30 minutes (ping every 15 min from 2 locations) |
+| Site down | An app's uptime check (its path on the suite's site) failed twice within 30 minutes (ping every 30 min from 2 locations) |
 | Notify sender silent | No `NotifyRun` heartbeat from the notify Worker for 20 minutes (it runs every 5) |
 | Notify run crashed | A notify run threw (`NotifyRun.error`) |
 | Push deliveries failing | More than 5 Web Push deliveries failed in an hour |
 
-CI failures on `main` are emailed by GitHub to whoever pushed; `huishouden/.github` also opens a
-weekly digest issue listing failed `main` runs across the org (only when there were any).
+CI failures on `main` are emailed by GitHub to whoever pushed.
 
 ## Dashboard
 
@@ -135,8 +134,8 @@ every production deploy (pwa-site assemble) ──► /hh-observability.json on 
 each app (startObservability) reads its path's entry at start
 ```
 
-The workflow runs when `apps.json` changes on `main`, weekly (repairs drift: a monitor edited or
-deleted by hand), and on demand. It:
+The workflow runs when `apps.json` changes on `main` and on demand; a monitor edited or deleted by
+hand is repaired by a manual run. It:
 
 1. Creates or updates, by name: a Browser app per app (`Huishouden Baby`, …), a ping monitor per
    app at its path on the suite's site (`https://<site>.web.app/<app>/`), the alert policy,
@@ -148,7 +147,7 @@ deleted by hand), and on demand. It:
 2. Writes each app's browser settings (account id, app id, browser key `NRJS-…`; public by design,
    the browser key can only send data) to `observability.json` and, when it changed, uploads it to
    the portal's `observability` pre-release and starts the portal's CI, which deploys the site with
-   the new `/hh-observability.json`. (Without that, the portal's 30-minute reconcile notices the new
+   the new `/hh-observability.json`. (Without that, the next deploy of any app, or a manual reconcile run, picks up the new
    asset and deploys it.) No app rebuilds: the settings are read at run time, so an app added to
    `apps.json` reports from the next deploy.
 
@@ -202,7 +201,7 @@ app's repo instead (apps served from a site of their own; needs `gh` with admin 
 |---|---|---|
 | Data ingest | 100 GB/month | Under 0.1 GB: about 2 KB per page view, 288 notify events a day |
 | Full platform users | 1 | 1 |
-| Ping monitors | Unlimited | 10 apps × 2 locations × 4/hour ≈ 58,000 checks/month, not billed |
+| Ping monitors | Unlimited | 10 apps × 2 locations × 2/hour ≈ 29,000 checks/month, not billed |
 | Other synthetic checks | 500/month | 0 |
 | Alerts, dashboards, pipeline cloud rules | Included | 5 conditions, 1 dashboard, 5 rules |
 
