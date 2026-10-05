@@ -1,57 +1,12 @@
 import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { deleteDoc, setDoc, writeBatch } from './firestore.js';
 import { doseSlots } from './dose.js';
-import { MONEY_APPS } from './roles.js';
 import { cleanAudience, inAudience } from './audience.js';
-import { getLang, inEveryLang, kt, LANGS } from './i18n.js';
+import { kt } from './i18n.js';
 import { atClock } from './time.js';
-import { cleanSource, readSource } from './reminder-source.js';
-export const REMINDER_FIELDS = ['app', 'title', 'body', 'texts', 'at', 'url', 'recipients', 'ref', 'private', 'source', 'sent', 'sentAt', 'createdAt', 'by'];
-/** Limits of a stored title and body, also inside `texts` (the rules check the same). */
-export const REMINDER_LIMITS = { title: 120, body: 500 };
-/** The collection of reminders for named members only (`./audience`); the sender reads it too. */
-export const PERSONAL_REMINDERS = 'personalReminders';
-/** Fields of a `personalReminders` document: a reminder's plus `audience`. */
-export const PERSONAL_REMINDER_FIELDS = [...REMINDER_FIELDS, 'audience'];
-/** `texts` as stored: known languages only, each title and body trimmed and clipped; undefined when none is left. */
-export function cleanTexts(texts) {
-    if (!texts || typeof texts !== 'object')
-        return undefined;
-    const out = {};
-    for (const lang of LANGS) {
-        const t = texts[lang];
-        if (!t || typeof t.title !== 'string')
-            continue;
-        const title = t.title.trim().slice(0, REMINDER_LIMITS.title);
-        if (!title)
-            continue;
-        out[lang] = { title, body: (typeof t.body === 'string' ? t.body : '').trim().slice(0, REMINDER_LIMITS.body) };
-    }
-    return Object.keys(out).length ? out : undefined;
-}
-/**
- * Runs `build` once per language (its `t`/`kt` and formatters in that language) and returns its
- * reminders in the page's language, each with `texts` holding every language's title and body, so
- * each device is notified in its own. `build` must be synchronous and return the same reminders in
- * the same order every time (only the words differ).
- *
- * ```ts
- * syncReminders(db, id, 'car', await localizeReminders(() => carReminders(data)), me);
- * ```
- */
-export async function localizeReminders(build) {
-    const all = await inEveryLang(build);
-    const base = all[getLang()];
-    return base.map((r, i) => {
-        const texts = {};
-        for (const lang of LANGS) {
-            const other = all[lang][i];
-            if (other)
-                texts[lang] = { title: other.title, body: other.body ?? '' };
-        }
-        return { ...r, texts };
-    });
-}
+import { readSource } from './reminder-source.js';
+import { cleanTexts, localizeReminders, PERSONAL_REMINDERS, personalReminderDoc, reminderDoc, reminderId, toReminder } from './reminder-core.js';
+export * from './reminder-core.js';
 const remindersOf = (db, householdId) => collection(db, 'households', householdId, 'reminders');
 const personalOf = (db, householdId) => collection(db, 'households', householdId, PERSONAL_REMINDERS);
 /** Reminders matching `filters`, or for a helper or kid only the open ones (what the rules let them read). */
@@ -75,40 +30,6 @@ async function commit(db, ops, restricted = false) {
             op(batch);
         await batch.commit();
     }
-}
-/**
- * The same id for the same reminder however often it is written, so re-saving a course
- * overwrites its reminders instead of doubling them: `<ref or app>-<at>`, Firestore-safe.
- */
-export function reminderId(refOrApp, at) {
-    return `${refOrApp.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 200)}-${at}`;
-}
-/** The document a reminder is stored as: trimmed, recipients lowercased, unsent. */
-export function reminderDoc(input, by, now = Date.now()) {
-    if (!/^https:\/\//.test(input.url))
-        throw new Error('Reminder url must be an https deep link into the app.');
-    const recipients = input.recipients === undefined || input.recipients === 'all'
-        ? 'all'
-        : [...new Set(input.recipients.map((e) => e.trim().toLowerCase()).filter(Boolean))];
-    if (Array.isArray(recipients) && recipients.length === 0)
-        throw new Error('Reminder has no recipients.');
-    const texts = cleanTexts(input.texts);
-    const source = cleanSource(input.app, input.source);
-    return {
-        app: input.app,
-        title: input.title.trim().slice(0, REMINDER_LIMITS.title),
-        body: (input.body ?? '').trim().slice(0, REMINDER_LIMITS.body),
-        ...(texts ? { texts } : {}),
-        at: Math.round(input.at),
-        url: input.url,
-        recipients,
-        ...(input.ref ? { ref: input.ref } : {}),
-        private: input.private === true || MONEY_APPS.includes(input.app),
-        ...(source ? { source } : {}),
-        sent: false,
-        createdAt: now,
-        by,
-    };
 }
 /**
  * Creates or replaces a reminder (id from `reminderId(ref ?? app, at)` unless given). Writing it
@@ -192,20 +113,6 @@ export async function syncReminders(db, householdId, app, inputs, by, now = Date
     return { written: ops.length - deleted, deleted, unchanged };
 }
 /**
- * A `personalReminders` document: as `reminderDoc`, private, with the audience cleaned and the
- * recipients narrowed to it. Throws when the audience leaves out the writer or no recipient is in it.
- */
-export function personalReminderDoc(input, by, now = Date.now()) {
-    const audience = cleanAudience(input.audience);
-    if (!inAudience(audience, by))
-        throw new Error('A personal reminder must name its writer in its audience.');
-    const recipients = cleanAudience(input.recipients).filter((e) => audience.includes(e));
-    const { audience: _a, ...rest } = input;
-    const { source: _s, ...shared } = reminderDoc({ ...rest, recipients, private: true }, by, now);
-    const source = cleanSource(input.app, input.source, { personal: true });
-    return { ...shared, ...(source ? { source } : {}), audience };
-}
-/**
  * Makes this app's reminders for named members exactly `inputs` from now on, as `syncReminders`
  * does for shared ones: the reminders whose audience includes `by`. Past and sent ones are never
  * touched; inputs whose audience leaves `by` out, or with no recipient in it, are skipped.
@@ -247,26 +154,6 @@ export async function syncPersonalReminders(db, householdId, app, inputs, by, no
     }
     await commit(db, ops);
     return { written: ops.length - deleted, deleted, unchanged };
-}
-export function toReminder(id, data) {
-    return {
-        id,
-        app: String(data.app ?? ''),
-        title: String(data.title ?? ''),
-        body: String(data.body ?? ''),
-        ...((t) => (t ? { texts: t } : {}))(cleanTexts(data.texts)),
-        at: typeof data.at === 'number' ? data.at : 0,
-        url: String(data.url ?? ''),
-        recipients: Array.isArray(data.recipients) ? data.recipients.map(String) : 'all',
-        ref: typeof data.ref === 'string' ? data.ref : undefined,
-        ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
-        ...(Array.isArray(data.audience) ? { audience: data.audience.filter((e) => typeof e === 'string') } : {}),
-        ...((source) => (source ? { source } : {}))(readSource(String(data.app ?? ''), data.source)),
-        sent: data.sent === true,
-        sentAt: typeof data.sentAt === 'number' ? data.sentAt : undefined,
-        createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
-        by: String(data.by ?? ''),
-    };
 }
 /** Follows the household's reminders, optionally one app's, soonest first. */
 export function watchReminders(db, householdId, onChange, { app, restricted, onError } = {}) {

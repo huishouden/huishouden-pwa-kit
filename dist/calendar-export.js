@@ -82,7 +82,7 @@ function words(item, input) {
     const { title, detail } = textIn(item, input.lang);
     if (item.app === 'health' && !input.settings.healthDetail) {
         const who = item.who ?? '';
-        const generic = item.kind === 'medicine' ? kt('calendarExport.medicineFor', { who }) : kt('calendarExport.healthFor', { who });
+        const generic = item.kind === 'medicine' ? kt('calendarExport.medicineFor', { who }) : item.kind === 'appointment' ? kt('calendarExport.appointmentFor', { who }) : kt('calendarExport.healthFor', { who });
         return { title: who ? generic : kt('calendarExport.health'), description: item.url };
     }
     const shown = item.status === 'done' ? kt('calendarExport.done', { title }) : title;

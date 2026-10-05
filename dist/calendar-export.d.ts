@@ -14,7 +14,8 @@ import { type IcsEvent } from './ics.js';
  * Who sees what follows the household's rules, and is checked here again: helpers and kids only
  * items not marked private and nothing about money; personal items (Health) only their audience.
  * Each person's settings (`CalendarSettings`) then leave out apps, to-dos or bills, and keep Health
- * items to "Medicine for Ana" unless they ask for the detail, since calendars are often shared.
+ * items to "Medicine for Ana" or "Appointment for Ana" unless they ask for the detail, since calendars
+ * are often shared.
  *
  * Regular events (an agenda item with `series`) become one repeating event: an RRULE from the
  * schedule, EXDATEs for skipped days and overrides for moved ones.
@@ -26,7 +27,7 @@ export interface CalendarSettings {
     todos: boolean;
     /** Bills and other money items (admins and members only see them at all). */
     bills: boolean;
-    /** Health items with their detail; off, they read "Medicine for Ana" and nothing more. */
+    /** Health items with their detail; off, they read "Medicine for Ana" or "Appointment for Ana" and nothing more. */
     healthDetail: boolean;
     /** Things already done (a ticked task, a given dose). */
     done: boolean;
@@ -46,7 +47,7 @@ export declare function calendarSettingsDoc(settings: CalendarSettings, by: stri
     todos: boolean;
     /** Bills and other money items (admins and members only see them at all). */
     bills: boolean;
-    /** Health items with their detail; off, they read "Medicine for Ana" and nothing more. */
+    /** Health items with their detail; off, they read "Medicine for Ana" or "Appointment for Ana" and nothing more. */
     healthDetail: boolean;
     /** Things already done (a ticked task, a given dose). */
     done: boolean;

@@ -133,7 +133,7 @@ export function todoWords(item: Pick<TodoItem, 'title' | 'detail' | 'done' | 'ca
  * `healthPeople`, `*`, `doses` joined with slashes.
  */
 export const TODO_COLLECTIONS: Record<string, readonly string[]> = {
-  health: ['healthPeople/*/doses', 'healthPeople/*/meds'],
+  health: ['healthPeople/*/doses', 'healthPeople/*/meds', 'healthPeople/*/visits'],
   tasks: ['items'],
   groceries: [],
   home: ['homeTasks', 'homeServiceLog', 'homeEventPrep'],

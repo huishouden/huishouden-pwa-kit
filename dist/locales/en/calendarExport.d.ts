@@ -1,5 +1,6 @@
 declare const _default: {
     readonly 'calendarExport.medicineFor': "Medicine for {who}";
+    readonly 'calendarExport.appointmentFor': "Appointment for {who}";
     readonly 'calendarExport.healthFor': "Health: {who}";
     readonly 'calendarExport.health': "Health";
     readonly 'calendarExport.done': "✓ {title}";

@@ -26,6 +26,7 @@ import suggestions from './es/suggestions.js';
 import time from './es/time.js';
 import todos from './es/todos.js';
 import ui from './es/ui.js';
+import visit from './es/visit.js';
 export default {
     ...agenda,
     ...appBar,
@@ -55,4 +56,5 @@ export default {
     ...time,
     ...todos,
     ...ui,
+    ...visit,
 };

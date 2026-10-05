@@ -1,5 +1,6 @@
 declare const _default: {
     'calendarExport.medicineFor': string;
+    'calendarExport.appointmentFor': string;
     'calendarExport.healthFor': string;
     'calendarExport.health': string;
     'calendarExport.done': string;

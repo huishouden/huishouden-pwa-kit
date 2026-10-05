@@ -3,6 +3,16 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## 0.97.0 (2026-10-05)
+
+### Features
+
+* `./visit` (server-safe): Health's visits, `healthPeople/{person}/visits` with their notes apart in `visitNotes` (admins and member carers only). Documents (`visitDoc`, `toVisit`, `visitNoteDoc`; `visitMark`, a signed mark to merge, and `visitUnmarked`, the document without it to replace), state and follow-ups (`visitState`, `followUpOpen`), words in en/es/nl, and what a visit publishes for named people only: `visitAgendaItem` ("Appointment for Ana", the rest only in `calendarDetail`), `visitReminders` (each lead time, default the day before and 2 hours before, to `visitRecipients`), `./audience` `personAudience` (who reads all of it, medicines too), `followUpTodo` ("Book a follow-up for Ana", Booked and Not needed). Calendar import: `visitCalendarWords`, `guessVisitKind`; `./people` `namedIn` finds whose it is and never assumes.
+* `./household-tools`: `add_appointment` with `app: "health"` writes a Health visit (kind, doctor, video link, prep, medicine list, lead times, follow-up; notes only from keepers) and publishes it as Health does; new `health_appointments` lists a person's visits, notes only for keepers.
+* `./reminder-core`: the reminder documents without Firebase (`reminderId`, `reminderDoc`, `personalReminderDoc`, `localizeReminders`), re-exported by `./reminders`.
+* `TODO_COLLECTIONS.health` takes `healthPeople/*/visits`, so the follow-up to-do's buttons work.
+* Calendar export: a Health appointment without Health details reads "Appointment for Ana" (was "Health: Ana"). Dutch to-dos in calendars read "Taak: …".
+
 ## [0.96.0](https://github.com/huishouden/pwa-kit/compare/v0.95.1...v0.96.0) (2026-10-05)
 
 ### Features
