@@ -4,6 +4,8 @@ import { FirestoreError, Increment, type Doc, type FirestoreRest, type Write } f
 
 // Health's writes through the shared tools, on an in-memory Firestore (no rules: those are tested in
 // huishouden/connector against the emulator). 13:00 UTC is 08:00 in New York: Nan's morning dose is due.
+// The tools run in a UTC process (Workers do; `hh` sets TZ), as LocalClock's frame needs.
+process.env.TZ = 'UTC';
 
 const NOW = Date.UTC(2031, 0, 6, 13);
 const SAM = 'sam@example.com';
@@ -84,7 +86,7 @@ describe('health_log_dose', () => {
     const { db, docs, commits } = household({ [DOSE]: { personId: 'p1', medId: 'm1', slot: SLOT, at: NOW - 600_000, status: 'given', by: SAM, createdAt: NOW - 600_000 } });
     const asked = await run(SAM, db, 'health_log_dose', { person: 'Nan', medicine: 'Examplamine', dose_time: '08:00', status: 'skipped' });
     expect(asked.result.data).toMatchObject({ written: false, needs_confirmation: true });
-    expect(asked.result.text).toContain('was marked given at 7:50');
+    expect(asked.result.text).toContain('was marked given at 7:50 AM');
     expect(commits).toEqual([]);
     await run(SAM, db, 'health_log_dose', { person: 'Nan', medicine: 'Examplamine', dose_time: '08:00', status: 'skipped', confirm: true });
     expect(docs.get(DOSE)).toMatchObject({ status: 'skipped', by: SAM });

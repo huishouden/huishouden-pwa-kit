@@ -5,7 +5,9 @@
  * token from `../firebase-auth-rest`), so the household's rules decide everything, and answers in
  * their language and time zone with links into the apps.
  *
- * Server-safe: no DOM, no Firebase SDK. Needs `zod` (a peer dependency) for the tools' inputs.
+ * Server-safe: no DOM, no Firebase SDK. Needs `zod` (a peer dependency) for the tools' inputs, and a
+ * process in UTC (Workers are; a command line sets `TZ=UTC` first): `../local-clock` moves times
+ * into a frame whose UTC fields are the person's wall clock, and the kit formats them as local.
  *
  *   const session = new Session({ uid, email, connectionId }, db, siteUrl);
  *   const call = await runTool(session, toolNamed('today')!, { household: 'Home' });
