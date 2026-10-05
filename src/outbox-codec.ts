@@ -19,6 +19,8 @@ import {
  */
 
 export const TAG = '__hhOutbox';
+/** Tags `encode` gives values (a Timestamp, a GeoPoint, Bytes, a reference); every other tag is a field sentinel. */
+export const VALUE_TAGS: ReadonlySet<string> = new Set(['ts', 'geo', 'bytes', 'ref']);
 /** A note older than this is dropped unread: whatever it held is stale by now. */
 export const MAX_AGE_MS = 7 * 24 * 3_600_000;
 
@@ -133,4 +135,35 @@ export function sameJson(a: Json, b: Json): boolean {
   }
   const ka = Object.keys(a);
   return ka.length === Object.keys(b).length && ka.every((k) => k in b && sameJson(a[k], b[k]));
+}
+
+/** Whether `value` holds a field sentinel of kind `tag` anywhere. */
+export function hasTag(value: Json, tag: string): boolean {
+  if (Array.isArray(value)) return value.some((v) => hasTag(v, tag));
+  if (value === null || typeof value !== 'object') return false;
+  return value[TAG] === tag || Object.values(value).some((v) => hasTag(v, tag));
+}
+
+/**
+ * Whether the cached document already shows every field `data` writes: an update's keys are field
+ * paths (`a.b`) and its maps replace; a merge's maps merge. Sentinels other than deleteField can't
+ * be told from the result, so they never count as shown.
+ */
+export function shows(cached: Json, data: Json, update: boolean): boolean {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return false;
+  for (const [key, value] of Object.entries(data)) {
+    let here: Json | undefined = cached;
+    for (const part of update ? key.split('.') : [key]) {
+      here = here !== null && typeof here === 'object' && !Array.isArray(here) ? here[part] : undefined;
+    }
+    const tag = value !== null && typeof value === 'object' && !Array.isArray(value) ? value[TAG] : undefined;
+    if (tag === 'deleteField') {
+      if (here !== undefined) return false;
+    } else if (typeof tag === 'string' && !VALUE_TAGS.has(tag)) return false;
+    else if (here === undefined) return false;
+    else if (!update && tag === undefined && value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      if (!shows(here, value, false)) return false;
+    } else if (!sameJson(here, value)) return false;
+  }
+  return true;
 }
