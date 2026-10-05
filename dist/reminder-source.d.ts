@@ -84,9 +84,12 @@ export declare function readSource(app: string, value: unknown): ReminderSource 
 /**
  * `source` as `reminderDoc` writes it, or undefined for none or for one the sender would refuse:
  * left off, the reminder still goes out (as one without a source) rather than failing the app's
- * sync. `readSource(app, source) === null` tells a caller it was refused.
+ * sync. A source naming records only some people may read (Health's) is kept only on a personal
+ * reminder (`personal`), which only its audience reads.
  */
-export declare function cleanSource(app: string, source: ReminderSource | undefined | null): ReminderSource | undefined;
+export declare function cleanSource(app: string, source: ReminderSource | undefined | null, { personal }?: {
+    personal?: boolean;
+}): ReminderSource | undefined;
 /** Every document the sender reads for a source: its checks' and, for Health records, their people's. */
 export declare function sourceReads(app: string, source: ReminderSource): string[];
 /** Documents as read: fields, or null when the document doesn't exist. A path not in the map wasn't read. */

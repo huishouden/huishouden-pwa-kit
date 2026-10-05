@@ -312,7 +312,9 @@ export function personalReminderDoc(input: PersonalReminderInput, by: string, no
   if (!inAudience(audience, by)) throw new Error('A personal reminder must name its writer in its audience.');
   const recipients = cleanAudience(input.recipients).filter((e) => audience.includes(e));
   const { audience: _a, ...rest } = input;
-  return { ...reminderDoc({ ...rest, recipients, private: true }, by, now), audience };
+  const { source: _s, ...shared } = reminderDoc({ ...rest, recipients, private: true }, by, now);
+  const source = cleanSource(input.app, input.source, { personal: true });
+  return { ...shared, ...(source ? { source } : {}), audience };
 }
 
 /**
