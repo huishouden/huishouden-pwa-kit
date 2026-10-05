@@ -1,20 +1,19 @@
 import { z } from 'zod';
 import { CONTACT_PAY_COLLECTION, CONTACT_PAY_KINDS, cleanContact, cleanContactPay, contactInput, toContact, withContactPay } from '../contact-core.js';
-import { cleanAudience } from '../audience.js';
-import { householdRole } from '../role-core.js';
+import { FOLLOW_UP_UNITS, REMIND_CHOICES, VISIT_KINDS } from '../visit.js';
 import { formatDateLong, formatTime } from '../time.js';
 import { t } from './i18n.js';
 import { UserError } from './context.js';
 import { common, defineTool, idempotency, render } from './registry.js';
 import { clip, fold, pick, recordId } from './shared.js';
 import { create } from './home.js';
-import { loadPeople, personUrl } from './health-data.js';
-// ---- Appointments: Pet, Baby, Car (their own collections) and Health (the person's carers' agenda) ----
+import { addHealthVisit } from './health-visits.js';
+// ---- Appointments: Pet, Baby, Car and Health, each in its app's own collections ----
 const APPOINTMENT_APPS = ['pet', 'baby', 'car', 'health'];
 export const addAppointment = defineTool({
     name: 'add_appointment',
     title: 'Add an appointment',
-    description: "Adds an appointment, as this person: `app: \"pet\"` (vet, grooming, boarding), `\"baby\"` (pediatrician, checkups), `\"car\"` (service, inspection) in that app's own list, or `\"health\"` (a doctor's or dentist's appointment for someone in Health), which goes on the calendar of only that person's carers and the admins. It shows on the household calendar. `private` hides a pet, baby or car appointment from helpers and kids (admins and members only can set it).",
+    description: "Adds an appointment, as this person: `app: \"pet\"` (vet, grooming, boarding), `\"baby\"` (pediatrician, checkups), `\"car\"` (service, inspection) in that app's own list, or `\"health\"` (a doctor's, dentist's, eye, lab, vaccine or therapy visit for someone in Health: a visit in Health, on the calendars of only that person's carers, the person and the admins, reminding their carers the day before and 2 hours before unless `remind_before_minutes` says otherwise). It shows on the household calendar. `private` hides a pet, baby or car appointment from helpers and kids (admins and members only can set it). Health notes are kept from helpers; only admins and members who care for the person can add them.",
     kind: 'write',
     input: {
         ...common,
@@ -29,6 +28,13 @@ export const addAppointment = defineTool({
         pet_kind: z.enum(['vet', 'grooming', 'boarding', 'other']).optional().describe('Pet: default vet.'),
         vehicle: z.string().max(60).optional().describe('Car: which car, by name or id.'),
         person: z.string().max(60).optional().describe('Health: whose appointment, by name or id (required for health).'),
+        health_kind: z.enum(VISIT_KINDS).optional().describe('Health: checkup, specialist, dentist, eye, lab (a test), vaccine, therapy or other. Default: guessed from the title.'),
+        doctor: z.string().max(120).optional().describe('Health: the doctor or clinic, a household contact by name or id (`contacts_search`).'),
+        video_link: z.string().max(500).optional().describe('Health: the https link to join a video visit.'),
+        prep: z.array(z.string().max(80)).max(6).optional().describe('Health: what to do or bring before: "Fasting from midnight".'),
+        bring_medicine_list: z.boolean().optional().describe("Health: bring the person's printable medicine list."),
+        remind_before_minutes: z.array(z.number().int().min(0).max(20160)).max(4).optional().describe(`Health: reminders this many minutes before, to the carers. Default [1440, 120]. Health offers ${REMIND_CHOICES.join(', ')}.`),
+        follow_up: z.object({ every: z.number().int().min(1).max(24), unit: z.enum(FOLLOW_UP_UNITS) }).optional().describe('Health: a follow-up due this long after; once the visit is over, "Book a follow-up" goes on the to-do list.'),
         private: z.boolean().optional().describe('Pet, baby, car: only admins and members see it. Default false.'),
     },
     async run(ctx, args) {
@@ -86,39 +92,27 @@ export const addAppointment = defineTool({
             const repeated = await create(ctx, path, { ...(vehicleId ? { vehicleId } : {}), ...common });
             return done(ctx, 'car', path, id, repeated, title, day, url, who);
         }
-        // Health: an item on the calendars of the person's carers and the admins (personalAgenda), the
-        // same people Health shows the person's doses to. Health has no appointments of its own.
-        if (!args.person)
-            throw new UserError('health.whichPerson');
-        if (ctx.here.role === 'kid')
-            throw new UserError('health.noKids');
-        const people = await loadPeople(ctx);
-        const { found: person } = pick(people, args.person, (p) => p.id, (p) => p.name);
-        if (!person)
-            throw new UserError('health.unknownPerson', { name: args.person, people: people.map((p) => p.name).join(', ') || '-' });
-        const admins = ctx.here.members.filter((m) => householdRole(ctx.here, m) === 'admin');
-        const audience = cleanAudience([...admins, ...person.readers.filter((r) => householdRole(ctx.here, r) !== 'kid'), ctx.session.email]);
-        const end = when.allDay ? at + 24 * 3600_000 : at + (args.duration_minutes ?? 60) * 60_000;
-        path = `${base}/personalAgenda/${id}`;
-        url = personUrl(ctx, person.id);
-        const repeated = await create(ctx, path, {
-            app: 'assistant',
-            ref: `appointment:${person.id}:${id}`,
-            kind: 'appointment',
+        // Health: a visit under the person (@huishouden/pwa-kit/visit), published as Health publishes it.
+        const added = await addHealthVisit(ctx, id, {
+            person: args.person,
             title,
-            start: at,
-            end,
+            at,
             allDay: when.allDay,
-            ...(location || notes ? { detail: clip([location, notes].filter(Boolean).join(' · '), 200) } : {}),
-            url,
-            who: person.name.slice(0, 60),
-            status: 'upcoming',
-            private: true,
-            audience,
-            updatedAt: now,
-            by: ctx.session.email,
+            minutes: args.duration_minutes,
+            location,
+            notes,
+            kind: args.health_kind,
+            doctor: args.doctor,
+            videoLink: args.video_link,
+            prep: args.prep,
+            medList: args.bring_medicine_list,
+            remindBefore: args.remind_before_minutes,
+            followUp: args.follow_up,
         });
-        return done(ctx, 'health', path, id, repeated, title, day, url, person.name);
+        return render(ctx.lang, () => ({
+            text: t('appointment.added', { title, when: day(), who: added.person.name, url: added.url }),
+            data: { id, app: 'health', title, url: added.url, repeated: added.repeated, person: added.person.id },
+        }));
     },
 });
 function done(ctx, app, path, id, repeated, title, day, url, who) {

@@ -181,6 +181,17 @@ export default {
   'health.medUpdated': 'Updated {med} for {name}: {schedule}. [Health]({url})',
   'health.medStopped': 'Stopped {med} for {name} from today. [Health]({url})',
   'health.refillMarked': 'Marked a refill of {med} for {name} as ordered.',
+  'visits.title': 'Visits',
+  'visits.none': 'No visits in those days.',
+  'visits.video': 'video visit',
+  'visits.medList': 'bring the medicine list',
+  'visits.notes': 'notes: {notes}',
+  'visits.state.upcoming': 'coming up',
+  'visits.state.now': 'now',
+  'visits.state.unmarked': 'over, not marked yet',
+  'visits.state.attended': 'attended',
+  'visits.state.missed': 'missed',
+  'visits.notesKeepersOnly': 'Only admins, and members who care for this person, can keep notes on their visits. Leave `notes` out; the place, time and what to bring are fine.',
   'health.printLink': 'Printable list: {url}',
 
   // Health's own words (huishouden/health src/locales), so lists read the same as in the app.

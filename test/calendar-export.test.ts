@@ -85,6 +85,20 @@ describe('settings', () => {
     expect(es.title).toBe('Medicina para Ana');
   });
 
+  test('a Health visit without detail: "Appointment for Ana", and what it is only with detail on', () => {
+    const visit = toAgendaItem('health_visit_ana', {
+      app: 'health', ref: 'visit:ana:v1', kind: 'appointment', title: 'Appointment for Ana', start: at('2031-10-06T10:00:00+02:00'), end: at('2031-10-06T11:00:00+02:00'),
+      allDay: false, who: 'Ana', url: 'https://example.com/health/?tab=visits', private: true, audience: ['carer@example.com'],
+      calendarDetail: 'Dentist: Cleaning with Dr. Example', updatedAt: 1, by: 'admin@example.com',
+    });
+    const off = exportEvents({ ...input('carer@example.com'), agenda: [visit] }).find((e) => e.app === 'health')!;
+    expect(off.title).toBe('Appointment for Ana');
+    expect(off.description).not.toContain('Dentist');
+    const on = exportEvents({ ...input('carer@example.com', { healthDetail: true }), agenda: [visit] }).find((e) => e.app === 'health')!;
+    expect(on.description).toContain('Dentist: Cleaning with Dr. Example');
+    expect(exportEvents({ ...input('admin@example.com'), agenda: [visit] }).filter((e) => e.app === 'health')).toHaveLength(0);
+  });
+
   test('a calendar-only detail goes in only with Health detail on', () => {
     const withNames = agenda.map((i) => (i.app === 'health' ? { ...i, calendarDetail: 'Amoxicillin 250 mg, Vitamin D' } : i));
     const off = exportEvents({ ...input('carer@example.com'), agenda: withNames }).find((e) => e.app === 'health')!;

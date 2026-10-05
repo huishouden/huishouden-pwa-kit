@@ -1,5 +1,6 @@
 export default {
   'calendarExport.medicineFor': 'Medicine for {who}',
+  'calendarExport.appointmentFor': 'Appointment for {who}',
   'calendarExport.healthFor': 'Health: {who}',
   'calendarExport.health': 'Health',
   'calendarExport.done': '✓ {title}',

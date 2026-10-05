@@ -1,6 +1,6 @@
 {
   "name": "@huishouden/pwa-kit",
-  "version": "0.96.0",
+  "version": "0.97.0",
   "private": true,
   "description": "Building blocks for small installable web apps on Firebase Hosting: Vite PWA preset, Firebase config, Playwright smoke checks, reusable CI.",
   "license": "PolyForm-Shield-1.0.0",
@@ -246,6 +246,10 @@
       "types": "./dist/reminder-source.d.ts",
       "default": "./dist/reminder-source.js"
     },
+    "./reminder-core": {
+      "types": "./dist/reminder-core.d.ts",
+      "default": "./dist/reminder-core.js"
+    },
     "./reminders": {
       "types": "./dist/reminders.d.ts",
       "default": "./dist/reminders.js"
@@ -303,6 +307,10 @@
     "./time": {
       "types": "./dist/time.d.ts",
       "default": "./dist/time.js"
+    },
+    "./visit": {
+      "types": "./dist/visit.d.ts",
+      "default": "./dist/visit.js"
     },
     "./vite": {
       "types": "./dist/vite.d.ts",

@@ -30,3 +30,19 @@ export function personColour(email: string, members: string[]): string {
   for (const c of email) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return PERSON_COLOURS[h % PERSON_COLOURS.length];
 }
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The one person a text names, by full name, else by first or last name ("Ana's dentist" → Ana),
+ * as a whole word in any language; null when it names nobody or more than one. Never a guess from
+ * there being only one person: whose a health visit or a baby's checkup is gets asked, not assumed.
+ */
+export function namedIn<P extends { name: string }>(text: string, people: readonly P[]): P | null {
+  const named = (name: string) => !!name && new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(name)}($|[^\\p{L}\\p{N}])`, 'iu').test(text);
+  const found = people.filter((p) => {
+    const words = p.name.trim().split(/\s+/);
+    return named(p.name.trim()) || named(words[0] ?? '') || (words.length > 1 && named(words[words.length - 1]));
+  });
+  return found.length === 1 ? found[0] : null;
+}
