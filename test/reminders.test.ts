@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
 import * as real from 'firebase/firestore';
 
 // An in-memory stand-in for the few Firestore calls reminders.ts makes (no emulator in this repo;
@@ -36,7 +36,9 @@ mock.module('firebase/firestore', () => ({
   },
 }));
 
-const { PERSONAL_REMINDER_FIELDS, personalReminderDoc, syncPersonalReminders, REMINDER_FIELDS, cancelReminders, reminderDoc, reminderId, remindersForCourse, replaceReminders, syncReminders, toReminder, upsertReminder } = await import('../src/reminders');
+const { PERSONAL_REMINDER_FIELDS, personalReminderDoc, syncPersonalReminders, REMINDER_FIELDS, cancelReminder, cancelReminders, reminderDoc, reminderId, remindersForCourse, replaceReminders, syncReminders, toReminder, upsertReminder } = await import('../src/reminders');
+const { memoryNotes, withoutPageStorage } = await import('./published-notes');
+withoutPageStorage(beforeAll, afterAll);
 
 const db = {} as real.Firestore;
 const NOW = new Date(2026, 2, 14, 12, 0).getTime();
@@ -148,6 +150,32 @@ describe('syncReminders', () => {
     expect(moved).toEqual({ written: 1, deleted: 1, unchanged: 0 });
     expect([...store.keys()]).toEqual([`${H}/${reminderId('tasks:item:a', at(15, 9))}`]);
     expect(store.get(`${H}/${reminderId('tasks:item:a', at(15, 9))}`)?.title).toBe('Pick up dry cleaning');
+  });
+
+  test('the same reminders again from this device skip the read; a per-record write or a change syncs again', async () => {
+    store.clear();
+    const published = memoryNotes();
+    const list = [input('tasks:item:a', at(15, 9)), input('tasks:item:b', at(16, 9))];
+    expect(await syncReminders(db, 'h1', 'tasks', list, 'alex@example.com', NOW, { published })).toEqual({ written: 2, deleted: 0, unchanged: 0 });
+    expect(await syncReminders(db, 'h1', 'tasks', list, 'alex@example.com', NOW + 1000, { published })).toEqual({ written: 0, deleted: 0, unchanged: 2, skipped: true });
+    await cancelReminders(db, 'h1', 'tasks:item:b', { published });
+    expect(await syncReminders(db, 'h1', 'tasks', list, 'alex@example.com', NOW + 2000, { published })).toEqual({ written: 1, deleted: 0, unchanged: 1 });
+    await replaceReminders(db, 'h1', 'tasks:item:b', [input('tasks:item:b', at(16, 10))], 'alex@example.com', NOW + 2500, { published });
+    expect(await syncReminders(db, 'h1', 'tasks', list, 'alex@example.com', NOW + 3000, { published })).toEqual({ written: 1, deleted: 1, unchanged: 1 });
+    await cancelReminder(db, 'h1', reminderId('tasks:item:a', at(15, 9)), { published });
+    expect(await syncReminders(db, 'h1', 'tasks', list, 'alex@example.com', NOW + 4000, { published })).toEqual({ written: 1, deleted: 0, unchanged: 1 });
+    await upsertReminder(db, 'h1', input('tasks:item:c', at(17, 9)), 'alex@example.com', { published });
+    expect(await syncReminders(db, 'h1', 'tasks', list, 'alex@example.com', NOW + 5000, { published })).toEqual({ written: 0, deleted: 1, unchanged: 2 });
+  });
+
+  test('personal reminders keep a note per member', async () => {
+    store.clear();
+    const published = memoryNotes();
+    const mine = [{ app: 'health', title: 'Take the pill', at: at(15, 9), url: 'https://health.example.com/', ref: 'health:med:1', audience: ['alex@example.com'], recipients: ['alex@example.com'] }];
+    const first = await syncPersonalReminders(db, 'h1', 'health', mine, 'alex@example.com', NOW, { published });
+    expect(first.skipped).toBeUndefined();
+    expect(await syncPersonalReminders(db, 'h1', 'health', mine, 'alex@example.com', NOW + 1000, { published })).toMatchObject({ skipped: true });
+    expect(await syncPersonalReminders(db, 'h1', 'health', mine, 'sam@example.com', NOW + 1000, { published })).not.toHaveProperty('skipped');
   });
 
   test('never touches past or sent reminders, or another app\'s', async () => {

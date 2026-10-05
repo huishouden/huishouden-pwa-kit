@@ -15,6 +15,7 @@ import {
   type TodoItem,
 } from './todo-core.js';
 import { cleanAudience, inAudience } from './audience.js';
+import { fingerprint, forgetPublished, publishedKey, publishedStore, unlessPublished, type PublishedStorage } from './published.js';
 
 /**
  * The household's to-do list over the Firebase SDK: publishing (`syncTodos`), following
@@ -62,12 +63,16 @@ export interface TodoWriteOptions {
   /** A helper or kid (`isRestricted(role)`): only open items are read and written, each on its own; one the rules refuse is skipped. */
   restricted?: boolean;
   now?: number;
+  /** Where this device notes what it published (`./published`): `localStorage` by default, null for none. */
+  published?: PublishedStorage | null;
 }
 
 export interface TodoWriteResult {
   written: number;
   deleted: number;
   unchanged: number;
+  /** Nothing read or written: this device published exactly these items a short while ago (`./published`). */
+  skipped?: true;
 }
 
 /** The to-dos, or for a helper or kid only those not marked private (what the rules let them read). */
@@ -79,15 +84,22 @@ const visible = (db: Firestore, householdId: string, restricted: boolean | undef
  * a change (as `syncAgenda`). Writes only what changed and deletes what is no longer open, so a
  * record done or cancelled anywhere leaves the list on the next sync.
  */
-export async function syncTodos(db: Firestore, householdId: string, app: string, items: TodoInput[], { by, restricted = false, now = Date.now() }: TodoWriteOptions): Promise<TodoWriteResult> {
-  const snap = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
+export async function syncTodos(db: Firestore, householdId: string, app: string, items: TodoInput[], { by, restricted = false, now = Date.now(), published }: TodoWriteOptions): Promise<TodoWriteResult> {
   const wanted = new Map<string, Omit<TodoItem, 'id'>>();
   for (const item of items) {
     // A helper's device can't see private items, so it never publishes or removes them.
     if (restricted && (item.private || MONEY_APPS.includes(app))) continue;
     wanted.set(todoId(app, item.ref), todoDoc(app, item, by, now));
   }
-  return reconcile(db, todosOf(db, householdId), snap.docs, wanted, restricted);
+  // The same items this device published a short while ago: nothing to read or write (`./published`).
+  return unlessPublished(
+    publishedStore(published),
+    publishedKey(db, householdId, 'todos', app, by),
+    fingerprint(wanted, String(restricted)),
+    now,
+    () => ({ written: 0, deleted: 0, unchanged: wanted.size, skipped: true }),
+    async () => reconcile(db, todosOf(db, householdId), (await getDocs(visible(db, householdId, restricted, where('app', '==', app)))).docs, wanted, restricted),
+  );
 }
 
 /** Makes the stored documents exactly `wanted`, writing only what changed. */
@@ -122,17 +134,23 @@ export async function syncPersonalTodos(
   householdId: string,
   app: string,
   items: PersonalTodoInput[],
-  { by, now = Date.now() }: Omit<TodoWriteOptions, 'restricted'>,
+  { by, now = Date.now(), published }: Omit<TodoWriteOptions, 'restricted'>,
 ): Promise<TodoWriteResult> {
   const me = by.trim().toLowerCase();
   const col = personalOf(db, householdId);
-  const snap = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
   const wanted = new Map<string, Omit<TodoItem, 'id'>>();
   for (const item of items) {
     if (!inAudience(cleanAudience(item.audience), me)) continue;
     wanted.set(todoId(app, item.ref), personalTodoDoc(app, item, me, now));
   }
-  return reconcile(db, col, snap.docs, wanted, false);
+  return unlessPublished(
+    publishedStore(published),
+    publishedKey(db, householdId, PERSONAL_TODOS, app, me),
+    fingerprint(wanted),
+    now,
+    () => ({ written: 0, deleted: 0, unchanged: wanted.size, skipped: true }),
+    async () => reconcile(db, col, (await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)))).docs, wanted, false),
+  );
 }
 
 export interface TodoWatchOptions {
@@ -182,6 +200,8 @@ export function watchTodos(db: Firestore, householdId: string, { restricted, me,
 export interface ApplyOptions {
   me: string;
   now?: number;
+  /** Where this device notes what apps published (`./published`): `localStorage` by default, null for none. */
+  published?: PublishedStorage | null;
 }
 
 export interface Applied {
@@ -198,7 +218,7 @@ export interface Applied {
  * A merge onto a record that no longer exists is refused (it was deleted in its app): the item is
  * left for the app to clear on its next sync.
  */
-export async function applyTodo(db: Firestore, householdId: string, item: TodoItem, which: 'done' | 'cancel', { me, now = Date.now() }: ApplyOptions): Promise<Applied> {
+export async function applyTodo(db: Firestore, householdId: string, item: TodoItem, which: 'done' | 'cancel', { me, now = Date.now(), published }: ApplyOptions): Promise<Applied> {
   const ops = todoActionOps(item, which, { now, me });
   const base = `households/${householdId}`;
   const before = new Map<string, { id: string } | undefined>();
@@ -209,6 +229,8 @@ export async function applyTodo(db: Firestore, householdId: string, item: TodoIt
     before.set(key, snap.exists() ? { id: op.id, ...(snap.data() as object) } : undefined);
   }
   const plan = planTodo(item, ops, (col, id) => before.get(`${col}/${id}`), { now, me });
+  // The item leaves the list here, not in its app's sync: that app's next sync on this device reads again.
+  for (const list of ['todos', PERSONAL_TODOS]) forgetPublished(publishedStore(published), db, householdId, list, item.app);
   const written = commitOps(db, base, plan.writes);
   return {
     written,

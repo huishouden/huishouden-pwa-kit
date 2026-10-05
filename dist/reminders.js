@@ -6,6 +6,7 @@ import { kt } from './i18n.js';
 import { atClock } from './time.js';
 import { readSource } from './reminder-source.js';
 import { cleanTexts, localizeReminders, PERSONAL_REMINDERS, personalReminderDoc, reminderDoc, reminderId, toReminder } from './reminder-core.js';
+import { fingerprint, forgetPublished, publishedKey, publishedStore, unlessPublished } from './published.js';
 export * from './reminder-core.js';
 const remindersOf = (db, householdId) => collection(db, 'households', householdId, 'reminders');
 const personalOf = (db, householdId) => collection(db, 'households', householdId, PERSONAL_REMINDERS);
@@ -35,26 +36,35 @@ async function commit(db, ops, restricted = false) {
  * Creates or replaces a reminder (id from `reminderId(ref ?? app, at)` unless given). Writing it
  * again marks it unsent, so it is delivered again if its time has come.
  */
-export async function upsertReminder(db, householdId, input, by) {
+export async function upsertReminder(db, householdId, input, by, { published } = {}) {
     const id = input.id ?? reminderId(input.ref ?? input.app, input.at);
+    forgetPublished(publishedStore(published), db, householdId, 'reminders', input.app);
     await setDoc(doc(remindersOf(db, householdId), id), reminderDoc(input, by));
     return id;
 }
-export async function cancelReminder(db, householdId, id) {
+/** Deletes one reminder. Its app isn't known here, so every app's sync on this device reads again. */
+export async function cancelReminder(db, householdId, id, { published } = {}) {
+    forgetPublished(publishedStore(published), db, householdId, 'reminders');
     await deleteDoc(doc(remindersOf(db, householdId), id));
 }
 /** Deletes every reminder with this `ref` (a course stopped, an appointment cancelled). */
-export async function cancelReminders(db, householdId, ref, { restricted } = {}) {
+export async function cancelReminders(db, householdId, ref, { restricted, published } = {}) {
     const snap = await getDocs(visible(db, householdId, restricted, where('ref', '==', ref)));
+    forgetApps(publishedStore(published), db, householdId, snap.docs.map((d) => d.data().app));
     await commit(db, snap.docs.map((d) => (b) => b.delete(d.ref)), restricted);
     return snap.size;
+}
+/** A per-record write is about to change what is stored for these apps: their next sync on this device reads again. */
+function forgetApps(store, db, householdId, apps) {
+    for (const app of new Set(apps.filter((a) => typeof a === 'string')))
+        forgetPublished(store, db, householdId, 'reminders', app);
 }
 /**
  * Makes the reminders with this `ref` exactly `inputs` from now on: future ones not in the list are
  * deleted, the list is written (unchanged ones keep their ids), and past ones are left alone so a
  * sent reminder is never sent twice. Use it whenever a course or appointment is saved.
  */
-export async function replaceReminders(db, householdId, ref, inputs, by, now = Date.now(), { restricted } = {}) {
+export async function replaceReminders(db, householdId, ref, inputs, by, now = Date.now(), { restricted, published } = {}) {
     const wanted = new Map(inputs
         .filter((r) => r.at > now && !(restricted && r.private))
         .map((r) => [r.id ?? reminderId(ref, r.at), reminderDoc({ ...r, ref }, by, now)]));
@@ -67,6 +77,7 @@ export async function replaceReminders(db, householdId, ref, inputs, by, now = D
     }
     for (const [id, data] of wanted)
         ops.push((b) => b.set(doc(remindersOf(db, householdId), id), data));
+    forgetApps(publishedStore(published), db, householdId, [...existing.docs.map((d) => d.data().app), ...[...wanted.values()].map((d) => d.app)]);
     await commit(db, ops, restricted);
     return [...wanted.keys()];
 }
@@ -83,41 +94,44 @@ const sameReminder = (a, b) => ['app', 'title', 'body', 'at', 'url', 'ref', 'pri
  * so running it often costs one read and almost no writes. Past and sent reminders are never
  * touched, so nothing is sent twice.
  */
-export async function syncReminders(db, householdId, app, inputs, by, now = Date.now(), { restricted } = {}) {
+export async function syncReminders(db, householdId, app, inputs, by, now = Date.now(), { restricted, published } = {}) {
     const wanted = new Map(inputs
         .filter((r) => r.at > now && !(restricted && r.private))
         .map((r) => {
         const data = reminderDoc({ ...r, app }, by, now);
         return [r.id ?? reminderId(r.ref ?? app, data.at), data];
     }));
-    const existing = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
-    const have = new Map(existing.docs.map((d) => [d.id, d.data()]));
-    const ops = [];
-    for (const d of existing.docs) {
-        const data = d.data();
-        if (typeof data.at === 'number' && data.at > now && data.sent !== true && !wanted.has(d.id))
-            ops.push((b) => b.delete(d.ref));
-    }
-    const deleted = ops.length;
-    let unchanged = 0;
-    for (const [id, data] of wanted) {
-        const old = have.get(id);
-        if (old && sameReminder(old, data))
-            unchanged++;
-        else if (old?.sent === true)
-            unchanged++;
-        else
-            ops.push((b) => b.set(doc(remindersOf(db, householdId), id), data));
-    }
-    await commit(db, ops, restricted);
-    return { written: ops.length - deleted, deleted, unchanged };
+    // The same reminders this device scheduled a short while ago: nothing to read or write (`./published`).
+    return unlessPublished(publishedStore(published), publishedKey(db, householdId, 'reminders', app, by), fingerprint(wanted, String(!!restricted)), now, () => ({ written: 0, deleted: 0, unchanged: wanted.size, skipped: true }), async () => {
+        const existing = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
+        const have = new Map(existing.docs.map((d) => [d.id, d.data()]));
+        const ops = [];
+        for (const d of existing.docs) {
+            const data = d.data();
+            if (typeof data.at === 'number' && data.at > now && data.sent !== true && !wanted.has(d.id))
+                ops.push((b) => b.delete(d.ref));
+        }
+        const deleted = ops.length;
+        let unchanged = 0;
+        for (const [id, data] of wanted) {
+            const old = have.get(id);
+            if (old && sameReminder(old, data))
+                unchanged++;
+            else if (old?.sent === true)
+                unchanged++;
+            else
+                ops.push((b) => b.set(doc(remindersOf(db, householdId), id), data));
+        }
+        await commit(db, ops, restricted);
+        return { written: ops.length - deleted, deleted, unchanged };
+    });
 }
 /**
  * Makes this app's reminders for named members exactly `inputs` from now on, as `syncReminders`
  * does for shared ones: the reminders whose audience includes `by`. Past and sent ones are never
  * touched; inputs whose audience leaves `by` out, or with no recipient in it, are skipped.
  */
-export async function syncPersonalReminders(db, householdId, app, inputs, by, now = Date.now()) {
+export async function syncPersonalReminders(db, householdId, app, inputs, by, now = Date.now(), { published } = {}) {
     const me = by.trim().toLowerCase();
     const wanted = new Map();
     for (const r of inputs) {
@@ -133,27 +147,29 @@ export async function syncPersonalReminders(db, householdId, app, inputs, by, no
         wanted.set(r.id ?? reminderId(r.ref ?? app, data.at), data);
     }
     const col = personalOf(db, householdId);
-    const existing = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
-    const ops = [];
-    for (const d of existing.docs) {
-        const data = d.data();
-        if (typeof data.at === 'number' && data.at > now && data.sent !== true && !wanted.has(d.id))
-            ops.push((b) => b.delete(d.ref));
-    }
-    const deleted = ops.length;
-    const have = new Map(existing.docs.map((d) => [d.id, d.data()]));
-    let unchanged = 0;
-    for (const [id, data] of wanted) {
-        const old = have.get(id);
-        if (old && sameReminder(old, data) && JSON.stringify(old.audience) === JSON.stringify(data.audience))
-            unchanged++;
-        else if (old?.sent === true)
-            unchanged++;
-        else
-            ops.push((b) => b.set(doc(col, id), data));
-    }
-    await commit(db, ops);
-    return { written: ops.length - deleted, deleted, unchanged };
+    return unlessPublished(publishedStore(published), publishedKey(db, householdId, PERSONAL_REMINDERS, app, me), fingerprint(wanted), now, () => ({ written: 0, deleted: 0, unchanged: wanted.size, skipped: true }), async () => {
+        const existing = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
+        const ops = [];
+        for (const d of existing.docs) {
+            const data = d.data();
+            if (typeof data.at === 'number' && data.at > now && data.sent !== true && !wanted.has(d.id))
+                ops.push((b) => b.delete(d.ref));
+        }
+        const deleted = ops.length;
+        const have = new Map(existing.docs.map((d) => [d.id, d.data()]));
+        let unchanged = 0;
+        for (const [id, data] of wanted) {
+            const old = have.get(id);
+            if (old && sameReminder(old, data) && JSON.stringify(old.audience) === JSON.stringify(data.audience))
+                unchanged++;
+            else if (old?.sent === true)
+                unchanged++;
+            else
+                ops.push((b) => b.set(doc(col, id), data));
+        }
+        await commit(db, ops);
+        return { written: ops.length - deleted, deleted, unchanged };
+    });
 }
 /** Follows the household's reminders, optionally one app's, soonest first. */
 export function watchReminders(db, householdId, onChange, { app, restricted, onError } = {}) {
