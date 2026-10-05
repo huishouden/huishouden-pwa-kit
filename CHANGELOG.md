@@ -3,6 +3,12 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## 0.92.0 (2026-10-05)
+
+### Features
+
+* Logo glyph `receipt` (a receipt with a torn edge and two lines), so Bills no longer shares the `card` glyph with Spending.
+
 ## 0.91.0 (2026-10-05)
 
 ### Features
