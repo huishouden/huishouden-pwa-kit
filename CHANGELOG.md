@@ -3,6 +3,12 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## 0.100.2 (2026-10-05)
+
+### Bug Fixes
+
+* Callers pass the asset CDN's two secrets by name (`secrets: { CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID }`), not `secrets: inherit`, which handed `pwa.yml` every repository secret: `templates/ci.yml`, README, STANDARD.md, docs/one-site.md and `pwa.yml`'s messages.
+
 ## 0.100.1 (2026-10-05)
 
 ### Tests

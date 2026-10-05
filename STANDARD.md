@@ -444,7 +444,7 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 
 - Repo variables (not secrets; the Firebase web config is public by design): `GCP_WIF_PROVIDER`,
   `GCP_DEPLOY_SA`, `VITE_FIREBASE_*` (the bootstrap sets them). Repo secrets `CLOUDFLARE_API_TOKEN`
-  (Workers Scripts edit) and `CLOUDFLARE_ACCOUNT_ID` for the asset CDN, passed with `secrets: inherit`;
+  (Workers Scripts edit) and `CLOUDFLARE_ACCOUNT_ID` for the asset CDN, passed by name in the caller's `secrets:` (never `inherit`, which would hand pwa.yml every repo secret);
   the variable `HH_ASSET_CDN=off` (repo or organization) turns the CDN off. Apps on the suite's site need no
   `VITE_NEWRELIC_*`: the deploy serves their New Relic settings (see Observability).
 - Deploy waits on `leak-scan` and `build`. `concurrency: cancel-in-progress` on every workflow.
