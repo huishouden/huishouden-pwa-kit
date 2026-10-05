@@ -257,11 +257,16 @@ export interface CompleteButtonProps {
  * use `CompletionRow`, which does.
  */
 export declare function CompleteButton({ done, name, onDone, onUndo, verb, label, undoLabel, skipped, size, compact, disabled, className }: CompleteButtonProps): import("react").JSX.Element | null;
-/** "Done by You · 8:10 PM" (or "Skipped by …"); `at` is a moment or words already said. */
-export declare function doneLine({ by, at, skipped }: {
+/**
+ * "Done by Sam · 8:10 PM" (or "Skipped by …"); `at` is a moment or words already said. Done by the
+ * signed-in member (`byMe`, or `by` being `personName`'s "You") it says "Done by you", which each
+ * language words in its own case ("Hecho por ti", "Gedaan door jou").
+ */
+export declare function doneLine({ by, at, skipped, byMe }: {
     by?: string;
     at?: number | string;
     skipped?: boolean;
+    byMe?: boolean;
 }): string;
 export interface CompletionRowProps extends Omit<CompleteButtonProps, 'className'> {
     /** The thing to do, as a person reads it. `name` (the buttons' names) defaults to it when it is a string. */
@@ -273,6 +278,8 @@ export interface CompletionRowProps extends Omit<CompleteButtonProps, 'className
     attention?: boolean;
     /** Who did it, as shown ("You", "Sam"), and when (a moment, or words). */
     by?: string;
+    /** Done by the signed-in member: "Done by you". */
+    byMe?: boolean;
     at?: number | string;
     /** The done line in other words ("Given late 11:02 AM by Jo"); `doneLine({ by, at })` by default. */
     status?: ReactNode;
@@ -292,7 +299,7 @@ export interface CompletionRowProps extends Omit<CompleteButtonProps, 'className
  * check badge, the title muted (never struck through), "Done by You · 8:10 PM" and a small Undo.
  * Renders an `<li>`; put it in a `<ul>`, or a `CompletionList` that sorts done after open.
  */
-export declare function CompletionRow({ title, meta, attention, by, at, status, leading, onOpen, openLabel, actions, children, ...button }: CompletionRowProps): import("react").JSX.Element;
+export declare function CompletionRow({ title, meta, attention, by, byMe, at, status, leading, onOpen, openLabel, actions, children, ...button }: CompletionRowProps): import("react").JSX.Element;
 export interface CompletionListProps<T> {
     items: readonly T[];
     isDone: (item: T) => boolean;

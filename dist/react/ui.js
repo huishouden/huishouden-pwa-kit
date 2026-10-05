@@ -351,10 +351,17 @@ export function CompleteButton({ done, name, onDone, onUndo, verb, label, undoLa
     }
     return (_jsxs("button", { type: "button", "data-complete": "open", className: `${completeButton} ${size === 'lg' ? completeButtonLg : ''} ${className}`, onClick: onDone, disabled: disabled, "aria-label": label ?? kt('ui.markNameDone', { name }), children: [_jsx(Check, { size: size === 'lg' ? 22 : 18, strokeWidth: 2.4, "aria-hidden": "true" }), _jsx("span", { className: compact ? 'hidden sm:inline' : undefined, children: verb ?? kt('ui.markDone') })] }));
 }
-/** "Done by You · 8:10 PM" (or "Skipped by …"); `at` is a moment or words already said. */
-export function doneLine({ by, at, skipped }) {
+/**
+ * "Done by Sam · 8:10 PM" (or "Skipped by …"); `at` is a moment or words already said. Done by the
+ * signed-in member (`byMe`, or `by` being `personName`'s "You") it says "Done by you", which each
+ * language words in its own case ("Hecho por ti", "Gedaan door jou").
+ */
+export function doneLine({ by, at, skipped, byMe }) {
     const time = typeof at === 'number' ? clockWords(toHhmm(at)) : at;
+    const me = byMe || (by !== undefined && by === kt('people.you'));
     if (skipped) {
+        if (me)
+            return time ? kt('ui.skippedByYouAt', { at: time }) : kt('ui.skippedByYou');
         if (by && time)
             return kt('ui.skippedByAt', { name: by, at: time });
         if (by)
@@ -363,6 +370,8 @@ export function doneLine({ by, at, skipped }) {
             return kt('ui.skippedAt', { at: time });
         return kt('ui.skipped');
     }
+    if (me)
+        return time ? kt('ui.doneByYouAt', { at: time }) : kt('ui.doneByYou');
     if (by && time)
         return kt('ui.doneByAt', { name: by, at: time });
     if (by)
@@ -377,12 +386,12 @@ export function doneLine({ by, at, skipped }) {
  * check badge, the title muted (never struck through), "Done by You · 8:10 PM" and a small Undo.
  * Renders an `<li>`; put it in a `<ul>`, or a `CompletionList` that sorts done after open.
  */
-export function CompletionRow({ title, meta, attention, by, at, status, leading, onOpen, openLabel, actions, children, ...button }) {
+export function CompletionRow({ title, meta, attention, by, byMe, at, status, leading, onOpen, openLabel, actions, children, ...button }) {
     useKitT();
     const { done, skipped, size = 'md' } = button;
     const lg = size === 'lg';
     const heading = `${lg ? 'text-2xl sm:text-3xl tracking-tight' : 'text-lg'} leading-snug font-semibold [overflow-wrap:anywhere] ${done ? 'text-muted' : attention && lg ? 'text-attention' : 'text-ink'}`;
-    const line = done ? (status ?? doneLine({ by, at, skipped })) : meta;
+    const line = done ? (status ?? doneLine({ by, byMe, at, skipped })) : meta;
     const lineClass = `${lg ? 'text-lg' : 'text-base'} ${!done && attention ? 'font-semibold text-attention' : 'text-muted'}`;
     const text = (_jsxs(_Fragment, { children: [_jsx("span", { className: `block ${heading}`, children: title }), line ? _jsx("span", { className: `block ${lineClass}`, children: line }) : null] }));
     return (_jsxs("li", { "data-completion": done ? (skipped ? 'skipped' : 'done') : 'open', className: `flex items-center gap-3 py-2.5 sm:gap-4 ${lg ? 'flex-wrap' : ''}`, children: [done ? _jsx(DoneBadge, { skipped: skipped, size: size }) : leading, _jsxs("div", { className: "min-w-0 flex-1", children: [onOpen ? (_jsx("button", { type: "button", className: "-mx-2 flex min-h-11 w-[calc(100%+1rem)] flex-col justify-center rounded-xl px-2 text-left hover:bg-sunken", onClick: onOpen, "aria-label": openLabel, children: text })) : (text), children] }), _jsxs("div", { className: `flex shrink-0 items-center gap-1 ${lg ? 'w-full sm:w-auto' : ''}`, children: [!done && actions, _jsx(CompleteButton, { ...button })] })] }));

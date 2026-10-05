@@ -723,7 +723,7 @@ describe('Completion', () => {
     expect(document.querySelector('[data-complete=open]')).toBeNull();
     expect(document.querySelector('[data-done-badge=done]')).not.toBeNull();
     expect(document.querySelector('li')!.getAttribute('data-completion')).toBe('done');
-    expect(document.querySelector('li')!.textContent).toContain('Done by You · 8:10 PM');
+    expect(document.querySelector('li')!.textContent).toContain('Done by you · 8:10 PM');
     expect(document.querySelector('li')!.textContent).not.toContain('Tonight by 7 PM');
     expect(document.querySelector('[aria-pressed]')).toBeNull();
     click(document.querySelector('[data-complete=undo]'));
@@ -774,7 +774,10 @@ describe('Completion', () => {
     expect(ui.canUndoDone(at, at + 3_600_000, { until: at + 1_800_000 })).toBe(false);
     expect(ui.canUndoDone(undefined, at)).toBe(false);
     expect(ui.openFirst([1, 2, 3, 4], (n) => n % 2 === 1)).toEqual([2, 4, 1, 3]);
-    expect(ui.doneLine({ by: 'You', at: 'at 8 PM' })).toBe('Done by You · at 8 PM');
+    expect(ui.doneLine({ by: 'Jo', at: 'at 8 PM' })).toBe('Done by Jo · at 8 PM');
     expect(ui.doneLine({})).toBe('Done');
+    expect(ui.doneLine({ by: 'You', at: '8:10 PM' })).toBe('Done by you · 8:10 PM');
+    expect(ui.doneLine({ byMe: true, skipped: true })).toBe('Skipped by you');
+    expect(ui.doneLine({ by: 'Sam', at: '8:10 PM' })).toBe('Done by Sam · 8:10 PM');
   });
 });
