@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Writes the Huishouden family logo with an app's glyph: forest tile, cream house, terracotta roof,
 // glyph inside in forest green (DESIGN.md "Logos"). Then render sizes with `pwa-icons --background=#1b4332`.
-// Usage: pwa-logo <glyph> [out=public/icon.svg]    glyphs: home, check, card, bottle, paw, wrench, car, list, cart
+// Usage: pwa-logo <glyph> [out=public/icon.svg]    glyphs: home, check, card, receipt, bottle, paw, wrench, car, list, cart
 import { writeFileSync } from 'node:fs';
 import { logoSvg, GLYPHS, type Glyph } from '../src/logo';
 
