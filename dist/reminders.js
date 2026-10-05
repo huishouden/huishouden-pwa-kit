@@ -5,7 +5,8 @@ import { MONEY_APPS } from './roles.js';
 import { cleanAudience, inAudience } from './audience.js';
 import { getLang, inEveryLang, kt, LANGS } from './i18n.js';
 import { atClock } from './time.js';
-export const REMINDER_FIELDS = ['app', 'title', 'body', 'texts', 'at', 'url', 'recipients', 'ref', 'private', 'sent', 'sentAt', 'createdAt', 'by'];
+import { cleanSource, readSource } from './reminder-source.js';
+export const REMINDER_FIELDS = ['app', 'title', 'body', 'texts', 'at', 'url', 'recipients', 'ref', 'private', 'source', 'sent', 'sentAt', 'createdAt', 'by'];
 /** Limits of a stored title and body, also inside `texts` (the rules check the same). */
 export const REMINDER_LIMITS = { title: 120, body: 500 };
 /** The collection of reminders for named members only (`./audience`); the sender reads it too. */
@@ -92,6 +93,7 @@ export function reminderDoc(input, by, now = Date.now()) {
     if (Array.isArray(recipients) && recipients.length === 0)
         throw new Error('Reminder has no recipients.');
     const texts = cleanTexts(input.texts);
+    const source = cleanSource(input.app, input.source);
     return {
         app: input.app,
         title: input.title.trim().slice(0, REMINDER_LIMITS.title),
@@ -102,6 +104,7 @@ export function reminderDoc(input, by, now = Date.now()) {
         recipients,
         ...(input.ref ? { ref: input.ref } : {}),
         private: input.private === true || MONEY_APPS.includes(input.app),
+        ...(source ? { source } : {}),
         sent: false,
         createdAt: now,
         by,
@@ -150,6 +153,7 @@ export async function replaceReminders(db, householdId, ref, inputs, by, now = D
 const sameReminder = (a, b) => ['app', 'title', 'body', 'at', 'url', 'ref', 'private'].every((k) => a[k] === b[k]) &&
     JSON.stringify(a.recipients) === JSON.stringify(b.recipients) &&
     JSON.stringify(cleanTexts(a.texts) ?? null) === JSON.stringify(b.texts ?? null) &&
+    JSON.stringify(readSource(String(a.app ?? ''), a.source) ?? null) === JSON.stringify(b.source ?? null) &&
     a.sent === false;
 /**
  * Makes everything this app has scheduled from now on exactly `inputs` (each with its own `ref`):
@@ -255,6 +259,7 @@ export function toReminder(id, data) {
         ref: typeof data.ref === 'string' ? data.ref : undefined,
         ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
         ...(Array.isArray(data.audience) ? { audience: data.audience.filter((e) => typeof e === 'string') } : {}),
+        ...((source) => (source ? { source } : {}))(readSource(String(data.app ?? ''), data.source)),
         sent: data.sent === true,
         sentAt: typeof data.sentAt === 'number' ? data.sentAt : undefined,
         createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,

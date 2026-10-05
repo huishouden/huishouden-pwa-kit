@@ -242,6 +242,10 @@
       "types": "./dist/recurring.d.ts",
       "default": "./dist/recurring.js"
     },
+    "./reminder-source": {
+      "types": "./dist/reminder-source.d.ts",
+      "default": "./dist/reminder-source.js"
+    },
     "./reminders": {
       "types": "./dist/reminders.d.ts",
       "default": "./dist/reminders.js"

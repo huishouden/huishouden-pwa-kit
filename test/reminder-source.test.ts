@@ -1,0 +1,107 @@
+import { describe, expect, test } from 'bun:test';
+import { readSource, REMINDER_SOURCES, sourceAllowed, sourceCollection, sourceReads, stillDue, type ReminderSource, type SourceDocs } from '../src/reminder-source';
+
+const bill: ReminderSource = { checks: [{ doc: 'bills/b1', due: [{ field: 'status', notIn: ['paid', 'credit'] }, { field: 'dismissed', notIn: [true] }, { field: 'due', in: ['2031-01-15'] }] }] };
+const docs = (entries: Record<string, Record<string, unknown> | null>): SourceDocs => new Map(Object.entries(entries));
+
+describe('readSource', () => {
+  test('reads what the apps write', () => {
+    expect(readSource('bills', bill)).toEqual(bill);
+    const doses = { checks: [{ doc: 'healthPeople/p1/doses/m1_0800', absent: true }, { doc: 'healthPeople/p1/doses/m2_0800', absent: true }], any: true };
+    expect(readSource('health', doses)).toEqual(doses);
+    expect(readSource('pet', { checks: [{ doc: 'petMedCourses/c1' }], any: false })).toEqual({ checks: [{ doc: 'petMedCourses/c1' }] });
+  });
+
+  test('null for none, or for anything past the limits', () => {
+    for (const bad of [
+      undefined,
+      null,
+      'bills/b1',
+      { checks: [] },
+      { checks: [{ doc: 'bills/b1' }], extra: 1 },
+      { checks: [{ doc: 'bills/b1' }], any: 'yes' },
+      { checks: [{ doc: 'bills' }] },
+      { checks: [{ doc: 'bills/b1/x' }] },
+      { checks: [{ doc: 'bills/../b1' }] },
+      { checks: [{ doc: 'bills/__b1__' }] },
+      { checks: [{ doc: 'bills/b1', absent: false }] },
+      { checks: [{ doc: 'bills/b1', absent: true, due: [] }] },
+      { checks: [{ doc: 'bills/b1', due: [{ field: 'status' }] }] },
+      { checks: [{ doc: 'bills/b1', due: [{ field: 'status', in: [] }] }] },
+      { checks: [{ doc: 'bills/b1', due: [{ field: 'status', in: ['a'], notIn: ['b'] }] }] },
+      { checks: [{ doc: 'bills/b1', due: [{ field: 'status', in: [['nested']] }] }] },
+      { checks: Array.from({ length: 9 }, () => ({ doc: 'bills/b1' })) },
+    ])
+      expect(readSource('bills', bad)).toBeNull();
+  });
+
+  test("only the app's own collections, and in them only the fields that say it is done", () => {
+    expect(readSource('tasks', bill)).toBeNull();
+    expect(readSource('spending', { checks: [{ doc: 'spendingTransactions/t1' }] })).toBeNull();
+    expect(readSource('health', { checks: [{ doc: 'healthPeople/p1/meds/m1', due: [{ field: 'name', in: ['Lisinopril'] }] }] })).toBeNull();
+    expect(readSource('bills', { checks: [{ doc: 'bills/b1', due: [{ field: 'amountDue', in: [100] }] }] })).toBeNull();
+    expect(readSource('bills', { checks: [{ doc: 'bills/b1', due: [{ field: 'constructor', in: [null] }] }] })).toBeNull();
+    expect(sourceCollection('health', 'healthPeople/p1/notes/n1')).toBeUndefined();
+    expect(sourceCollection('health', 'healthPeople/p1')).toBeUndefined();
+    for (const [app, cols] of Object.entries(REMINDER_SOURCES)) for (const col of Object.keys(cols)) expect(sourceCollection(app, `${col.replace('*', 'x')}/d1`)).toBe(cols[col]);
+  });
+});
+
+describe('sourceAllowed', () => {
+  const doses: ReminderSource = { checks: [{ doc: 'healthPeople/p1/doses/m1_0800', absent: true }], any: true };
+
+  test("bills only from admins and members; kids' sources never", () => {
+    expect(sourceAllowed('bills', bill, 'alex@example.com', 'member', docs({}))).toBe(true);
+    expect(sourceAllowed('bills', bill, 'sam@example.com', 'helper', docs({}))).toBe(false);
+    expect(sourceAllowed('tasks', { checks: [{ doc: 'items/a' }] }, 'sam@example.com', 'helper', docs({}))).toBe(true);
+    expect(sourceAllowed('tasks', { checks: [{ doc: 'items/a' }] }, 'kim@example.com', 'kid', docs({}))).toBe(false);
+  });
+
+  test("a Health record only from an admin or one of the person's readers", () => {
+    expect(sourceReads('health', doses)).toEqual(['healthPeople/p1/doses/m1_0800', 'healthPeople/p1']);
+    const person = docs({ 'healthPeople/p1': { readers: ['Bob@example.com', 'helen@example.com'] } });
+    expect(sourceAllowed('health', doses, 'bob@example.com', 'member', person)).toBe(true);
+    expect(sourceAllowed('health', doses, 'helen@example.com', 'helper', person)).toBe(true);
+    expect(sourceAllowed('health', doses, 'carol@example.com', 'member', person)).toBe(false);
+    expect(sourceAllowed('health', doses, 'carol@example.com', 'admin', docs({}))).toBe(true);
+    expect(sourceAllowed('health', doses, 'bob@example.com', 'member', docs({ 'healthPeople/p1': null }))).toBe(false);
+    expect(sourceAllowed('health', doses, 'bob@example.com', 'member', docs({}))).toBeUndefined();
+  });
+});
+
+describe('stillDue', () => {
+  test('due while every condition holds; done once paid, skipped or re-dated', () => {
+    expect(stillDue(bill, docs({ 'bills/b1': { status: 'due', due: '2031-01-15' } }))).toBe(true);
+    expect(stillDue(bill, docs({ 'bills/b1': { status: 'paid', due: '2031-01-15' } }))).toBe(false);
+    expect(stillDue(bill, docs({ 'bills/b1': { status: 'due', dismissed: true, due: '2031-01-15' } }))).toBe(false);
+    expect(stillDue(bill, docs({ 'bills/b1': { status: 'due', due: '2031-02-15' } }))).toBe(false);
+  });
+
+  test('a removed record is done; one not read is unknown', () => {
+    expect(stillDue(bill, docs({ 'bills/b1': null }))).toBe(false);
+    expect(stillDue(bill, docs({}))).toBeUndefined();
+  });
+
+  test('absent: due until the record is written', () => {
+    const tick: ReminderSource = { checks: [{ doc: 'homeEventPrep/e1_2031-01-15', absent: true }, { doc: 'homeEvents/e1' }] };
+    expect(stillDue(tick, docs({ 'homeEventPrep/e1_2031-01-15': null, 'homeEvents/e1': {} }))).toBe(true);
+    expect(stillDue(tick, docs({ 'homeEventPrep/e1_2031-01-15': { done: true }, 'homeEvents/e1': {} }))).toBe(false);
+    expect(stillDue(tick, docs({ 'homeEventPrep/e1_2031-01-15': null, 'homeEvents/e1': null }))).toBe(false);
+  });
+
+  test('a missing field reads as null', () => {
+    const s: ReminderSource = { checks: [{ doc: 'items/a', due: [{ field: 'completed', in: [false, null] }] }] };
+    expect(stillDue(s, docs({ 'items/a': {} }))).toBe(true);
+    expect(stillDue(s, docs({ 'items/a': { completed: true } }))).toBe(false);
+  });
+
+  test('any: due while one dose is unmarked; all: one failing settles it', () => {
+    const two = (any: boolean): ReminderSource => ({ checks: [{ doc: 'healthPeople/p1/doses/a', absent: true }, { doc: 'healthPeople/p1/doses/b', absent: true }], any });
+    const marked = { status: 'given' };
+    expect(stillDue(two(true), docs({ 'healthPeople/p1/doses/a': marked, 'healthPeople/p1/doses/b': null }))).toBe(true);
+    expect(stillDue(two(true), docs({ 'healthPeople/p1/doses/a': marked, 'healthPeople/p1/doses/b': marked }))).toBe(false);
+    expect(stillDue(two(true), docs({ 'healthPeople/p1/doses/a': marked }))).toBeUndefined();
+    expect(stillDue(two(false), docs({ 'healthPeople/p1/doses/a': marked }))).toBe(false);
+    expect(stillDue(two(false), docs({ 'healthPeople/p1/doses/a': null }))).toBeUndefined();
+  });
+});

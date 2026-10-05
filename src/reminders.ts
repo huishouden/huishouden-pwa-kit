@@ -5,6 +5,9 @@ import { MONEY_APPS } from './roles.js';
 import { cleanAudience, inAudience } from './audience.js';
 import { getLang, inEveryLang, kt, LANGS, type Lang } from './i18n.js';
 import { atClock } from './time.js';
+import { cleanSource, readSource, type ReminderSource } from './reminder-source.js';
+
+export type { ReminderSource, SourceCheck, SourceCondition, SourceValue } from './reminder-source.js';
 
 /**
  * Reminders any app writes and the shared sender (huishouden/notify) delivers as push
@@ -56,13 +59,18 @@ export interface Reminder {
    * about one person's care; `recipients` are some of them. Absent on shared reminders.
    */
   audience?: string[];
+  /**
+   * What it is about, so the sender deletes it unsent once that is done anywhere: a bill paid from
+   * the portal, a task ticked in Google Tasks (`./reminder-source`). Without one it is always sent.
+   */
+  source?: ReminderSource;
   sent: boolean;
   sentAt?: number;
   createdAt: number;
   by: string;
 }
 
-export const REMINDER_FIELDS = ['app', 'title', 'body', 'texts', 'at', 'url', 'recipients', 'ref', 'private', 'sent', 'sentAt', 'createdAt', 'by'] as const;
+export const REMINDER_FIELDS = ['app', 'title', 'body', 'texts', 'at', 'url', 'recipients', 'ref', 'private', 'source', 'sent', 'sentAt', 'createdAt', 'by'] as const;
 
 /** Limits of a stored title and body, also inside `texts` (the rules check the same). */
 export const REMINDER_LIMITS = { title: 120, body: 500 } as const;
@@ -73,7 +81,7 @@ export const PERSONAL_REMINDERS = 'personalReminders';
 /** Fields of a `personalReminders` document: a reminder's plus `audience`. */
 export const PERSONAL_REMINDER_FIELDS = [...REMINDER_FIELDS, 'audience'] as const;
 
-export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Partial<Pick<Reminder, 'id' | 'body' | 'texts' | 'recipients' | 'ref' | 'private'>>;
+export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Partial<Pick<Reminder, 'id' | 'body' | 'texts' | 'recipients' | 'ref' | 'private' | 'source'>>;
 
 /** `texts` as stored: known languages only, each title and body trimmed and clipped; undefined when none is left. */
 export function cleanTexts(texts: ReminderTexts | undefined | null): ReminderTexts | undefined {
@@ -169,6 +177,7 @@ export function reminderDoc(input: ReminderInput, by: string, now = Date.now()):
     : [...new Set(input.recipients.map((e) => e.trim().toLowerCase()).filter(Boolean))];
   if (Array.isArray(recipients) && recipients.length === 0) throw new Error('Reminder has no recipients.');
   const texts = cleanTexts(input.texts);
+  const source = cleanSource(input.app, input.source);
   return {
     app: input.app,
     title: input.title.trim().slice(0, REMINDER_LIMITS.title),
@@ -179,6 +188,7 @@ export function reminderDoc(input: ReminderInput, by: string, now = Date.now()):
     recipients,
     ...(input.ref ? { ref: input.ref } : {}),
     private: input.private === true || MONEY_APPS.includes(input.app),
+    ...(source ? { source } : {}),
     sent: false,
     createdAt: now,
     by,
@@ -241,6 +251,7 @@ const sameReminder = (a: Record<string, unknown>, b: Omit<Reminder, 'id'>) =>
   (['app', 'title', 'body', 'at', 'url', 'ref', 'private'] as const).every((k) => a[k] === b[k]) &&
   JSON.stringify(a.recipients) === JSON.stringify(b.recipients) &&
   JSON.stringify(cleanTexts(a.texts as ReminderTexts | undefined) ?? null) === JSON.stringify(b.texts ?? null) &&
+  JSON.stringify(readSource(String(a.app ?? ''), a.source) ?? null) === JSON.stringify(b.source ?? null) &&
   a.sent === false;
 
 export interface SyncRemindersResult {
@@ -362,6 +373,7 @@ export function toReminder(id: string, data: Record<string, unknown>): Reminder 
     ref: typeof data.ref === 'string' ? data.ref : undefined,
     ...(typeof data.private === 'boolean' ? { private: data.private } : {}),
     ...(Array.isArray(data.audience) ? { audience: data.audience.filter((e): e is string => typeof e === 'string') } : {}),
+    ...((source) => (source ? { source } : {}))(readSource(String(data.app ?? ''), data.source)),
     sent: data.sent === true,
     sentAt: typeof data.sentAt === 'number' ? data.sentAt : undefined,
     createdAt: typeof data.createdAt === 'number' ? data.createdAt : 0,
