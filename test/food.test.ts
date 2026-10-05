@@ -108,15 +108,15 @@ describe('strict and gentle diets', () => {
 describe('spice tolerance', () => {
   const { householdMaxHeat, householdSpiceLines, householdDietPreferences, toFood } = require('../src/food');
   test('reads a valid tolerance and drops an unknown one', () => {
-    const food = toFood({ people: [{ id: 'a', name: 'Amanda', diets: [], avoid: [], spice: 'none' }, { id: 'b', name: 'Sam', diets: [], avoid: [], spice: 'scorching' }], pantryAssumed: [] });
+    const food = toFood({ people: [{ id: 'a', name: 'Pat', diets: [], avoid: [], spice: 'none' }, { id: 'b', name: 'Sam', diets: [], avoid: [], spice: 'scorching' }], pantryAssumed: [] });
     expect(food.people[0].spice).toBe('none');
     expect(food.people[1].spice).toBeUndefined();
   });
   test('a shared meal follows the lowest tolerance anyone set', () => {
-    const people = [{ id: 'a', name: 'Amanda', diets: [], avoid: [], spice: 'none' }, { id: 'b', name: 'Sam', diets: [], avoid: [], spice: 'hot' }, { id: 'c', name: 'Kid', diets: [], avoid: [] }];
+    const people = [{ id: 'a', name: 'Pat', diets: [], avoid: [], spice: 'none' }, { id: 'b', name: 'Sam', diets: [], avoid: [], spice: 'hot' }, { id: 'c', name: 'Kid', diets: [], avoid: [] }];
     expect(householdMaxHeat({ people })).toBe(0);
     expect(householdMaxHeat({ people: [people[2]] })).toBeUndefined();
-    expect(householdSpiceLines({ people })[0]).toContain('Amanda: keep meals mild, heat 0 of 3; a slight touch of heat (1) is tolerable now and then but not ideal.');
+    expect(householdSpiceLines({ people })[0]).toContain('Pat: keep meals mild, heat 0 of 3; a slight touch of heat (1) is tolerable now and then but not ideal.');
     expect(householdDietPreferences({ people })).toEqual(householdSpiceLines({ people }));
   });
 });
@@ -124,18 +124,18 @@ describe('spice tolerance', () => {
 describe('pseudonymous food for a model', () => {
   const food = toFood({
     people: [
-      { id: 'amanda@example.com', name: 'Amanda Rivera', member: 'amanda@example.com', diets: ['gerd', 'nut allergy'], avoid: ['mushrooms'], spice: 'mild', note: 'Amanda is pregnant; ask amanda@example.com or Bob first' },
-      { id: 'bob@example.com', name: 'Bob', member: 'bob@example.com', diets: ['vegetarian'], avoid: ['cilantro'], note: 'Cooks for Rivera family; writes to kim.lee@example.org' },
+      { id: 'pat@example.com', name: 'Pat Example', member: 'pat@example.com', diets: ['gerd', 'nut allergy'], avoid: ['mushrooms'], spice: 'mild', note: 'Pat is pregnant; ask pat@example.com or Bob first' },
+      { id: 'bob@example.com', name: 'Bob', member: 'bob@example.com', diets: ['vegetarian'], avoid: ['cilantro'], note: 'Cooks for Example family; writes to kim.lee@example.org' },
       { id: 'kid-1', name: 'Noor', diets: ['halal'], avoid: [] },
     ],
   });
-  const real = ['Amanda', 'Rivera', 'Bob', 'Noor', 'amanda@example.com', 'bob@example.com', 'kim.lee@example.org', 'Kim'];
+  const real = ['Pat', 'Example', 'Bob', 'Noor', 'pat@example.com', 'bob@example.com', 'kim.lee@example.org', 'Kim'];
 
   test('names nobody: no name, first name or email in any prompt line', () => {
     const { food: anon } = pseudonymousFood(food, [{ email: 'kim.lee@example.org', name: 'Kim Lee' }]);
     const text = [...householdDietRules(anon), ...householdDietRules(anon, { strictOnly: true }), ...householdDietPreferences(anon), ...householdSpiceLines(anon)].join('\n');
     for (const r of real) expect(text).not.toMatch(new RegExp(`\\b${r}\\b`, 'i'));
-    expect(JSON.stringify(anon.people)).not.toMatch(/@|Amanda|Bob|Rivera/);
+    expect(JSON.stringify(anon.people)).not.toMatch(/@|Pat|Bob|Example/);
   });
 
   test('keeps every condition, tied to a stand-in, and the avoid lists as written', () => {
@@ -153,9 +153,26 @@ describe('pseudonymous food for a model', () => {
     expect(householdDietRules(anon)).toEqual(['Person A avoids olive oil.']);
   });
 
+  test('carries nothing but the people: not who saved it', () => {
+    const { food: anon } = pseudonymousFood({ ...food, by: 'sam@example.com', updatedAt: 5 } as typeof food);
+    expect(Object.keys(anon)).toEqual(['people']);
+    expect(JSON.stringify(anon)).not.toContain('@');
+  });
+
+  test('replaces short and accented names in notes', () => {
+    const { food: anon } = pseudonymousFood(toFood({
+      people: [
+        { id: 'a', name: 'Jo Smith', diets: [], avoid: [], note: 'Jo and JO SMITH skip lunch' },
+        { id: 'b', name: 'José', diets: [], avoid: [], note: 'Jose cooks for jo' },
+      ],
+    }), [{ name: 'Ed Ng' }]);
+    expect(anon.people.map((p) => p.note)).toEqual(['Person A and Person A skip lunch', 'Person B cooks for Person A']);
+    expect(pseudonymousFood(toFood({ people: [{ id: 'a', name: 'Sam', diets: [], avoid: [], note: 'Ed visits; Ng too' }] }), [{ name: 'Ed Ng' }]).food.people[0].note).toBe('someone visits; someone too');
+  });
+
   test('is stable for the same list and puts real names back', () => {
     const a = pseudonymousFood(food);
     expect(pseudonymousFood(food).food).toEqual(a.food);
-    expect(a.restore('Too spicy for Person A; Person C and Person Z')).toBe('Too spicy for Amanda Rivera; Noor and Person Z');
+    expect(a.restore('Too spicy for Person A; Person C and Person Z')).toBe('Too spicy for Pat Example; Noor and Person Z');
   });
 });

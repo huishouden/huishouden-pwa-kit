@@ -99,7 +99,7 @@ export declare function withMembers(people: FoodPerson[], members: {
  * undefined when nobody has set one.
  */
 export declare function householdMaxHeat(food: Pick<FoodPreferences, 'people'>): number | undefined;
-/** "Amanda: keep meals mild, heat 0 of 3; …", one line per person who set a tolerance. */
+/** "Pat: keep meals mild, heat 0 of 3; …", one line per person who set a tolerance. */
 export declare function householdSpiceLines(food: Pick<FoodPreferences, 'people'>): string[];
 /** Every diet anyone in the household has, in the fixed order: for filtering recipes. */
 export declare function householdDiets(food: Pick<FoodPreferences, 'people'>): Diet[];
@@ -126,9 +126,13 @@ export declare function householdDietRules(food: Pick<FoodPreferences, 'people'>
  */
 export declare function householdDietPreferences(food: Pick<FoodPreferences, 'people'>): string[];
 /** What `pseudonymousFood` returns: the people under stand-in names, and the way back. */
-export interface PseudonymousFood<T extends Pick<FoodPreferences, 'people'>> {
-    /** The same preferences with each person as "Person A", "Person B", … (in list order), no email or id of theirs, and names and emails taken out of their notes. */
-    food: T;
+export interface PseudonymousFood {
+    /**
+     * Only the people, each as "Person A", "Person B", … (in list order) with their diets, avoid list,
+     * spice and note, no name, id or email, and names and emails taken out of the note. Nothing else
+     * from the input is carried (not `by`, the saving member's email).
+     */
+    food: Pick<FoodPreferences, 'people'>;
     /** Puts the real names back in text that came back from a model: "Person B" becomes the second person's name. */
     restore: (text: string) => string;
 }
@@ -136,16 +140,20 @@ export interface PseudonymousFood<T extends Pick<FoodPreferences, 'people'>> {
  * The household's food preferences with nobody named, for a prompt sent to a model outside the
  * household (Gemini): each person becomes "Person A", "Person B", … by their place in the list, so
  * the stand-ins are stable while the list is, and diets, allergies and notes stay but are not tied
- * to anyone's name or email. Names, first names and emails written in a note are replaced as well
- * (an email of someone not in the list as "someone"); `others` names more people to take out of
- * notes, such as household members not in the list. Avoid lists are ingredients and stay as
- * written: a first name can be a food ("Olive"), and "olive oil" must reach the model intact. Build the
- * prompt's rules from `food` (householdDietRules, householdDietPreferences, householdSpiceLines);
- * show the household anything the model wrote about a person through `restore`.
+ * to anyone's name or email. In a note, every listed person's name, each word of it, their email
+ * and its first part are replaced by their stand-in, ignoring case and accents (the note goes without
+ * accents), and any other email
+ * by "someone"; `others` names more people to replace by "someone" (household members not in the
+ * list). A note is free text: anything else in it (a stranger's name, a phone number, an address)
+ * goes to the model as written, so the portal asks for food notes, not contact details. Avoid lists
+ * are ingredients and stay as written: a first name can be a food ("Olive"), and "olive oil" must
+ * reach the model intact. Build the prompt's rules from `food` (householdDietRules,
+ * householdDietPreferences, householdSpiceLines); show the household anything the model wrote about
+ * a person through `restore`.
  */
-export declare function pseudonymousFood<T extends Pick<FoodPreferences, 'people'>>(food: T, others?: {
+export declare function pseudonymousFood(food: Pick<FoodPreferences, 'people'>, others?: {
     email?: string;
     name?: string;
-}[]): PseudonymousFood<T>;
+}[]): PseudonymousFood;
 /** "Assume the kitchen already has salt, black pepper and cooking oil." or '' when the list is empty. */
 export declare function pantryText(food: Pick<FoodPreferences, 'pantryAssumed'>): string;
