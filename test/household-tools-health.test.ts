@@ -291,6 +291,23 @@ describe('Health conditions', () => {
     expect(helper.result.text).toContain('Only admins, and members who care for this person');
   });
 
+  test('the person themself reads their own as a member, not as a helper (the rules: their email grants nothing)', async () => {
+    const CAROL = 'carol@example.com';
+    const HANK = 'hank@example.com';
+    const { db } = memoryDb({
+      [H]: { name: 'Home', members: [SAM, CAROL, HANK], joined: [SAM, CAROL, HANK], roles: { [HANK]: 'helper' }, createdAt: 1 },
+      [`${H}/healthPeople/pc`]: { name: 'Carol', email: CAROL, carers: [], readers: [CAROL] },
+      [`${H}/healthPeople/pc/conditions/k1`]: { personId: 'pc', name: 'Asthma', specialty: 'pulmonology', status: 'active', createdAt: 1, by: SAM },
+      [`${H}/healthPeople/ph`]: { name: 'Hank', email: HANK, carers: [], readers: [HANK] },
+      [`${H}/healthPeople/ph/conditions/k1`]: { personId: 'ph', name: 'Asthma', specialty: 'pulmonology', status: 'active', createdAt: 1, by: SAM },
+    });
+    const carol = await run(CAROL, db, 'health_conditions', { person: 'Carol' });
+    expect(carol.result.text).toContain('Asthma');
+    const hank = await run(HANK, db, 'health_conditions', { person: 'Hank' });
+    expect(hank.result.error).toBe(true);
+    expect(hank.result.text).not.toContain('Asthma');
+  });
+
   test('what would be dropped is said back instead', async () => {
     const { db, commits } = seeded();
     const both = await run(SAM, db, 'health_add_condition', { person: 'Nan', name: 'Asthma', clinic: 'Example Clinic', place: 'Example Hospital' });
