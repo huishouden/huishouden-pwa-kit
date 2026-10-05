@@ -36,8 +36,8 @@ mock.module('firebase/firestore', () => ({
   },
 }));
 
-const { PERSONAL_REMINDER_FIELDS, personalReminderDoc, syncPersonalReminders, REMINDER_FIELDS, cancelReminders, reminderDoc, reminderId, remindersForCourse, replaceReminders, syncReminders, toReminder, upsertReminder } = await import('../src/reminders');
-(await import('../src/published')).setPublishedStorage(null);
+const { PERSONAL_REMINDER_FIELDS, personalReminderDoc, syncPersonalReminders, REMINDER_FIELDS, cancelReminder, cancelReminders, reminderDoc, reminderId, remindersForCourse, replaceReminders, syncReminders, toReminder, upsertReminder } = await import('../src/reminders');
+const { clearPageNotes, memoryNotes } = await import('./published-notes');
 
 const db = {} as real.Firestore;
 const NOW = new Date(2026, 2, 14, 12, 0).getTime();
@@ -104,6 +104,7 @@ describe('remindersForCourse', () => {
 describe('writing reminders', () => {
   test('upsert writes under its idempotent id', async () => {
     store.clear();
+    clearPageNotes();
     const id = await upsertReminder(db, 'h1', { app: 'pet', title: 'Vet visit', at: 1000, url: 'https://pet.example.com/' }, 'a@example.com');
     expect(id).toBe('pet-1000');
     expect(store.get('households/h1/reminders/pet-1000')).toMatchObject({ title: 'Vet visit', sent: false });
@@ -111,6 +112,7 @@ describe('writing reminders', () => {
 
   test('replaceReminders swaps future reminders and leaves past ones alone', async () => {
     store.clear();
+    clearPageNotes();
     const ref = 'pet:course:c1';
     store.set(`households/h1/reminders/old-past`, { ref, at: NOW - 1000, sent: true });
     store.set(`households/h1/reminders/old-future`, { ref, at: NOW + 1000, sent: false });
@@ -141,6 +143,7 @@ describe('syncReminders', () => {
 
   test('writes new reminders, leaves unchanged ones, deletes future ones no longer wanted', async () => {
     store.clear();
+    clearPageNotes();
     const first = await syncReminders(db, 'h1', 'tasks', [input('tasks:item:a', at(15, 9)), input('tasks:item:b', at(16, 9))], 'alex@example.com', NOW);
     expect(first).toEqual({ written: 2, deleted: 0, unchanged: 0 });
     const again = await syncReminders(db, 'h1', 'tasks', [input('tasks:item:a', at(15, 9)), input('tasks:item:b', at(16, 9))], 'sam@example.com', NOW);
@@ -151,8 +154,37 @@ describe('syncReminders', () => {
     expect(store.get(`${H}/${reminderId('tasks:item:a', at(15, 9))}`)?.title).toBe('Pick up dry cleaning');
   });
 
+  test('the same reminders again from this device skip the read; a per-record write or a change syncs again', async () => {
+    store.clear();
+    clearPageNotes();
+    const published = memoryNotes();
+    const list = [input('tasks:item:a', at(15, 9)), input('tasks:item:b', at(16, 9))];
+    expect(await syncReminders(db, 'h1', 'tasks', list, 'alex@example.com', NOW, { published })).toEqual({ written: 2, deleted: 0, unchanged: 0 });
+    expect(await syncReminders(db, 'h1', 'tasks', list, 'alex@example.com', NOW + 1000, { published })).toEqual({ written: 0, deleted: 0, unchanged: 2, skipped: true });
+    await cancelReminders(db, 'h1', 'tasks:item:b', { published });
+    expect(await syncReminders(db, 'h1', 'tasks', list, 'alex@example.com', NOW + 2000, { published })).toEqual({ written: 1, deleted: 0, unchanged: 1 });
+    await replaceReminders(db, 'h1', 'tasks:item:b', [input('tasks:item:b', at(16, 10))], 'alex@example.com', NOW + 2500, { published });
+    expect(await syncReminders(db, 'h1', 'tasks', list, 'alex@example.com', NOW + 3000, { published })).toEqual({ written: 1, deleted: 1, unchanged: 1 });
+    await cancelReminder(db, 'h1', reminderId('tasks:item:a', at(15, 9)), { published });
+    expect(await syncReminders(db, 'h1', 'tasks', list, 'alex@example.com', NOW + 4000, { published })).toEqual({ written: 1, deleted: 0, unchanged: 1 });
+    await upsertReminder(db, 'h1', input('tasks:item:c', at(17, 9)), 'alex@example.com', { published });
+    expect(await syncReminders(db, 'h1', 'tasks', list, 'alex@example.com', NOW + 5000, { published })).toEqual({ written: 0, deleted: 1, unchanged: 2 });
+  });
+
+  test('personal reminders keep a note per member', async () => {
+    store.clear();
+    clearPageNotes();
+    const published = memoryNotes();
+    const mine = [{ app: 'health', title: 'Take the pill', at: at(15, 9), url: 'https://health.example.com/', ref: 'health:med:1', audience: ['alex@example.com'], recipients: ['alex@example.com'] }];
+    const first = await syncPersonalReminders(db, 'h1', 'health', mine, 'alex@example.com', NOW, { published });
+    expect(first.skipped).toBeUndefined();
+    expect(await syncPersonalReminders(db, 'h1', 'health', mine, 'alex@example.com', NOW + 1000, { published })).toMatchObject({ skipped: true });
+    expect(await syncPersonalReminders(db, 'h1', 'health', mine, 'sam@example.com', NOW + 1000, { published })).not.toHaveProperty('skipped');
+  });
+
   test('never touches past or sent reminders, or another app\'s', async () => {
     store.clear();
+    clearPageNotes();
     store.set(`${H}/past`, { app: 'tasks', at: at(13, 9), sent: true, ref: 'tasks:item:old' });
     store.set(`${H}/sent`, { app: 'tasks', at: at(15, 9), sent: true, ref: 'tasks:item:s' });
     store.set(`${H}/pet`, { app: 'pet', at: at(15, 9), sent: false, ref: 'pet:course:c1' });
@@ -163,6 +195,7 @@ describe('syncReminders', () => {
 
   test('past times in the list are skipped', async () => {
     store.clear();
+    clearPageNotes();
     expect(await syncReminders(db, 'h1', 'tasks', [input('tasks:item:a', at(14, 8))], 'alex@example.com', NOW)).toEqual({ written: 0, deleted: 0, unchanged: 0 });
   });
 });
@@ -194,6 +227,7 @@ describe('a source', () => {
 
   test('syncReminders rewrites a reminder whose source changed, and only then', async () => {
     store.clear();
+    clearPageNotes();
     expect(await syncReminders(db, 'h1', 'tasks', [input(undefined as never)].map(({ source: _s, ...r }) => r), 'alex@example.com', NOW)).toEqual({ written: 1, deleted: 0, unchanged: 0 });
     expect(await syncReminders(db, 'h1', 'tasks', [input()], 'alex@example.com', NOW)).toEqual({ written: 1, deleted: 0, unchanged: 0 });
     expect(store.get(`${H}/${reminderId('tasks:item:a', at(15, 9))}`)?.source).toEqual(source);
@@ -214,6 +248,7 @@ describe('private reminders', () => {
 
   test("a helper's sync touches only open reminders, and one refused write doesn't stop the rest", async () => {
     store.clear();
+    clearPageNotes();
     refuse.clear();
     const later = NOW + 3_600_000;
     await syncReminders(db, 'h1', 'pet', [input('Vet visit', later, { id: 'vet', private: true }), input('Dose 1', later, { id: 'd1' }), input('Dose 2', later, { id: 'd2' })], 'a@example.com', NOW);
@@ -249,6 +284,7 @@ describe('reminders for named members only', () => {
 
   test('sync writes future ones naming the writer, deletes dropped ones, never touches sent or others', async () => {
     store.clear();
+    clearPageNotes();
     const col = 'households/h1/personalReminders';
     store.set(`${col}/sent`, { app: 'health', at: at(14, 8), sent: true, audience: [A] });
     store.set(`${col}/someone-else`, { app: 'health', at: at(16, 8), sent: false, audience: [N] });
@@ -307,6 +343,7 @@ describe('reminders in every language', () => {
 
   test('syncReminders rewrites a reminder whose texts changed, and leaves an identical one', async () => {
     store.clear();
+    clearPageNotes();
     const input = { app: 'pet', title: 'T', at: at(20, 9), url: 'https://pet.example.com/', ref: 'x', texts: { es: { title: 'T es', body: '' } } };
     expect((await syncReminders(db, 'h', 'pet', [input], 'alex@example.com', NOW)).written).toBe(1);
     expect((await syncReminders(db, 'h', 'pet', [input], 'alex@example.com', NOW)).unchanged).toBe(1);

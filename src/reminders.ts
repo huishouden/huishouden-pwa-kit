@@ -6,7 +6,7 @@ import { kt } from './i18n.js';
 import { atClock } from './time.js';
 import { readSource } from './reminder-source.js';
 import { cleanTexts, localizeReminders, PERSONAL_REMINDERS, personalReminderDoc, reminderDoc, reminderId, toReminder, type PersonalReminderInput, type Reminder, type ReminderInput, type ReminderTexts } from './reminder-core.js';
-import { alreadyPublished, fingerprint, forgetPublishedApp, publishedKey, rememberPublished } from './published.js';
+import { fingerprint, forgetPublished, publishedKey, publishedStore, unlessPublished, type PublishedStorage } from './published.js';
 
 export type { ReminderSource, SourceCheck, SourceCondition, SourceValue } from './reminder-source.js';
 export * from './reminder-core.js';
@@ -33,6 +33,8 @@ export * from './reminder-core.js';
  */
 export interface ReminderWriteOptions {
   restricted?: boolean;
+  /** Where this device notes what apps scheduled (`./published`): `localStorage` by default, null for none. */
+  published?: PublishedStorage | null;
 }
 
 const remindersOf = (db: Firestore, householdId: string) => collection(db, 'households', householdId, 'reminders');
@@ -68,27 +70,30 @@ async function commit(db: Firestore, ops: Op[], restricted = false): Promise<voi
  * Creates or replaces a reminder (id from `reminderId(ref ?? app, at)` unless given). Writing it
  * again marks it unsent, so it is delivered again if its time has come.
  */
-export async function upsertReminder(db: Firestore, householdId: string, input: ReminderInput, by: string): Promise<string> {
+export async function upsertReminder(db: Firestore, householdId: string, input: ReminderInput, by: string, { published }: Pick<ReminderWriteOptions, 'published'> = {}): Promise<string> {
   const id = input.id ?? reminderId(input.ref ?? input.app, input.at);
+  forgetPublished(publishedStore(published), db, householdId, 'reminders', input.app);
   await setDoc(doc(remindersOf(db, householdId), id), reminderDoc(input, by));
   return id;
 }
 
-export async function cancelReminder(db: Firestore, householdId: string, id: string): Promise<void> {
+/** Deletes one reminder. Its app isn't known here, so every app's sync on this device reads again. */
+export async function cancelReminder(db: Firestore, householdId: string, id: string, { published }: Pick<ReminderWriteOptions, 'published'> = {}): Promise<void> {
+  forgetPublished(publishedStore(published), db, householdId, 'reminders');
   await deleteDoc(doc(remindersOf(db, householdId), id));
 }
 
 /** Deletes every reminder with this `ref` (a course stopped, an appointment cancelled). */
-export async function cancelReminders(db: Firestore, householdId: string, ref: string, { restricted }: ReminderWriteOptions = {}): Promise<number> {
+export async function cancelReminders(db: Firestore, householdId: string, ref: string, { restricted, published }: ReminderWriteOptions = {}): Promise<number> {
   const snap = await getDocs(visible(db, householdId, restricted, where('ref', '==', ref)));
+  forgetApps(publishedStore(published), db, householdId, snap.docs.map((d) => d.data().app));
   await commit(db, snap.docs.map((d) => (b) => b.delete(d.ref)), restricted);
-  forgetApps(db, householdId, snap.docs.map((d) => d.data().app));
   return snap.size;
 }
 
-/** A per-record write changed what is stored for these apps: their next sync on this device reads again. */
-function forgetApps(db: Firestore, householdId: string, apps: unknown[]) {
-  for (const app of new Set(apps.filter((a): a is string => typeof a === 'string'))) forgetPublishedApp(db, householdId, 'reminders', app);
+/** A per-record write is about to change what is stored for these apps: their next sync on this device reads again. */
+function forgetApps(store: PublishedStorage | null, db: Firestore, householdId: string, apps: unknown[]) {
+  for (const app of new Set(apps.filter((a): a is string => typeof a === 'string'))) forgetPublished(store, db, householdId, 'reminders', app);
 }
 
 /**
@@ -103,7 +108,7 @@ export async function replaceReminders(
   inputs: ReminderInput[],
   by: string,
   now = Date.now(),
-  { restricted }: ReminderWriteOptions = {},
+  { restricted, published }: ReminderWriteOptions = {},
 ): Promise<string[]> {
   const wanted = new Map(
     inputs
@@ -117,8 +122,8 @@ export async function replaceReminders(
     if (at > now && !wanted.has(d.id)) ops.push((b) => b.delete(d.ref));
   }
   for (const [id, data] of wanted) ops.push((b) => b.set(doc(remindersOf(db, householdId), id), data));
+  forgetApps(publishedStore(published), db, householdId, [...existing.docs.map((d) => d.data().app), ...[...wanted.values()].map((d) => d.app)]);
   await commit(db, ops, restricted);
-  forgetApps(db, householdId, [...existing.docs.map((d) => d.data().app), ...[...wanted.values()].map((d) => d.app)]);
   return [...wanted.keys()];
 }
 
@@ -152,7 +157,7 @@ export async function syncReminders(
   inputs: ReminderInput[],
   by: string,
   now = Date.now(),
-  { restricted }: ReminderWriteOptions = {},
+  { restricted, published }: ReminderWriteOptions = {},
 ): Promise<SyncRemindersResult> {
   const wanted = new Map(
     inputs
@@ -163,26 +168,32 @@ export async function syncReminders(
       }),
   );
   // The same reminders this device scheduled a short while ago: nothing to read or write (`./published`).
-  const key = publishedKey(db, householdId, 'reminders', app, by);
-  const print = fingerprint(wanted, String(!!restricted));
-  if (alreadyPublished(key, print, now)) return { written: 0, deleted: 0, unchanged: wanted.size, skipped: true };
-  const existing = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
-  const have = new Map(existing.docs.map((d) => [d.id, d.data() as Record<string, unknown>]));
-  const ops: Op[] = [];
-  for (const d of existing.docs) {
-    const data = d.data() as Record<string, unknown>;
-    if (typeof data.at === 'number' && data.at > now && data.sent !== true && !wanted.has(d.id)) ops.push((b) => b.delete(d.ref));
-  }
-  const deleted = ops.length;
-  let unchanged = 0;
-  for (const [id, data] of wanted) {
-    const old = have.get(id);
-    if (old && sameReminder(old, data)) unchanged++;
-    else if (old?.sent === true) unchanged++;
-    else ops.push((b) => b.set(doc(remindersOf(db, householdId), id), data));
-  }
-  await commit(db, ops, restricted);
-  return { written: ops.length - deleted, deleted, unchanged };
+  return unlessPublished(
+    publishedStore(published),
+    publishedKey(db, householdId, 'reminders', app, by),
+    fingerprint(wanted, String(!!restricted)),
+    now,
+    () => ({ written: 0, deleted: 0, unchanged: wanted.size, skipped: true as const }),
+    async () => {
+      const existing = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
+      const have = new Map(existing.docs.map((d) => [d.id, d.data() as Record<string, unknown>]));
+      const ops: Op[] = [];
+      for (const d of existing.docs) {
+        const data = d.data() as Record<string, unknown>;
+        if (typeof data.at === 'number' && data.at > now && data.sent !== true && !wanted.has(d.id)) ops.push((b) => b.delete(d.ref));
+      }
+      const deleted = ops.length;
+      let unchanged = 0;
+      for (const [id, data] of wanted) {
+        const old = have.get(id);
+        if (old && sameReminder(old, data)) unchanged++;
+        else if (old?.sent === true) unchanged++;
+        else ops.push((b) => b.set(doc(remindersOf(db, householdId), id), data));
+      }
+      await commit(db, ops, restricted);
+      return { written: ops.length - deleted, deleted, unchanged };
+    },
+  );
 }
 
 /**
@@ -197,6 +208,7 @@ export async function syncPersonalReminders(
   inputs: PersonalReminderInput[],
   by: string,
   now = Date.now(),
+  { published }: Pick<ReminderWriteOptions, 'published'> = {},
 ): Promise<SyncRemindersResult> {
   const me = by.trim().toLowerCase();
   const wanted = new Map<string, Omit<Reminder, 'id'>>();
@@ -211,23 +223,32 @@ export async function syncPersonalReminders(
     wanted.set(r.id ?? reminderId(r.ref ?? app, data.at), data);
   }
   const col = personalOf(db, householdId);
-  const existing = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
-  const ops: Op[] = [];
-  for (const d of existing.docs) {
-    const data = d.data() as Record<string, unknown>;
-    if (typeof data.at === 'number' && data.at > now && data.sent !== true && !wanted.has(d.id)) ops.push((b) => b.delete(d.ref));
-  }
-  const deleted = ops.length;
-  const have = new Map(existing.docs.map((d) => [d.id, d.data() as Record<string, unknown>]));
-  let unchanged = 0;
-  for (const [id, data] of wanted) {
-    const old = have.get(id);
-    if (old && sameReminder(old, data) && JSON.stringify(old.audience) === JSON.stringify(data.audience)) unchanged++;
-    else if (old?.sent === true) unchanged++;
-    else ops.push((b) => b.set(doc(col, id), data));
-  }
-  await commit(db, ops);
-  return { written: ops.length - deleted, deleted, unchanged };
+  return unlessPublished(
+    publishedStore(published),
+    publishedKey(db, householdId, PERSONAL_REMINDERS, app, me),
+    fingerprint(wanted),
+    now,
+    () => ({ written: 0, deleted: 0, unchanged: wanted.size, skipped: true as const }),
+    async () => {
+      const existing = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
+      const ops: Op[] = [];
+      for (const d of existing.docs) {
+        const data = d.data() as Record<string, unknown>;
+        if (typeof data.at === 'number' && data.at > now && data.sent !== true && !wanted.has(d.id)) ops.push((b) => b.delete(d.ref));
+      }
+      const deleted = ops.length;
+      const have = new Map(existing.docs.map((d) => [d.id, d.data() as Record<string, unknown>]));
+      let unchanged = 0;
+      for (const [id, data] of wanted) {
+        const old = have.get(id);
+        if (old && sameReminder(old, data) && JSON.stringify(old.audience) === JSON.stringify(data.audience)) unchanged++;
+        else if (old?.sent === true) unchanged++;
+        else ops.push((b) => b.set(doc(col, id), data));
+      }
+      await commit(db, ops);
+      return { written: ops.length - deleted, deleted, unchanged };
+    },
+  );
 }
 
 /** Follows the household's reminders, optionally one app's, soonest first. */
