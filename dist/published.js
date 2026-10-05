@@ -12,22 +12,19 @@
  * anything another device or a server changed in the meantime.
  *
  * The note is a fingerprint of the items (without `updatedAt`, `createdAt` and `by`, which differ
- * from run to run) in `localStorage`, under `hh-published:<project>:`. A per-record write
- * (`replaceAgenda`, `removeAgenda`, `cancelReminders`, a to-do done) forgets the app's note, since
- * it changes what is stored without changing what the next sync would compute.
+ * from run to run) in `localStorage` (or the store a caller passes as `published`), under
+ * `hh-published:<project>:`. A per-record write (`replaceAgenda`, `removeAgenda`, `upsertReminder`,
+ * `cancelReminder(s)`, `replaceReminders`, a to-do done) forgets the app's note first, since it
+ * changes what is stored without changing what the next sync would compute.
  */
 /** How long a completed sync stands in for the next identical one. */
 export const FRESH_MS = 6 * 60 * 60 * 1000;
 const PREFIX = 'hh-published:';
 const VOLATILE = new Set(['updatedAt', 'createdAt', 'by']);
-/** Tests set this to a storage of their own, or null for none. */
-let override;
-export function setPublishedStorage(storage) {
-    override = storage;
-}
-function storage() {
-    if (override !== undefined)
-        return override;
+/** The store a write option names: `undefined` means this page's `localStorage` (none outside a browser). */
+export function publishedStore(option) {
+    if (option !== undefined)
+        return option;
     try {
         return typeof localStorage === 'undefined' ? null : localStorage;
     }
@@ -73,8 +70,7 @@ export function fingerprint(wanted, extra = '') {
     return `${(h1 >>> 0).toString(36)}.${(h2 >>> 0).toString(36)}.${rows.length}`;
 }
 /** Whether this device completed a sync of exactly these items under `key` less than `FRESH_MS` ago. */
-export function alreadyPublished(key, print, now) {
-    const store = storage();
+export function alreadyPublished(store, key, print, now) {
     if (!store)
         return false;
     try {
@@ -89,20 +85,34 @@ export function alreadyPublished(key, print, now) {
     }
 }
 /** Notes that the sync of these items under `key` completed. */
-export function rememberPublished(key, print, now) {
+export function rememberPublished(store, key, print, now) {
     try {
-        storage()?.setItem(key, JSON.stringify({ p: print, at: now }));
+        store?.setItem(key, JSON.stringify({ p: print, at: now }));
     }
     catch {
         // Storage full or unavailable: the next open reads again, as before.
     }
 }
-/** Forgets every person's note for one household's app and list (a per-record write by anyone on this device). */
-export function forgetPublishedApp(db, householdId, list, app) {
-    const store = storage();
-    if (!store || typeof store.key !== 'function')
+/**
+ * The whole protocol for a sync: `skipped()` when this device published exactly `print` under `key`
+ * within `FRESH_MS`, else `run()` and, once it has finished, the note.
+ */
+export async function unlessPublished(store, key, print, now, skipped, run) {
+    if (alreadyPublished(store, key, print, now))
+        return skipped();
+    const result = await run();
+    rememberPublished(store, key, print, now);
+    return result;
+}
+/**
+ * Forgets every member's note for one household's list, for one app or (without `app`) every app:
+ * a per-record write changed what is stored. Call it before the write, so a write that fails half
+ * way leaves no note behind.
+ */
+export function forgetPublished(store, db, householdId, list, app) {
+    if (!store)
         return;
-    const prefix = `${PREFIX}${project(db)}:${householdId}:${list}:${app}:`;
+    const prefix = `${PREFIX}${project(db)}:${householdId}:${list}:${app === undefined ? '' : `${app}:`}`;
     try {
         const drop = [];
         for (let i = 0; i < store.length; i++) {

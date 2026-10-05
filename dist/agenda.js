@@ -2,7 +2,7 @@ import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/fir
 import { writeBatch } from './firestore.js';
 import { cleanAudience, inAudience } from './audience.js';
 import { agendaDoc, agendaId, agendaInRange, inAgendaWindow, personalAgendaDoc, toAgendaItem, PERSONAL_AGENDA } from './agenda-core.js';
-import { alreadyPublished, fingerprint, forgetPublishedApp, publishedKey, rememberPublished } from './published.js';
+import { fingerprint, forgetPublished, publishedKey, publishedStore, unlessPublished } from './published.js';
 /**
  * The household's agenda over the Firebase SDK: publishing (`syncAgenda` and friends) and following
  * (`watchAgenda`). The data contract and every reading helper are in `./agenda-core` (re-exported
@@ -77,14 +77,14 @@ const snapshotDocs = (snap) => snap.docs.map((d) => ({ id: d.id, data: d.data() 
  */
 export async function replaceAgenda(db, householdId, app, ref, items, options) {
     const { by, restricted = false, now = Date.now() } = options;
-    forgetPublishedApp(db, householdId, 'agenda', app);
+    forgetPublished(publishedStore(options.published), db, householdId, 'agenda', app);
     const snap = await getDocs(visible(db, householdId, restricted, where('app', '==', app), where('ref', '==', ref)));
     const wanted = wantedOf(app, items.map((i) => ({ ...i, ref })), restricted, now, (item) => agendaDoc(app, item, by, now));
     return reconcile(db, snapshotDocs(snap), wanted, restricted, agendaOf(db, householdId));
 }
 /** Deletes one source record's items (the record was deleted). */
-export async function removeAgenda(db, householdId, app, ref, { restricted = false } = {}) {
-    forgetPublishedApp(db, householdId, 'agenda', app);
+export async function removeAgenda(db, householdId, app, ref, { restricted = false, published } = {}) {
+    forgetPublished(publishedStore(published), db, householdId, 'agenda', app);
     const snap = await getDocs(visible(db, householdId, restricted, where('app', '==', app), where('ref', '==', ref)));
     await commit(db, snap.docs.map((d) => (b) => b.delete(d.ref)), restricted);
     return snap.docs.length;
@@ -98,33 +98,25 @@ export async function removeAgenda(db, householdId, app, ref, { restricted = fal
 export async function syncAgenda(db, householdId, app, items, options) {
     const { by, restricted = false, now = Date.now() } = options;
     const wanted = wantedOf(app, items, restricted, now, (item) => agendaDoc(app, item, by, now));
-    const key = publishedKey(db, householdId, 'agenda', app, by);
-    const print = fingerprint(wanted, String(restricted));
-    if (alreadyPublished(key, print, now))
-        return { written: 0, deleted: 0, unchanged: wanted.size, skipped: true };
-    const snap = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
-    const result = await reconcile(db, snapshotDocs(snap), wanted, restricted, agendaOf(db, householdId));
-    rememberPublished(key, print, now);
-    return result;
+    return unlessPublished(publishedStore(options.published), publishedKey(db, householdId, 'agenda', app, by), fingerprint(wanted, String(restricted)), now, () => ({ written: 0, deleted: 0, unchanged: wanted.size, skipped: true }), async () => {
+        const snap = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
+        return reconcile(db, snapshotDocs(snap), wanted, restricted, agendaOf(db, householdId));
+    });
 }
 /**
  * Makes this app's items for named members exactly `items`, as `syncAgenda` does for the shared
  * agenda: the items whose audience includes `by` (the only ones this member may read or write).
  * Items whose audience leaves `by` out are skipped; another allowed member's device keeps them.
  */
-export async function syncPersonalAgenda(db, householdId, app, items, { by, now = Date.now() }) {
+export async function syncPersonalAgenda(db, householdId, app, items, { by, now = Date.now(), published }) {
     const me = by.trim().toLowerCase();
     const col = personalOf(db, householdId);
     const mine = items.filter((i) => inAudience(cleanAudience(i.audience), me));
     const wanted = wantedOf(app, mine, false, now, (item) => personalAgendaDoc(app, item, me, now));
-    const key = publishedKey(db, householdId, PERSONAL_AGENDA, app, me);
-    const print = fingerprint(wanted);
-    if (alreadyPublished(key, print, now))
-        return { written: 0, deleted: 0, unchanged: wanted.size, skipped: true };
-    const snap = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
-    const result = await reconcile(db, snapshotDocs(snap), wanted, false, col);
-    rememberPublished(key, print, now);
-    return result;
+    return unlessPublished(publishedStore(published), publishedKey(db, householdId, PERSONAL_AGENDA, app, me), fingerprint(wanted), now, () => ({ written: 0, deleted: 0, unchanged: wanted.size, skipped: true }), async () => {
+        const snap = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
+        return reconcile(db, snapshotDocs(snap), wanted, false, col);
+    });
 }
 /**
  * Follows the household's items overlapping `from`..`to` (and any overdue), soonest first; with

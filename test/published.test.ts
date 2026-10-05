@@ -1,11 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import type { Firestore } from 'firebase/firestore';
-import { alreadyPublished, fingerprint, FRESH_MS, forgetPublishedApp, publishedKey, rememberPublished, setPublishedStorage } from '../src/published';
+import { alreadyPublished, fingerprint, FRESH_MS, forgetPublished, publishedKey, rememberPublished, unlessPublished } from '../src/published';
+import { memoryNotes } from './published-notes';
 
-const memory = () => {
-  const m = new Map<string, string>();
-  return { m, getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k), key: (i: number) => [...m.keys()][i] ?? null, get length() { return m.size; } };
-};
 const db = { app: { options: { projectId: 'demo' }, name: '[DEFAULT]' } } as unknown as Firestore;
 
 describe('fingerprint', () => {
@@ -25,52 +22,46 @@ describe('fingerprint', () => {
 
 describe('the note', () => {
   test('stands for FRESH_MS, for the same print only', () => {
-    const store = memory();
-    setPublishedStorage(store);
-    try {
-      const key = publishedKey(db, 'h1', 'agenda', 'pet', 'Alex@Example.com');
-      expect(key).toBe('hh-published:demo:h1:agenda:pet:alex@example.com');
-      expect(alreadyPublished(key, 'p1', 1000)).toBe(false);
-      rememberPublished(key, 'p1', 1000);
-      expect(alreadyPublished(key, 'p1', 1000 + FRESH_MS - 1)).toBe(true);
-      expect(alreadyPublished(key, 'p2', 2000)).toBe(false);
-      expect(alreadyPublished(key, 'p1', 1000 + FRESH_MS)).toBe(false);
-      // A clock set back doesn't stretch it.
-      expect(alreadyPublished(key, 'p1', 999)).toBe(false);
-    } finally {
-      setPublishedStorage(undefined);
-    }
+    const store = memoryNotes();
+    const key = publishedKey(db, 'h1', 'agenda', 'pet', 'Alex@Example.com');
+    expect(key).toBe('hh-published:demo:h1:agenda:pet:alex@example.com');
+    expect(alreadyPublished(store, key, 'p1', 1000)).toBe(false);
+    rememberPublished(store, key, 'p1', 1000);
+    expect(alreadyPublished(store, key, 'p1', 1000 + FRESH_MS - 1)).toBe(true);
+    expect(alreadyPublished(store, key, 'p2', 2000)).toBe(false);
+    expect(alreadyPublished(store, key, 'p1', 1000 + FRESH_MS)).toBe(false);
+    // A clock set back doesn't stretch it.
+    expect(alreadyPublished(store, key, 'p1', 999)).toBe(false);
   });
 
-  test("a per-record write forgets every member's note for that app and list only", () => {
-    const store = memory();
-    setPublishedStorage(store);
-    try {
-      rememberPublished(publishedKey(db, 'h1', 'agenda', 'pet', 'a@example.com'), 'p', 1);
-      rememberPublished(publishedKey(db, 'h1', 'agenda', 'pet', 'b@example.com'), 'p', 1);
-      rememberPublished(publishedKey(db, 'h1', 'agenda', 'petx', 'a@example.com'), 'p', 1);
-      rememberPublished(publishedKey(db, 'h1', 'todos', 'pet', 'a@example.com'), 'p', 1);
-      forgetPublishedApp(db, 'h1', 'agenda', 'pet');
-      expect([...store.m.keys()].sort()).toEqual(['hh-published:demo:h1:agenda:petx:a@example.com', 'hh-published:demo:h1:todos:pet:a@example.com']);
-    } finally {
-      setPublishedStorage(undefined);
-    }
+  test('unlessPublished runs, then notes; the same print skips; a failed run leaves no note', async () => {
+    const store = memoryNotes();
+    let runs = 0;
+    const run = async () => ++runs;
+    expect(await unlessPublished(store, 'k', 'p', 1, () => -1, run)).toBe(1);
+    expect(await unlessPublished(store, 'k', 'p', 2, () => -1, run)).toBe(-1);
+    expect(await unlessPublished(store, 'k', 'q', 3, () => -1, run)).toBe(2);
+    await expect(unlessPublished(store, 'k2', 'p', 4, () => -1, async () => Promise.reject(new Error('offline')))).rejects.toThrow('offline');
+    expect(alreadyPublished(store, 'k2', 'p', 5)).toBe(false);
+  });
+
+  test("a per-record write forgets every member's note for that app and list, or the whole list", () => {
+    const store = memoryNotes();
+    rememberPublished(store, publishedKey(db, 'h1', 'agenda', 'pet', 'a@example.com'), 'p', 1);
+    rememberPublished(store, publishedKey(db, 'h1', 'agenda', 'pet', 'b@example.com'), 'p', 1);
+    rememberPublished(store, publishedKey(db, 'h1', 'agenda', 'petx', 'a@example.com'), 'p', 1);
+    rememberPublished(store, publishedKey(db, 'h1', 'todos', 'pet', 'a@example.com'), 'p', 1);
+    forgetPublished(store, db, 'h1', 'agenda', 'pet');
+    expect([...store.m.keys()].sort()).toEqual(['hh-published:demo:h1:agenda:petx:a@example.com', 'hh-published:demo:h1:todos:pet:a@example.com']);
+    forgetPublished(store, db, 'h1', 'agenda');
+    expect([...store.m.keys()]).toEqual(['hh-published:demo:h1:todos:pet:a@example.com']);
   });
 
   test('no storage, or a broken one, means always syncing', () => {
-    setPublishedStorage(null);
-    try {
-      rememberPublished('k', 'p', 1);
-      expect(alreadyPublished('k', 'p', 2)).toBe(false);
-    } finally {
-      setPublishedStorage(undefined);
-    }
-    setPublishedStorage({ getItem: () => '{not json', setItem: () => { throw new Error('full'); }, removeItem: () => {} });
-    try {
-      expect(alreadyPublished('k', 'p', 2)).toBe(false);
-      expect(() => rememberPublished('k', 'p', 1)).not.toThrow();
-    } finally {
-      setPublishedStorage(undefined);
-    }
+    rememberPublished(null, 'k', 'p', 1);
+    expect(alreadyPublished(null, 'k', 'p', 2)).toBe(false);
+    const broken = { ...memoryNotes(), getItem: () => '{not json', setItem: () => { throw new Error('full'); } };
+    expect(alreadyPublished(broken, 'k', 'p', 2)).toBe(false);
+    expect(() => rememberPublished(broken, 'k', 'p', 1)).not.toThrow();
   });
 });

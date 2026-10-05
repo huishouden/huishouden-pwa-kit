@@ -2,7 +2,7 @@ import { collection, doc, getDocs, onSnapshot, query, where, type Firestore, typ
 import { writeBatch } from './firestore.js';
 import { cleanAudience, inAudience } from './audience.js';
 import { agendaDoc, agendaId, agendaInRange, inAgendaWindow, personalAgendaDoc, toAgendaItem, PERSONAL_AGENDA, type AgendaInput, type AgendaItem, type AgendaRange, type PersonalAgendaInput } from './agenda-core.js';
-import { alreadyPublished, fingerprint, forgetPublishedApp, publishedKey, rememberPublished } from './published.js';
+import { fingerprint, forgetPublished, publishedKey, publishedStore, unlessPublished, type PublishedStorage } from './published.js';
 
 /**
  * The household's agenda over the Firebase SDK: publishing (`syncAgenda` and friends) and following
@@ -52,6 +52,8 @@ export interface AgendaWriteOptions {
    */
   restricted?: boolean;
   now?: number;
+  /** Where this device notes what it published (`./published`): `localStorage` by default, null for none. */
+  published?: PublishedStorage | null;
 }
 
 export interface AgendaWriteResult {
@@ -116,15 +118,21 @@ export async function replaceAgenda(
   options: AgendaWriteOptions,
 ): Promise<AgendaWriteResult> {
   const { by, restricted = false, now = Date.now() } = options;
-  forgetPublishedApp(db, householdId, 'agenda', app);
+  forgetPublished(publishedStore(options.published), db, householdId, 'agenda', app);
   const snap = await getDocs(visible(db, householdId, restricted, where('app', '==', app), where('ref', '==', ref)));
   const wanted = wantedOf(app, items.map((i) => ({ ...i, ref })), restricted, now, (item) => agendaDoc(app, item, by, now));
   return reconcile(db, snapshotDocs(snap), wanted, restricted, agendaOf(db, householdId));
 }
 
 /** Deletes one source record's items (the record was deleted). */
-export async function removeAgenda(db: Firestore, householdId: string, app: string, ref: string, { restricted = false }: { restricted?: boolean } = {}): Promise<number> {
-  forgetPublishedApp(db, householdId, 'agenda', app);
+export async function removeAgenda(
+  db: Firestore,
+  householdId: string,
+  app: string,
+  ref: string,
+  { restricted = false, published }: { restricted?: boolean; published?: PublishedStorage | null } = {},
+): Promise<number> {
+  forgetPublished(publishedStore(published), db, householdId, 'agenda', app);
   const snap = await getDocs(visible(db, householdId, restricted, where('app', '==', app), where('ref', '==', ref)));
   await commit(db, snap.docs.map((d) => (b: ReturnType<typeof writeBatch>) => b.delete(d.ref)), restricted);
   return snap.docs.length;
@@ -139,13 +147,17 @@ export async function removeAgenda(db: Firestore, householdId: string, app: stri
 export async function syncAgenda(db: Firestore, householdId: string, app: string, items: AgendaInput[], options: AgendaWriteOptions): Promise<AgendaWriteResult> {
   const { by, restricted = false, now = Date.now() } = options;
   const wanted = wantedOf(app, items, restricted, now, (item) => agendaDoc(app, item, by, now));
-  const key = publishedKey(db, householdId, 'agenda', app, by);
-  const print = fingerprint(wanted, String(restricted));
-  if (alreadyPublished(key, print, now)) return { written: 0, deleted: 0, unchanged: wanted.size, skipped: true };
-  const snap = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
-  const result = await reconcile(db, snapshotDocs(snap), wanted, restricted, agendaOf(db, householdId));
-  rememberPublished(key, print, now);
-  return result;
+  return unlessPublished(
+    publishedStore(options.published),
+    publishedKey(db, householdId, 'agenda', app, by),
+    fingerprint(wanted, String(restricted)),
+    now,
+    () => ({ written: 0, deleted: 0, unchanged: wanted.size, skipped: true }),
+    async () => {
+      const snap = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
+      return reconcile(db, snapshotDocs(snap), wanted, restricted, agendaOf(db, householdId));
+    },
+  );
 }
 
 /**
@@ -158,19 +170,23 @@ export async function syncPersonalAgenda(
   householdId: string,
   app: string,
   items: PersonalAgendaInput[],
-  { by, now = Date.now() }: Omit<AgendaWriteOptions, 'restricted'>,
+  { by, now = Date.now(), published }: Omit<AgendaWriteOptions, 'restricted'>,
 ): Promise<AgendaWriteResult> {
   const me = by.trim().toLowerCase();
   const col = personalOf(db, householdId);
   const mine = items.filter((i) => inAudience(cleanAudience(i.audience), me));
   const wanted = wantedOf(app, mine, false, now, (item) => personalAgendaDoc(app, item, me, now));
-  const key = publishedKey(db, householdId, PERSONAL_AGENDA, app, me);
-  const print = fingerprint(wanted);
-  if (alreadyPublished(key, print, now)) return { written: 0, deleted: 0, unchanged: wanted.size, skipped: true };
-  const snap = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
-  const result = await reconcile(db, snapshotDocs(snap), wanted, false, col);
-  rememberPublished(key, print, now);
-  return result;
+  return unlessPublished(
+    publishedStore(published),
+    publishedKey(db, householdId, PERSONAL_AGENDA, app, me),
+    fingerprint(wanted),
+    now,
+    () => ({ written: 0, deleted: 0, unchanged: wanted.size, skipped: true }),
+    async () => {
+      const snap = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
+      return reconcile(db, snapshotDocs(snap), wanted, false, col);
+    },
+  );
 }
 
 

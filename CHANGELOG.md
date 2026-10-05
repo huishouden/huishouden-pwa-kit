@@ -8,6 +8,9 @@ ones are described in their PR titles and tags.
 ### Features
 
 * an unchanged republish reads nothing; read budgets and a 60% alert ([508207d](https://github.com/huishouden/pwa-kit/commit/508207dd5f597f3068bc541ccca4fcf7cceec9a5))
+  * `syncAgenda`, `syncTodos`, `syncReminders` and their personal forms skip the Firestore read when this device synced the same items for the same household, app and member in the last 6 hours (`src/published.ts`; `published` in the write options picks the store, `localStorage` by default, null for none). Per-record writes (`replaceAgenda`, `removeAgenda`, `upsertReminder`, `cancelReminder(s)`, `replaceReminders`, `applyTodo`) forget the note first.
+  * `infra/read-alert.sh` (run by the bootstrap with `ALERT_EMAIL`): a Cloud Monitoring alert when billed reads pass 30,000 in 24 hours, 60% of the free plan's daily 50,000.
+  * docs/one-site.md "Budgets": Spark limits, what is billed as a read, a household's reads by source, Blaze's cost per household.
 
 ## 0.102.0 (2026-10-05)
 

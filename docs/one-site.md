@@ -204,9 +204,9 @@ is billed.
 ### A household's day
 
 The budget is **under 5,000 reads a day per active household**, so the free plan holds about ten
-(50,000 less the fixed costs below and a margin). A household here is four members, two with
-Google Calendar sync, one Spending alert inbox, a kitchen tablet showing the portal, and about
-fifteen app opens a day, two of them Spending.
+(50,000 less the fixed costs below and a margin). The sizing assumes a household (invented, round
+numbers) of four members, two with Google Calendar sync, one Spending alert inbox, a screen that
+shows the portal all day, and about fifteen app opens a day, two of them Spending.
 
 | Source | What it reads | Reads a day |
 |---|---|---|
@@ -214,9 +214,9 @@ fifteen app opens a day, two of them Spending.
 | Calendar Worker, syncs and feeds | per change: an aggregation per list, then only the documents changed since the cached copy; a full read when something was deleted or once a day | ~400 |
 | Calendar Worker, alert inbox | Gmail first (no Firestore read); cards, rules and settings every 12 hours (~125); the import's few days of transactions | ~300 |
 | Spending | per open after 30 minutes: this and last month's transactions (~250), rules, cards, settings; an older month when opened | ~800 |
-| Portal on the tablet | per wake after 30 minutes asleep: the agenda window, to-dos, contacts, members, settings (~130) | ~1,300 |
-| Other app opens | each app's own lists (10 to 60), and its agenda, to-dos and reminders only when they changed (`./published`) | ~600 |
-| **Household total** | | **~4,900** |
+| Portal on the always-on screen | per wake after 30 minutes asleep: a week of agenda (the Calendar tab: all of it), to-dos, contacts, members, settings (~75) | ~800 |
+| Other app opens | each app's own lists (10 to 60), and its agenda, to-dos and reminders only when they changed or this device's last sync of them is over 6 hours old (`./published`) | ~600 |
+| **Household total** | | **~4,400** |
 
 Fixed, once for the project: Notify's due-reminder queries, two every 5 minutes (`FIRESTORE_NOTIFY_READS`
 caps the rest), ~600 a day.
@@ -225,7 +225,7 @@ What keeps it there, and what to keep when changing an app:
 
 - **No full-history listeners.** A listener's whole result is billed again after every 30-minute
   gap, so a list that only grows (Spending's transactions) is followed by date window, and older
-  pages are read when shown.
+  months are read when shown; the portal follows a week of agenda except on its Calendar tab.
 - **Apps republish only what changed.** `syncAgenda`, `syncTodos`, `syncReminders` and their
   personal forms skip the read when this device published the same items in the last 6 hours
   (`src/published.ts`).
