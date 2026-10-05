@@ -48,7 +48,7 @@ export const TODO_COLLECTIONS = {
     groceries: [],
     home: ['homeTasks', 'homeServiceLog', 'homeEventPrep'],
     baby: ['babyChecklists', 'babyAppointments'],
-    pet: ['petReminders', 'petDoses', 'petMedDoses'],
+    pet: ['petReminders', 'petDoses', 'petMedDoses', 'petOutings'],
     car: ['carRenewals', 'carServiceItems', 'carServiceLog'],
     bills: ['bills'],
 };

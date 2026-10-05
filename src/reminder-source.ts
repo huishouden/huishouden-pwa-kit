@@ -73,6 +73,8 @@ export const REMINDER_SOURCES: Readonly<Record<string, Readonly<Record<string, S
     petMedCourses: { fields: [], roles: EVERYDAY },
     petMedDoses: { fields: [], roles: EVERYDAY },
     petMeals: { fields: [], roles: EVERYDAY },
+    petOutingPlans: { fields: ['on'], roles: EVERYDAY },
+    petOutings: { fields: [], roles: EVERYDAY },
     petProfiles: { fields: ['birthDate', 'birthDateApprox'], roles: EVERYDAY },
   },
   health: {

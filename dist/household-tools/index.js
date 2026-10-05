@@ -22,7 +22,7 @@ import { t } from './i18n.js';
 import { calendar, householdHome, households, today, todos } from './overview.js';
 import { groceriesAdd, groceriesCheck, groceriesList, tasksAdd, todoCancel, todoDone } from './lists.js';
 import { billsDue } from './money.js';
-import { petLogDose, petLogFeeding, petToday } from './pet.js';
+import { petLogDose, petLogFeeding, petLogOuting, petToday } from './pet.js';
 import { homeAddEvent, homeUpkeepDue } from './home.js';
 import { addAppointment, contactsAdd, contactsSearch } from './people.js';
 import { healthAppointments } from './health-visits.js';
@@ -45,6 +45,7 @@ export const TOOLS = [
     petToday,
     petLogFeeding,
     petLogDose,
+    petLogOuting,
     homeUpkeepDue,
     homeAddEvent,
     addAppointment,
