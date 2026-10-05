@@ -110,8 +110,7 @@ Policy **Huishouden**, emailed through the workflow **Huishouden alerts** (desti
 | Notify run crashed | A notify run threw (`NotifyRun.error`) |
 | Push deliveries failing | More than 5 Web Push deliveries failed in an hour |
 
-CI failures on `main` are emailed by GitHub to whoever pushed; `huishouden/.github` also opens a
-weekly digest issue listing failed `main` runs across the org (only when there were any).
+CI failures on `main` are emailed by GitHub to whoever pushed.
 
 ## Dashboard
 
@@ -135,8 +134,8 @@ every production deploy (pwa-site assemble) ──► /hh-observability.json on 
 each app (startObservability) reads its path's entry at start
 ```
 
-The workflow runs when `apps.json` changes on `main`, weekly (repairs drift: a monitor edited or
-deleted by hand), and on demand. It:
+The workflow runs when `apps.json` changes on `main` and on demand; a monitor edited or deleted by
+hand is repaired by a manual run. It:
 
 1. Creates or updates, by name: a Browser app per app (`Huishouden Baby`, …), a ping monitor per
    app at its path on the suite's site (`https://<site>.web.app/<app>/`), the alert policy,
