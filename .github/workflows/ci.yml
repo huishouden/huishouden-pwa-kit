@@ -32,12 +32,54 @@ jobs:
       - run: bun run lint
       - run: bun run test
       - run: bun run build
-      # Apps install this package straight from git, so the compiled output is committed.
-      - name: dist is up to date
-        run: git diff --exit-code -- dist
       - name: Workflows and hooks parse
         run: |
           bash -n templates/githooks/pre-commit infra/bootstrap.sh actions/license-check/check.sh
           for f in .github/workflows/*.yml actions/*/action.yml; do python3 -c "import sys,yaml; yaml.safe_load(open(sys.argv[1]))" "$f"; done
       - name: No browser against production in the kit's workflows (docs/one-site.md "Bandwidth")
         run: bun scripts/bandwidth-check.ts .github/workflows
+
+  # Versions are CI's, never a commit (STANDARD.md "Versions"): on main, the next semver from the
+  # Conventional Commit titles since the last v* tag, an annotated tag, and a GitHub release with
+  # generated notes and the package tarball (built here, not committed) that apps install by URL.
+  # package.json stays 0.0.0; the tarball is packed with the release's version.
+  release:
+    needs: [leak-scan, build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - name: Tag, pack and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --tags --force -q
+          tag=$(python3 scripts/next-version.py | sed -n 's/^tag=//p')
+          if [ -n "$tag" ]; then
+            if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then echo "$tag is already tagged"; else
+              git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" tag -a "$tag" -m "$tag" "$GITHUB_SHA"
+              git push origin "$tag"
+            fi
+          else
+            echo "nothing to release: only chore, docs, test or ci commits since the last tag"
+          fi
+          # The newest tag has its release (a cancelled run's tag is finished here).
+          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -z "$last" ] || gh release view "$last" >/dev/null 2>&1; then exit 0; fi
+          prev=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | sed -n 2p)
+          v=${last#v}
+          git checkout -q "$last"
+          bun install --frozen-lockfile
+          jq --arg v "$v" '.version = $v' package.json > "$RUNNER_TEMP/package.json" && cp "$RUNNER_TEMP/package.json" package.json
+          bun run build
+          bun pm pack --filename "pwa-kit-$v.tgz" --quiet
+          gh release create "$last" "pwa-kit-$v.tgz" --verify-tag --title "$last" --generate-notes ${prev:+--notes-start-tag "$prev"}

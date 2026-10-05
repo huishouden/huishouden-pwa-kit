@@ -1,6 +1,5 @@
-# Retired (pwa-kit 0.91.0): release-please no longer runs. The PR's author bumps package.json and
-# adds the CHANGELOG.md section (`hh dev release`); pwa.yml's deploy tags the version and publishes
-# the release (STANDARD.md "Versions"). Kept so callers that still list `release:` don't fail;
+# Retired (pwa-kit 0.91.0): release-please no longer runs. pwa.yml's `release` job tags and releases
+# on merge to main from the commit titles (STANDARD.md "Versions"). Kept so callers that still list `release:` don't fail;
 # remove the job from the caller's ci.yml.
 name: release
 

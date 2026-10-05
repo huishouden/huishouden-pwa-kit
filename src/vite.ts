@@ -439,12 +439,12 @@ export const FIREBASE_RESERVED_PATHS = [/^\/__\//];
 export const SITE_PAGE_PATH = /\/index\.site\.html$/;
 
 /**
- * Stamps the build with `import.meta.env.VITE_APP_VERSION` (package.json version, set by the release
- * process) and `VITE_BUILD_SHA` (short commit, from CI's GITHUB_SHA), so a running app can say exactly
+ * Stamps the build with `import.meta.env.VITE_APP_VERSION` (the release tag CI computed, from the
+ * environment; else package.json's version, 0.0.0 in a repo CI versions by tag) and `VITE_BUILD_SHA` (short commit, from CI's GITHUB_SHA), so a running app can say exactly
  * what it is. Apps show them in their account menu or settings.
  */
 export function buildStamp() {
-  let version = process.env.npm_package_version;
+  let version = process.env.VITE_APP_VERSION || process.env.npm_package_version;
   if (!version) {
     try {
       version = JSON.parse(readFileSync('package.json', 'utf8')).version;

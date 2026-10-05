@@ -1,8 +1,8 @@
 name: ci
 
 # main only: pull requests run no hosted CI; their author verifies them (pwa-kit STANDARD.md
-# "Pull requests"). Each push to main builds, tests, deploys, smoke-checks over HTTP and tags the
-# package.json version.
+# "Pull requests"). Each push to main builds, tests, tags and releases the version (from the commit
+# titles; nothing is committed), deploys and smoke-checks over HTTP.
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
   pwa:
     uses: huishouden/pwa-kit/.github/workflows/pwa.yml@v0
     permissions:
-      contents: write # the hosting release asset, the version's tag and release
+      contents: write # the version's tag and release, the hosting release asset
       id-token: write
     with:
       base: /APP_PATH/ # the app's path on the suite's one site (docs/one-site.md)
