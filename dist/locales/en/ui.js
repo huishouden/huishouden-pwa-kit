@@ -31,4 +31,8 @@ export default {
     'ui.allDone': 'All done',
     'ui.showDone': 'Show {count} done',
     'ui.hideDone': 'Hide',
+    'ui.doneByYou': 'Done by you',
+    'ui.doneByYouAt': 'Done by you · {at}',
+    'ui.skippedByYou': 'Skipped by you',
+    'ui.skippedByYouAt': 'Skipped by you · {at}',
 };

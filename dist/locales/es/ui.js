@@ -31,4 +31,8 @@ export default {
     'ui.allDone': 'Todo hecho',
     'ui.showDone': '{count, plural, one {Ver # hecho} other {Ver # hechos}}',
     'ui.hideDone': 'Ocultar',
+    'ui.doneByYou': 'Hecho por ti',
+    'ui.doneByYouAt': 'Hecho por ti · {at}',
+    'ui.skippedByYou': 'Omitido por ti',
+    'ui.skippedByYouAt': 'Omitido por ti · {at}',
 };

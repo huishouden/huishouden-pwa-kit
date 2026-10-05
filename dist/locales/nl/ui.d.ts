@@ -31,5 +31,9 @@ declare const _default: {
     'ui.allDone': string;
     'ui.showDone': string;
     'ui.hideDone': string;
+    'ui.doneByYou': string;
+    'ui.doneByYouAt': string;
+    'ui.skippedByYou': string;
+    'ui.skippedByYouAt': string;
 };
 export default _default;
