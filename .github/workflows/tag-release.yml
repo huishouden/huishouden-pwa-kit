@@ -1,0 +1,105 @@
+# Tags and releases a repo that has no build to ship with the version (the Workers, the rules).
+# Reusable: call it after the repo's tests, before its deploy.
+#
+#   release:
+#     needs: [leak-scan, test]
+#     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+#     uses: huishouden/pwa-kit/.github/workflows/tag-release.yml@vX.Y.Z
+#     permissions: { contents: write }
+#
+# On main it computes the next semver from the Conventional Commit titles since the last v* tag
+# (feat minor, fix/perf/refactor patch, `!` or BREAKING CHANGE: major; chore, docs, test, ci, build
+# and style alone release nothing), creates the annotated tag and a GitHub release with generated
+# notes. Nothing is committed (STANDARD.md "Versions"). It runs no code from the repo but the
+# commit's own git history.
+name: tag-release
+
+on:
+  workflow_call:
+    outputs:
+      tag:
+        description: The version tag of this commit (new, or the latest), empty when the repo has none yet
+        value: ${{ jobs.release.outputs.tag }}
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.repository }}
+      cancel-in-progress: false
+    outputs:
+      tag: ${{ steps.next.outputs.label }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Next version, from the commit titles since the last tag
+        id: next
+        run: |
+          git fetch --tags --force -q
+          python3 - <<'PY' > "$RUNNER_TEMP/next.txt"
+          # next-version:begin
+          import re, subprocess
+          def git(*a):
+              return subprocess.run(['git', *a], capture_output=True, text=True, check=True).stdout
+          tags = [t for t in git('tag', '--list', 'v[0-9]*.[0-9]*.[0-9]*').split() if re.fullmatch(r'v\d+\.\d+\.\d+', t)]
+          tags.sort(key=lambda t: tuple(int(x) for x in t[1:].split('.')))
+          last = tags[-1] if tags else ''
+          raw = git('log', '--no-merges', '--format=%s%x1f%b%x1e', f'{last}..HEAD' if last else 'HEAD')
+          level = None
+          for rec in raw.split('\x1e'):
+              rec = rec.strip()
+              if not rec:
+                  continue
+              subject, _, body = rec.partition('\x1f')
+              m = re.match(r'^(\w+)(?:\([^)]*\))?(!)?:\s*\S', subject)
+              kind = m.group(1).lower() if m else ''
+              if (m and m.group(2)) or re.search(r'^BREAKING[ -]CHANGE:', body, re.M):
+                  level = 'major'
+              elif kind == 'feat' and level != 'major':
+                  level = 'minor'
+              elif kind in ('fix', 'perf', 'refactor') and level is None:
+                  level = 'patch'
+          nxt = ''
+          if level:
+              major, minor, patch = (int(x) for x in (last[1:] if last else '1.0.0').split('.'))
+              if not last:
+                  nxt = 'v1.0.0'
+              else:
+                  if level == 'major' and major == 0:
+                      level = 'minor'
+                  nxt = 'v' + {'major': f'{major + 1}.0.0', 'minor': f'{major}.{minor + 1}.0', 'patch': f'{major}.{minor}.{patch + 1}'}[level]
+          print(f'tag={nxt}')
+          print(f'prev={last}')
+          print(f'label={nxt or last or "v0.0.0"}')
+          # next-version:end
+          PY
+          cat "$RUNNER_TEMP/next.txt" | tee -a "$GITHUB_OUTPUT"
+      - name: Tag it and create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.next.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "$TAG" ]; then
+            if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              if [ "$(git rev-list -n 1 "$TAG")" != "$GITHUB_SHA" ]; then echo "::error title=$TAG is another commit's::$TAG already points to $(git rev-list -n 1 "$TAG"), not $GITHUB_SHA; rerun this workflow"; exit 1; fi
+              echo "$TAG is already tagged"
+            else
+              git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+              git push origin "$TAG"
+            fi
+          else
+            echo "nothing to release: only chore, docs, test or ci commits since the last tag"
+          fi
+          # The newest tag has its release (a cancelled run's tag is finished here).
+          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -n "$last" ] && ! gh release view "$last" >/dev/null 2>&1; then
+            prev=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | sed -n 2p)
+            gh release create "$last" --verify-tag --title "$last" --generate-notes ${prev:+--notes-start-tag "$prev"}
+          fi
