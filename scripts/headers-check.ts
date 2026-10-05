@@ -1,16 +1,26 @@
 #!/usr/bin/env bun
 // Usage: pwa-headers-check [firebase.json]. Exit 1 when the site's own pages lack the security
-// headers (STANDARD.md "Security headers") or a Firebase /__/ path would be frame-denied.
-import { readFileSync } from 'node:fs';
+// headers (STANDARD.md "Security headers") or a Firebase /__/ path would be frame-denied. A repo
+// that serves no pages (a Worker such as huishouden/notify: no firebase.json, or one without
+// `hosting`) has nothing to check.
+import { existsSync, readFileSync } from 'node:fs';
 import { APP_PATHS_REGEX, checkSecurityHeaders } from '../src/security-headers';
 
 const file = process.argv[2] ?? 'firebase.json';
+if (!process.argv[2] && !existsSync(file)) {
+  console.log('headers check: no firebase.json, so no pages to check');
+  process.exit(0);
+}
 let config: unknown;
 try {
   config = JSON.parse(readFileSync(file, 'utf8'));
 } catch (e) {
   console.log(`headers check: can't read ${file}: ${(e as Error).message}`);
   process.exit(2);
+}
+if (!(config as { hosting?: unknown })?.hosting) {
+  console.log(`headers check: ${file} has no hosting, so no pages to check`);
+  process.exit(0);
 }
 const problems = checkSecurityHeaders(config);
 if (problems.length) {
