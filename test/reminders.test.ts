@@ -184,6 +184,13 @@ describe('a source', () => {
     expect(reminderDoc(input({ checks: [{ doc: 'items/a', due: [{ field: 'name', in: ['x'] }] }] }), 'alex@example.com', NOW).source).toBeUndefined();
   });
 
+  test("a Health source stays only on a personal reminder, which only its audience reads", () => {
+    const dose = { checks: [{ doc: 'healthPeople/p1/doses/d1', absent: true as const }] };
+    const r = { app: 'health', title: 'Medicine', at: at(15, 9), url: 'https://health.example.com/', recipients: ['alex@example.com'], source: dose };
+    expect(reminderDoc(r, 'alex@example.com', NOW).source).toBeUndefined();
+    expect(personalReminderDoc({ ...r, audience: ['alex@example.com'] }, 'alex@example.com', NOW).source).toEqual(dose);
+  });
+
   test('syncReminders rewrites a reminder whose source changed, and only then', async () => {
     store.clear();
     expect(await syncReminders(db, 'h1', 'tasks', [input(undefined as never)].map(({ source: _s, ...r }) => r), 'alex@example.com', NOW)).toEqual({ written: 1, deleted: 0, unchanged: 0 });

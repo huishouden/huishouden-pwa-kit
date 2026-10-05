@@ -147,11 +147,14 @@ export function readSource(app: string, value: unknown): ReminderSource | null {
 /**
  * `source` as `reminderDoc` writes it, or undefined for none or for one the sender would refuse:
  * left off, the reminder still goes out (as one without a source) rather than failing the app's
- * sync. `readSource(app, source) === null` tells a caller it was refused.
+ * sync. A source naming records only some people may read (Health's) is kept only on a personal
+ * reminder (`personal`), which only its audience reads.
  */
-export function cleanSource(app: string, source: ReminderSource | undefined | null): ReminderSource | undefined {
+export function cleanSource(app: string, source: ReminderSource | undefined | null, { personal = false }: { personal?: boolean } = {}): ReminderSource | undefined {
   if (source === undefined || source === null) return undefined;
-  return readSource(app, source) ?? undefined;
+  const read = readSource(app, source);
+  if (!read || (!personal && read.checks.some((c) => sourceCollection(app, c.doc)?.readers))) return undefined;
+  return read;
 }
 
 /** The person document a Health record belongs to (`healthPeople/p1`), whose `readers` decide who may check it. */
