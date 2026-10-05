@@ -32,18 +32,16 @@ import {
 import {
   decode,
   encode,
-  hasTag,
-  shows,
   type Json,
   pendingEntries,
   remember,
-  sameJson,
   TAG,
   Unencodable,
   type Op,
   type OutboxEntry,
   type StorageLike,
 } from './outbox-codec.js';
+import { opsToRepeat } from './outbox-plan.js';
 import type { Op as StoreOp } from './store.js';
 
 /**
@@ -352,22 +350,15 @@ async function replayNow(box: Outbox, uid: string): Promise<boolean> {
 }
 
 /**
- * The note's writes that aren't done, queued or overtaken, judged one document at a time against the
- * freshest view of it this device can get:
+ * The note's writes that aren't done, queued or overtaken (`opsToRepeat`), judged one document at a
+ * time against the freshest view of it this device can get:
  * - Firestore's own queue still holds a write to it (the persistent cache, kept across the reload):
  *   the local cache, which shows that queue, since the queue will send it anyway.
  * - Otherwise the server's copy, so a replay is judged against what other members wrote since and
  *   not a stale cache (or, with a memory cache, no cache at all). Out of reach (offline) or
  *   refused, the local cache, as before; an update to a document neither has seen waits (null).
- *
- * A document whose `updatedAt` is at or after the note was changed since, by someone or something
- * newer: repeating a set, update or delete would undo that, so none of the note's writes to it are.
- * A set or merge whose data the document already shows landed before the page closed (only the
- * forgetting was cut short). Several writes to one document are judged together: a field a later
- * write in the note sets again is judged by that later write, and once one write to the document is
- * needed, it and every later one to it are repeated in order, so the document never ends at an
- * earlier write's value. A document that is missing gets the note's sets and deletes, and its
- * updates only after a set in the note creates it.
+ *   Offline with no copy at all, a set or delete is written unchecked, as Firestore's own queue
+ *   would: a feed logged offline must still show after an offline reload.
  */
 async function stillNeeded(db: Firestore, entry: OutboxEntry, replayed: ReadonlySet<string> = new Set()): Promise<Op[] | null> {
   const keep = new Set<Op>();
@@ -376,10 +367,7 @@ async function stillNeeded(db: Firestore, entry: OutboxEntry, replayed: Readonly
     const view = await currentDoc(db, path, replayed, ops.some((op) => op.kind === 'update'));
     if (view === 'wait') return null;
     if (view === 'refused') continue;
-    const { snap, queued } = view;
-    const exists = !!snap?.exists();
-    const data = exists ? snap!.data() : undefined;
-    if (data && typeof data.updatedAt === 'number' && data.updatedAt >= entry.at) continue;
+    const data = view.snap?.exists() ? view.snap.data() : undefined;
     let cached: Json | null = null;
     if (data) {
       try {
@@ -388,18 +376,8 @@ async function stillNeeded(db: Firestore, entry: OutboxEntry, replayed: Readonly
         cached = null;
       }
     }
-    let from = -1;
-    for (let i = 0; i < ops.length && from < 0; i++) if (needed(ops[i], ops.slice(i + 1), exists, cached, queued)) from = i;
-    if (from < 0) continue;
-    let created = exists;
-    for (const op of ops.slice(from)) {
-      // An increment Firestore's own queue still holds is left to it: repeated, it would count twice.
-      if (queued && op.kind !== 'delete' && hasTag(op.data, 'increment')) continue;
-      if (op.kind === 'delete') created = false;
-      else if (op.kind === 'set') created = true;
-      else if (!created) continue; // An update to a missing document would fail the whole batch.
-      keep.add(op);
-    }
+    const updatedAt = typeof data?.updatedAt === 'number' ? data.updatedAt : undefined;
+    for (const op of opsToRepeat(ops, { exists: !!data, data: cached, updatedAt, queued: view.queued }, entry.at)) keep.add(op);
   }
   return entry.ops.filter((op) => keep.has(op));
 }
@@ -422,41 +400,6 @@ async function currentDoc(db: Firestore, path: string, replayed: ReadonlySet<str
   if (cached) return { snap: cached, queued: false };
   if (!hasUpdate) return { snap: null, queued: false };
   return asked === 'refused' ? 'refused' : 'wait';
-}
-
-/** Whether `op` is still needed, with `later` (the note's later writes to the same document) judged on their own. */
-function needed(op: Op, later: readonly Op[], exists: boolean, cached: Json | null, queued: boolean): boolean {
-  if (later.some((l) => l.kind === 'delete' || (l.kind === 'set' && !l.merge && !l.mergeFields))) return false;
-  if (op.kind === 'delete') return exists;
-  if (!exists) return op.kind === 'set';
-  if (cached === null) return true;
-  if (queued && hasTag(op.data, 'increment')) return false;
-  const update = op.kind === 'update';
-  const replace = op.kind === 'set' && !op.merge && !op.mergeFields;
-  if (replace && !later.length) return !sameJson(cached, op.data);
-  // Fields a later write sets again are that write's to judge.
-  const own = withoutOverwritten(op.data, later, update);
-  if (own === null) return true;
-  // Every field already as the note sets it: landed or queued. Anything else is written again (a
-  // plain value, arrayUnion, arrayRemove or deleteField twice is harmless).
-  return !shows(cached, own, update);
-}
-
-function withoutOverwritten(data: Json, later: readonly Op[], update: boolean): Json | null {
-  if (data === null || typeof data !== 'object' || Array.isArray(data)) return null;
-  const out: { [key: string]: Json } = {};
-  for (const [key, value] of Object.entries(data)) {
-    const overwritten = later.some((l) => {
-      if (l.kind === 'delete' || l.data === null || typeof l.data !== 'object' || Array.isArray(l.data)) return false;
-      if (!(key in l.data)) return false;
-      if (l.kind === 'update' || update) return true;
-      // A later merge's map merges into this one's rather than replacing it.
-      const v = l.data[key];
-      return !(v !== null && typeof v === 'object' && !Array.isArray(v) && typeof v[TAG] !== 'string');
-    });
-    if (!overwritten) out[key] = value;
-  }
-  return out;
 }
 
 type RawBatch = ReturnType<typeof fsWriteBatch>;
