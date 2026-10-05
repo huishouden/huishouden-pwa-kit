@@ -13,5 +13,8 @@ declare const _default: {
     'feedback.windowFailed': string;
     'feedback.windowWaiting': string;
     'feedback.windowShow': string;
+    'feedback.windowBlockedHere': string;
+    'feedback.windowContinueHere': string;
+    'feedback.windowWaitingHere': string;
 };
 export default _default;

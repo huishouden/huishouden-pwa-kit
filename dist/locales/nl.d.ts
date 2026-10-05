@@ -254,6 +254,9 @@ declare const _default: {
     'feedback.windowFailed': string;
     'feedback.windowWaiting': string;
     'feedback.windowShow': string;
+    'feedback.windowBlockedHere': string;
+    'feedback.windowContinueHere': string;
+    'feedback.windowWaitingHere': string;
     'dose.amount': string;
     'dose.timeOfDay': string;
     'dose.assumeMonths': string;

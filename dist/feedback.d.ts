@@ -25,8 +25,11 @@ export declare function accessDenied(e: unknown): boolean;
 export declare function googleAccessMessage(e: unknown, service?: string): string | null;
 /**
  * Words for a failed `googleAuthCode` (connecting Google Calendar, an alert inbox) or any wait on
- * Google's window, so no failure is silent: blocked, closed before finishing, refused, or stopped
+ * Google's window, so no failure is silent (`continueHere`: the page offers "Continue in this tab",
+ * `GoogleWindowWait`, and the blocked message points to it): blocked, closed before finishing, refused, or stopped
  * for another reason (reported, `./observability`). Null only when the error is not about
  * Google's window or permission, so the caller words it (a server's answer, being offline).
  */
-export declare function googleWindowMessage(e: unknown, service?: string): string | null;
+export declare function googleWindowMessage(e: unknown, service?: string, { continueHere }?: {
+    continueHere?: boolean;
+}): string | null;

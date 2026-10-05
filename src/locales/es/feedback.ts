@@ -16,4 +16,7 @@ export default {
   'feedback.windowFailed': 'La ventana de Google se detuvo antes de terminar. Inténtalo de nuevo.',
   'feedback.windowWaiting': 'Esperando la ventana de Google. ¿No la ves? Puede estar detrás de esta ventana.',
   'feedback.windowShow': 'Mostrar la ventana de Google',
+  'feedback.windowBlockedHere': 'Tu navegador bloqueó la ventana de Google. Permite las ventanas emergentes para este sitio o usa Continuar en esta pestaña.',
+  'feedback.windowContinueHere': 'Continuar en esta pestaña',
+  'feedback.windowWaitingHere': 'Esperando la ventana de Google. ¿No la ves? Puede estar detrás de esta ventana, o continúa en esta pestaña.',
 } satisfies CatalogueOf<typeof en>;
