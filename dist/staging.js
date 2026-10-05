@@ -53,6 +53,14 @@ export function testRunId(env = processEnv()) {
         throw new Error(`HH_STAGING_RUN "${id}" must start with e2e- and use only a-z, 0-9 and -`);
     return id;
 }
+/**
+ * A run from a laptop (`pwa-staging run`): `e2e-local-<who>-<time>`, unique per run, so two people's
+ * (or one person's two) runs never share a household, and the sweep knows it by its `e2e-` prefix.
+ */
+export function localRunId(who, now = Date.now()) {
+    const slug = who.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 12) || 'dev';
+    return `e2e-local-${slug}-${now.toString(36)}`;
+}
 /** The kit's jobs' run id: `e2e-<repo>-<run id>-<attempt>`. */
 export function ciRunId(repository, runId, attempt) {
     const repo = repository.split('/').pop().toLowerCase().replace(/[^a-z0-9]+/g, '-');

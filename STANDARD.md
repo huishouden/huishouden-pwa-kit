@@ -479,6 +479,11 @@ nothing deployed or tested there can read or write real household data.
   set in Health by the spec (the helper, say), like any app data. A nightly run of the portal
   (`staging-sweep`) removes what a cancelled run left once it is a day old. Nothing outlives its run,
   so a test may count on an empty household.
+- **From your own machine**: `bunx pwa-staging run -- bun run e2e:signed-in` (with `BASE_URL` set to
+  the staging site under test) runs the same specs against staging outside CI: a run id of its own
+  (`e2e-local-<you>-<time>`), the staging service account's token through `gcloud` impersonation
+  (Service Account Token Creator on it; or `HH_STAGING_ACCESS_TOKEN`), the quota check, the
+  command, then the cleanup. Nothing in the specs or the kit depends on CI.
 - **Signing in**: `hh.signIn(page, 'helper')` (or `signInTestUser(page, { as, household })`) mints a
   custom token with the staging deploy account (IAM `signJwt`, keyless), runs `signInWithCustomToken`
   on the site's own origin and opens the app signed in. It throws if the build's or the site's

@@ -79,6 +79,15 @@ export function testRunId(env: Env = processEnv()): string {
   return id;
 }
 
+/**
+ * A run from a laptop (`pwa-staging run`): `e2e-local-<who>-<time>`, unique per run, so two people's
+ * (or one person's two) runs never share a household, and the sweep knows it by its `e2e-` prefix.
+ */
+export function localRunId(who: string, now = Date.now()): string {
+  const slug = who.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 12) || 'dev';
+  return `e2e-local-${slug}-${now.toString(36)}`;
+}
+
 /** The kit's jobs' run id: `e2e-<repo>-<run id>-<attempt>`. */
 export function ciRunId(repository: string, runId: string | number, attempt: string | number): string {
   const repo = repository.split('/').pop()!.toLowerCase().replace(/[^a-z0-9]+/g, '-');
