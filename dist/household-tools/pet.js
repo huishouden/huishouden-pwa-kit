@@ -398,7 +398,7 @@ export const petLogDose = defineTool({
 export const petLogOuting = defineTool({
     name: 'pet_log_outing',
     title: 'Log a pet outing',
-    description: "Records a bathroom break (or a walk), as this person, for a pet whose outings Huishouden Pet tracks: whether it pooped (it peed unless `pee: false`). Without `slot` it ticks today's scheduled outing closest to the time (one due within 90 minutes or already passed), else logs an extra outing. A walk without bathroom details: `walk_minutes` alone. A slot already logged today is not logged twice.",
+    description: "Records a bathroom break (or a walk), as this person, for a pet whose outings Huishouden Pet tracks: whether it pooped (it peed unless `pee: false`). Without `slot` it ticks today's scheduled outing closest to the time (one due within 90 minutes or already passed), else logs an extra outing. A walk without bathroom details: `walk_minutes` alone. A slot already logged today is not logged twice. Anyone in the household may log one, kids too.",
     kind: 'write',
     input: {
         ...common,
