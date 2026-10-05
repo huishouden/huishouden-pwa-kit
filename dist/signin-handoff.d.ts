@@ -21,6 +21,25 @@
  *
  * A stolen code is useless without the browser's cookie, and the refresh token never travels in a
  * URL.
+ *
+ * The `hh` command line signs in the same way with no cookie to bind to, so it binds to a proof key
+ * instead (PKCE, RFC 7636, as native OAuth apps do):
+ *
+ * 1. `hh login` listens on 127.0.0.1 (or [::1]) on a random port, makes a random `state` and a
+ *    random verifier, and opens `cliConnectUrl(site, { redirect, state, codeChallenge })`:
+ *    `/connect?service=hh&redirect=http://127.0.0.1:<port>/callback&state=…&code_challenge=…`.
+ * 2. The portal accepts only that exact loopback shape (`isLoopbackRedirect`: an IP literal, a port
+ *    from 1024 to 65535, the path `/callback`, nothing else; never `localhost`, which a hosts file or
+ *    DNS can point anywhere), signs the person in, says "Sign in to the hh command-line tool on this
+ *    computer", and on Allow posts a `CliHandoffRequest` to the connector's `CLI_HANDOFF_PATH`. The
+ *    connector checks the refresh token and keeps it for two minutes under a one-time code, sealed
+ *    with a key only the code derives and bound to the state, the challenge and the redirect.
+ * 3. The browser goes to `${redirect}?state=…&code=…` (no token in it). `hh` checks the state and
+ *    posts the code with the verifier to `CLI_TOKEN_PATH`, which hands the refresh token over once
+ *    (`takeCliHandoff`): a replayed, expired or mismatched code gets nothing, and the first attempt
+ *    uses it up either way. Workers KV has no atomic take: two requests racing within the same moment
+ *    could both read the code before the delete lands. Both would still need the PKCE verifier,
+ *    which never leaves the `hh` process, so the race gives nothing to anyone else.
  */
 /** The portal page that hands a signed-in person over to a service. */
 export declare const CONNECT_PATH = "/connect";
@@ -36,8 +55,38 @@ export interface ConnectParams {
     /** Where the service sends what it gets, shown on the confirmation: "claude.ai". */
     redirectHost?: string;
     /** What the service is, for the page's wording. */
-    purpose?: 'assistant' | 'calendar';
+    purpose?: 'assistant' | 'calendar' | 'cli';
+    /** The command line's loopback address (`service` is `hh`): where the browser goes with the code. */
+    redirect?: string;
+    /** The command line's PKCE challenge (S256), which its token request must answer. */
+    codeChallenge?: string;
 }
+/** `service` on `/connect` for the `hh` command line. */
+export declare const CLI_SERVICE = "hh";
+/** On the connector: the portal posts a `CliHandoffRequest` here and gets `{ code }`. */
+export declare const CLI_HANDOFF_PATH = "/cli/hand-off";
+/** On the connector: `hh` posts `{ code, state, code_verifier, redirect_uri }` here for the sign-in. */
+export declare const CLI_TOKEN_PATH = "/cli/token";
+/** How long a command-line hand-off waits for `hh` to collect it. */
+export declare const CLI_HANDOFF_TTL_SECONDS = 120;
+/**
+ * Whether `redirect` is exactly `http://127.0.0.1:<port>/callback` or `http://[::1]:<port>/callback`
+ * with a port from 1024 to 65535: the only places the portal sends a command-line sign-in. No
+ * `localhost` (a name anything can resolve), no other host, path, query, fragment or user part.
+ */
+export declare function isLoopbackRedirect(redirect: string): boolean;
+/** A PKCE verifier as RFC 7636 allows: 43 to 128 unreserved characters. */
+export declare const isPkceVerifier: (v: unknown) => v is string;
+/** A PKCE S256 challenge: the base64url SHA-256 of a verifier, 43 characters. */
+export declare const isPkceChallenge: (v: unknown) => v is string;
+/** The S256 challenge for `verifier`. */
+export declare function pkceChallenge(verifier: string): Promise<string>;
+/** The portal's `/connect` URL for a command-line sign-in. */
+export declare function cliConnectUrl(site: string, params: {
+    redirect: string;
+    state: string;
+    codeChallenge: string;
+}): string;
 /** The portal's `/connect` URL for a sign-in. */
 export declare function connectUrl(site: string, params: ConnectParams): string;
 /** The parameters on the portal's `/connect` page, or null when they don't make a sign-in. */
@@ -51,6 +100,12 @@ export interface HandoffRequest {
     timeZone?: string;
 }
 export declare function isHandoffRequest(v: unknown): v is HandoffRequest;
+/** What the portal posts to the connector's `CLI_HANDOFF_PATH` for `hh login`. */
+export interface CliHandoffRequest extends HandoffRequest {
+    codeChallenge: string;
+    redirect: string;
+}
+export declare function isCliHandoffRequest(v: unknown): v is CliHandoffRequest;
 /** The few KV calls the hand-off needs (a Workers KV namespace has them). */
 export interface HandoffStore {
     get(key: string): Promise<string | null>;
@@ -70,3 +125,36 @@ export declare function storeHandoff<T extends {
 export declare function takeHandoff<T extends {
     state: string;
 }>(store: HandoffStore, code: string, state: string): Promise<T | null>;
+/** A command-line hand-off as the connector keeps it: who signed in, and what the code is bound to. */
+export interface CliHandoff extends CliHandoffRequest {
+    uid: string;
+    email: string;
+    /** Milliseconds since the epoch; KV's own expiry is coarser (60 s minimum, eventually consistent). */
+    expiresAt: number;
+}
+/** Keeps a checked command-line hand-off for `CLI_HANDOFF_TTL_SECONDS` under a new one-time code. */
+export declare function storeCliHandoff(store: HandoffStore, request: CliHandoffRequest, who: {
+    uid: string;
+    email: string;
+}, now?: number): Promise<string>;
+/** What `hh` posts to `CLI_TOKEN_PATH`. */
+export interface CliTokenRequest {
+    code: string;
+    state: string;
+    code_verifier: string;
+    redirect_uri: string;
+}
+export type CliTokenRefusal = 'invalid_request' | 'unknown_code' | 'state_mismatch' | 'redirect_mismatch' | 'expired' | 'challenge_mismatch';
+/**
+ * The command-line hand-off for `request`, once: the code is used up by the first attempt whether it
+ * succeeds or not, so a code seen in a browser's history, replayed, or tried with a guessed
+ * verifier gets nothing. `reason` is for the connector's own logs and tests; `hh` is told only
+ * `invalid_grant`.
+ */
+export declare function takeCliHandoff(store: HandoffStore, request: unknown, now?: number): Promise<{
+    ok: true;
+    handoff: CliHandoff;
+} | {
+    ok: false;
+    reason: CliTokenRefusal;
+}>;
