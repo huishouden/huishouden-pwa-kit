@@ -76,9 +76,9 @@ short name unless sharing is the point, and say so.
 ## Deploys without cross-repo secrets
 
 Firebase Hosting replaces a whole site on each deploy, so every deploy ships every app. Each repo
-keeps its own credentials (Workload Identity Federation, the same deploy account it already uses,
-and for the asset CDN the Cloudflare token secret, "Asset CDN")
-and reads the other apps only from public release assets:
+keeps its own credentials (Workload Identity Federation, the same deploy account it already uses;
+the asset CDN's Cloudflare token is the portal's `production` environment's alone, "Asset CDN",
+Token) and reads the other apps only from public release assets:
 
 1. `build` (every run) builds `dist`. On `main` it also builds `dist-staging` with the
    `STAGING_VITE_*` variables.
