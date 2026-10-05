@@ -160,6 +160,96 @@ export async function googleAuthCode(auth, scopes, { deniedMessage = kt('googleT
     }
     return answer;
 }
+const REDIRECT_KEY = 'hh-google-redirect';
+const REDIRECT_TTL_MS = 15 * 60_000;
+const thisPage = () => `${location.origin}${location.pathname}`;
+function randomState() {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+/** Sends this tab to Google's page for a code (see `GoogleAuthRedirectOptions`). Call from a tap; resolves just before the page leaves. */
+export async function googleAuthCodeRedirect(auth, scopes, { clientId, selectAccount = false, redirectUri = thisPage(), data } = {}) {
+    const user = auth.currentUser;
+    if (!user)
+        throw new Error(kt('feedback.signInFirst'));
+    const client_id = clientId || configuredClientId;
+    if (!client_id)
+        throw new GoogleTokenError(kt('googleToken.notConfigured'), 'not_configured');
+    const gsi = loadedGsi() ??
+        (await loadGsi().catch(() => {
+            throw new GoogleTokenError(kt('googleToken.unreachable'), 'unavailable');
+        }));
+    const request = { state: randomState(), uid: user.uid, scopes: [...scopes], redirectUri, at: Date.now(), ...(data ? { data } : {}) };
+    try {
+        sessionStorage.setItem(REDIRECT_KEY, JSON.stringify(request));
+    }
+    catch {
+        // Without sessionStorage the answer could not be checked on return: don't leave.
+        throw new GoogleTokenError(kt('googleToken.noAnswer'), 'unknown');
+    }
+    gsi.oauth2
+        .initCodeClient({
+        client_id,
+        scope: scopes.join(' '),
+        ux_mode: 'redirect',
+        redirect_uri: redirectUri,
+        state: request.state,
+        include_granted_scopes: !selectAccount,
+        ...(selectAccount ? { select_account: true } : user.email ? { login_hint: user.email } : {}),
+    })
+        .requestCode();
+}
+function pendingRedirect() {
+    try {
+        const r = JSON.parse(sessionStorage.getItem(REDIRECT_KEY) ?? 'null');
+        return r && typeof r.state === 'string' && typeof r.redirectUri === 'string' ? r : null;
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * Whether this page is Google's answer to this tab's `googleAuthCodeRedirect` (its `state`), without
+ * taking it: for opening the section that finishes the connection.
+ */
+export function googleRedirectReturned() {
+    if (typeof location === 'undefined')
+        return false;
+    const state = new URLSearchParams(location.search).get('state');
+    return !!state && pendingRedirect()?.state === state;
+}
+/**
+ * Google's answer to this tab's `googleAuthCodeRedirect`, taken once: null when this page isn't
+ * one (no `state`, or another page's). Removes `code`, `scope`, `state` and the rest from the
+ * address either way. Rejects like `googleAuthCode`: `access_denied` when the person said no or
+ * unticked a scope; `unknown` when the answer is for another tab, person or request, or too old.
+ */
+export function googleAuthCodeReturn(auth, { deniedMessage = kt('googleToken.denied') } = {}) {
+    if (typeof location === 'undefined')
+        return null;
+    const answer = new URLSearchParams(location.search);
+    const state = answer.get('state');
+    if (!state || !(answer.has('code') || answer.has('error')))
+        return null;
+    // The one-time code leaves the address (and so history, bookmarks and reloads) at once.
+    const rest = new URLSearchParams(location.search);
+    for (const k of ['code', 'scope', 'state', 'error', 'error_description', 'error_uri', 'authuser', 'prompt', 'hd', 'iss'])
+        rest.delete(k);
+    const query = rest.toString();
+    history.replaceState(history.state, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
+    const request = pendingRedirect();
+    try {
+        sessionStorage.removeItem(REDIRECT_KEY);
+    }
+    catch {
+        // Nothing kept: the checks below fail closed.
+    }
+    if (!request || request.state !== state || request.uid !== auth.currentUser?.uid || Date.now() - request.at > REDIRECT_TTL_MS) {
+        throw new GoogleTokenError(kt('googleToken.noAnswer'), 'unknown');
+    }
+    const { code, scope } = codeFrom({ code: answer.get('code') ?? undefined, scope: answer.get('scope') ?? undefined, error: answer.get('error') ?? undefined, error_description: answer.get('error_description') ?? undefined }, request.scopes, deniedMessage);
+    return { code, scope, redirectUri: request.redirectUri, ...(request.data ? { data: request.data } : {}) };
+}
 /** Google Identity Services' `error_callback` as a `GoogleTokenError` with its code. */
 function gsiWindowError(e) {
     if (e.type === 'popup_closed')

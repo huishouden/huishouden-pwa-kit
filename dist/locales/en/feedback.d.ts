@@ -13,5 +13,8 @@ declare const _default: {
     readonly 'feedback.windowFailed': "Google’s window stopped before finishing. Try again.";
     readonly 'feedback.windowWaiting': "Waiting for Google’s window. Can’t see it? It may be behind this window.";
     readonly 'feedback.windowShow': "Show Google’s window";
+    readonly 'feedback.windowBlockedHere': "Your browser blocked Google’s window. Allow pop-ups for this site, or use Continue in this tab.";
+    readonly 'feedback.windowContinueHere': "Continue in this tab";
+    readonly 'feedback.windowWaitingHere': "Waiting for Google’s window. Can’t see it? It may be behind this window, or continue in this tab instead.";
 };
 export default _default;

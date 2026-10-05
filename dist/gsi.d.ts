@@ -61,12 +61,14 @@ export interface GoogleAccountsOAuth2 {
     initCodeClient(config: {
         client_id: string;
         scope: string;
-        ux_mode: 'popup';
+        ux_mode: 'popup' | 'redirect';
+        /** Redirect mode: where Google sends the person back, `?code=…&state=…` (an Authorized redirect URI of the client). */
+        redirect_uri?: string;
         include_granted_scopes?: boolean;
         login_hint?: string;
         select_account?: boolean;
         state?: string;
-        callback: (response: GsiCodeResponse) => void;
+        callback?: (response: GsiCodeResponse) => void;
         error_callback?: (error: GsiClientError) => void;
     }): GsiCodeClient;
     initTokenClient(config: {

@@ -253,6 +253,7 @@ describe('googleAuthCode', () => {
     const blocked = await ended('popup_failed_to_open');
     expect(popupBlocked(blocked)).toBe(true);
     expect(googleWindowMessage(blocked)).toBe('Your browser blocked Google’s window. Allow pop-ups for this site, then try again.');
+    expect(googleWindowMessage(blocked, 'Google', { continueHere: true })).toBe('Your browser blocked Google’s window. Allow pop-ups for this site, or use Continue in this tab.');
     codeAnswer = (cfg) => cfg.error_callback?.({ type: 'popup_closed' });
     expect(googleWindowMessage(await ended('popup_closed'))).toBe('Google’s window was closed before finishing. Try again when you are ready.');
     codeAnswer = (cfg) => cfg.error_callback?.({ type: 'something_new' });

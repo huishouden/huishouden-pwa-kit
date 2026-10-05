@@ -16,4 +16,7 @@ export default {
   'feedback.windowFailed': 'Het venster van Google is gestopt voordat het klaar was. Probeer het opnieuw.',
   'feedback.windowWaiting': 'Wachten op het venster van Google. Zie je het niet? Het staat misschien achter dit venster.',
   'feedback.windowShow': 'Venster van Google tonen',
+  'feedback.windowBlockedHere': 'Je browser heeft het venster van Google geblokkeerd. Sta pop-ups toe voor deze site, of kies Doorgaan in dit tabblad.',
+  'feedback.windowContinueHere': 'Doorgaan in dit tabblad',
+  'feedback.windowWaitingHere': 'Wachten op het venster van Google. Zie je het niet? Het staat misschien achter dit venster, of ga verder in dit tabblad.',
 } satisfies CatalogueOf<typeof en>;

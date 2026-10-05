@@ -13,4 +13,7 @@ export default {
     'feedback.windowFailed': 'Google’s window stopped before finishing. Try again.',
     'feedback.windowWaiting': 'Waiting for Google’s window. Can’t see it? It may be behind this window.',
     'feedback.windowShow': 'Show Google’s window',
+    'feedback.windowBlockedHere': 'Your browser blocked Google’s window. Allow pop-ups for this site, or use Continue in this tab.',
+    'feedback.windowContinueHere': 'Continue in this tab',
+    'feedback.windowWaitingHere': 'Waiting for Google’s window. Can’t see it? It may be behind this window, or continue in this tab instead.',
 };

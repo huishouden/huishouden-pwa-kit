@@ -281,9 +281,12 @@ export const GOOGLE_WINDOW_HINT_MS = 4000;
 /**
  * Under a button that opens Google's window (`googleAuthCode`): when the wait lasts a few seconds,
  * says the window may be behind this one (desktop browsers, installed apps) and offers to bring it
- * to the front; `onShow` calls `googleAuthCode` again, which reuses the open window.
+ * to the front; `onShow` calls `googleAuthCode` again, which reuses the open window. With
+ * `onContinueHere` (`googleAuthCodeRedirect`) it also offers "Continue in this tab", and shows that
+ * button alone while `blocked` (the browser refused the window; the page says so with
+ * `googleWindowMessage(e, service, { continueHere: true })`).
  */
-export function GoogleWindowWait({ waiting, onShow, delayMs = GOOGLE_WINDOW_HINT_MS }) {
+export function GoogleWindowWait({ waiting, onShow, blocked = false, onContinueHere, delayMs = GOOGLE_WINDOW_HINT_MS, }) {
     const kt = useKitT();
     const [late, setLate] = useState(false);
     useEffect(() => {
@@ -293,7 +296,10 @@ export function GoogleWindowWait({ waiting, onShow, delayMs = GOOGLE_WINDOW_HINT
         const id = setTimeout(() => setLate(true), delayMs);
         return () => clearTimeout(id);
     }, [waiting, delayMs]);
+    const here = onContinueHere && (_jsx("button", { type: "button", className: linkClass, onClick: onContinueHere, children: kt('feedback.windowContinueHere') }));
+    if (blocked && !waiting)
+        return here ? _jsx("p", { className: "flex flex-wrap items-center gap-x-3 text-sm", children: here }) : null;
     if (!waiting || !late)
         return null;
-    return (_jsxs("p", { role: "status", className: "flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted", children: [_jsx("span", { children: kt('feedback.windowWaiting') }), _jsx("button", { type: "button", className: linkClass, onClick: onShow, children: kt('feedback.windowShow') })] }));
+    return (_jsxs("p", { role: "status", className: "flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted", children: [_jsx("span", { children: kt(onContinueHere ? 'feedback.windowWaitingHere' : 'feedback.windowWaiting') }), _jsx("button", { type: "button", className: linkClass, onClick: onShow, children: kt('feedback.windowShow') }), here] }));
 }

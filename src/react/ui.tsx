@@ -613,9 +613,24 @@ export const GOOGLE_WINDOW_HINT_MS = 4000;
 /**
  * Under a button that opens Google's window (`googleAuthCode`): when the wait lasts a few seconds,
  * says the window may be behind this one (desktop browsers, installed apps) and offers to bring it
- * to the front; `onShow` calls `googleAuthCode` again, which reuses the open window.
+ * to the front; `onShow` calls `googleAuthCode` again, which reuses the open window. With
+ * `onContinueHere` (`googleAuthCodeRedirect`) it also offers "Continue in this tab", and shows that
+ * button alone while `blocked` (the browser refused the window; the page says so with
+ * `googleWindowMessage(e, service, { continueHere: true })`).
  */
-export function GoogleWindowWait({ waiting, onShow, delayMs = GOOGLE_WINDOW_HINT_MS }: { waiting: boolean; onShow: () => void; delayMs?: number }) {
+export function GoogleWindowWait({
+  waiting,
+  onShow,
+  blocked = false,
+  onContinueHere,
+  delayMs = GOOGLE_WINDOW_HINT_MS,
+}: {
+  waiting: boolean;
+  onShow: () => void;
+  blocked?: boolean;
+  onContinueHere?: () => void;
+  delayMs?: number;
+}) {
   const kt = useKitT();
   const [late, setLate] = useState(false);
   useEffect(() => {
@@ -624,13 +639,20 @@ export function GoogleWindowWait({ waiting, onShow, delayMs = GOOGLE_WINDOW_HINT
     const id = setTimeout(() => setLate(true), delayMs);
     return () => clearTimeout(id);
   }, [waiting, delayMs]);
+  const here = onContinueHere && (
+    <button type="button" className={linkClass} onClick={onContinueHere}>
+      {kt('feedback.windowContinueHere')}
+    </button>
+  );
+  if (blocked && !waiting) return here ? <p className="flex flex-wrap items-center gap-x-3 text-sm">{here}</p> : null;
   if (!waiting || !late) return null;
   return (
     <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
-      <span>{kt('feedback.windowWaiting')}</span>
+      <span>{kt(onContinueHere ? 'feedback.windowWaitingHere' : 'feedback.windowWaiting')}</span>
       <button type="button" className={linkClass} onClick={onShow}>
         {kt('feedback.windowShow')}
       </button>
+      {here}
     </p>
   );
 }

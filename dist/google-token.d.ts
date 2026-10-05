@@ -51,6 +51,44 @@ export declare function googleAuthCode(auth: Auth, scopes: readonly string[], { 
     scope: string;
 }>;
 /**
+ * "Continue in this tab": the same code request with Google's page in this tab instead of a window,
+ * for when the browser blocks the window or it opened out of sight. The page goes to Google and
+ * comes back to `redirectUri` (default: this page's address without its query) with
+ * `?code=…&state=…`; that page calls `googleAuthCodeReturn` once the person is signed in and hands
+ * the code to its server with the same `redirectUri`, which the server passes to Google's token
+ * exchange instead of `postmessage`.
+ *
+ * `redirectUri` must be an Authorized redirect URI of the OAuth client, and the server must accept
+ * it. `data` (a few words, e.g. which section to reopen) comes back with the code. The request's
+ * `state` is 32 random bytes kept in sessionStorage with who asked and what for; the answer is taken
+ * once, only in this tab, within 15 minutes, for the same person.
+ */
+export interface GoogleAuthRedirectOptions extends GoogleAuthCodeOptions {
+    redirectUri?: string;
+    data?: string;
+}
+/** What `googleAuthCodeReturn` hands back: the code, and the `redirectUri` the server must exchange it with. */
+export interface GoogleRedirectAnswer {
+    code: string;
+    scope: string;
+    redirectUri: string;
+    data?: string;
+}
+/** Sends this tab to Google's page for a code (see `GoogleAuthRedirectOptions`). Call from a tap; resolves just before the page leaves. */
+export declare function googleAuthCodeRedirect(auth: Auth, scopes: readonly string[], { clientId, selectAccount, redirectUri, data }?: GoogleAuthRedirectOptions): Promise<void>;
+/**
+ * Whether this page is Google's answer to this tab's `googleAuthCodeRedirect` (its `state`), without
+ * taking it: for opening the section that finishes the connection.
+ */
+export declare function googleRedirectReturned(): boolean;
+/**
+ * Google's answer to this tab's `googleAuthCodeRedirect`, taken once: null when this page isn't
+ * one (no `state`, or another page's). Removes `code`, `scope`, `state` and the rest from the
+ * address either way. Rejects like `googleAuthCode`: `access_denied` when the person said no or
+ * unticked a scope; `unknown` when the answer is for another tab, person or request, or too old.
+ */
+export declare function googleAuthCodeReturn(auth: Auth, { deniedMessage }?: Pick<GoogleTokenOptions, 'deniedMessage'>): GoogleRedirectAnswer | null;
+/**
  * Stops using a token: pass the one Google rejected (a 401: revoked, or expired early) so the next
  * call asks again, or nothing to forget every token (signing out).
  */
