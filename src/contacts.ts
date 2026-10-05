@@ -2,6 +2,7 @@ import { collection, doc, onSnapshot, query, where, type Firestore, type Unsubsc
 import { addDoc, deleteDoc, deleteField, setDoc, updateDoc, writeBatch } from './firestore.js';
 import {
   CONTACT_PAY_COLLECTION,
+  backfillPositions,
   cleanContact,
   cleanContactPay,
   contactPayDoc,
@@ -13,6 +14,7 @@ import {
   type ContactPay,
   type ContactPayKind,
 } from './contact-core.js';
+import { geocodeAddress, getHome, onHomeChange } from './home.js';
 
 /**
  * The household's contacts over the Firebase SDK. The data contract and the screen helpers are in
@@ -33,6 +35,14 @@ export interface WatchContactsOptions {
   restricted?: boolean;
   /** Who is signed in, for the `by` of pay details tidied on load (see `tidyContactPay`). */
   by?: string;
+  /**
+   * Looks up contacts saved with an address but no position (before positions existed), so they
+   * say how far from home they are: once the list has come from the server and the household has
+   * a home, up to `limit` of them (`POSITION_BACKFILL_LIMIT`), one a second at most through the
+   * kit's Nominatim queue and cache, only while the page is showing. An address the map can't find
+   * is marked `geoTried` and left for 30 days. Admins and members only (ignored with `restricted`).
+   */
+  backfillPositions?: boolean | { limit?: number };
   onError?: (error: Error) => void;
 }
 
@@ -47,7 +57,7 @@ export function watchContacts(
   db: Firestore,
   householdId: string,
   onChange: (contacts: Contact[]) => void,
-  { app, restricted, by, onError }: WatchContactsOptions = {},
+  { app, restricted, by, backfillPositions: backfill, onError }: WatchContactsOptions = {},
 ): Unsubscribe {
   const all = contactsOf(db, householdId);
   let raw: { id: string; data: Record<string, unknown> }[] | null = null;
@@ -75,7 +85,24 @@ export function watchContacts(
         .sort((a, b) => a.name.localeCompare(b.name)),
     );
   };
+  const stopBackfill = new AbortController();
+  let backfillStarted = false;
+  const startBackfill = () => {
+    if (!backfill || restricted || backfillStarted || !raw || !fromServer.contacts || !getHome() || stopBackfill.signal.aborted) return;
+    backfillStarted = true;
+    backfillPositions(raw, {
+      geocode: async (address) => (await geocodeAddress(address))[0] ?? null,
+      write: (id, update) =>
+        updateDoc(doc(all, id), 'geoTried' in update ? update : { ...update, geoTried: deleteField() }),
+      current: (id) => raw?.find((d) => d.id === id)?.data,
+      whenVisible: () => whenVisible(stopBackfill.signal),
+      limit: typeof backfill === 'object' ? backfill.limit : undefined,
+      signal: stopBackfill.signal,
+    }).catch((e) => console.warn('Looking up contact positions failed', e));
+  };
   const unsubs = [
+    onHomeChange(startBackfill),
+    () => stopBackfill.abort(),
     onSnapshot(
       restricted ? query(all, where('private', '==', false)) : all,
       { includeMetadataChanges: !restricted },
@@ -86,6 +113,7 @@ export function watchContacts(
         // With metadata changes on (for the tidy), a snapshot that only says "now from the server" isn't a new list.
         if (first || snap.docChanges().length) emit();
         tidy();
+        startBackfill();
       },
       (error) => onError?.(error),
     ),
@@ -112,6 +140,23 @@ export function watchContacts(
     );
   }
   return () => unsubs.forEach((u) => u());
+}
+
+/** Resolves true once the page is showing (at once when it is, or outside a browser); false when stopped first. */
+function whenVisible(signal: AbortSignal): Promise<boolean> {
+  if (signal.aborted) return Promise.resolve(false);
+  if (typeof document === 'undefined' || document.visibilityState === 'visible') return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const done = (showing: boolean) => {
+      document.removeEventListener('visibilitychange', onChange);
+      signal.removeEventListener('abort', onAbort);
+      resolve(showing);
+    };
+    const onChange = () => document.visibilityState === 'visible' && done(true);
+    const onAbort = () => done(false);
+    document.addEventListener('visibilitychange', onChange);
+    signal.addEventListener('abort', onAbort);
+  });
 }
 
 async function tidyPay(
@@ -170,7 +215,7 @@ export async function updateContact(db: Firestore, householdId: string, id: stri
   const now = Date.now();
   const cleaned = cleanContact(input) as Record<string, unknown>;
   const update: Record<string, unknown> = { ...cleaned, updatedAt: now, by };
-  for (const k of ['role', 'phone', 'email', 'website', 'address', 'lat', 'lng', 'mapsUrl', 'notes']) if (!(k in cleaned)) update[k] = deleteField();
+  for (const k of ['role', 'phone', 'email', 'website', 'address', 'lat', 'lng', 'geoTried', 'mapsUrl', 'notes']) if (!(k in cleaned)) update[k] = deleteField();
   if (!('pay' in input)) return updateDoc(doc(contactsOf(db, householdId), id), update);
   const batch = writeBatch(db);
   batch.update(doc(contactsOf(db, householdId), id), update);

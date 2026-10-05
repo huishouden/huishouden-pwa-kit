@@ -15,6 +15,16 @@ export interface WatchContactsOptions {
     restricted?: boolean;
     /** Who is signed in, for the `by` of pay details tidied on load (see `tidyContactPay`). */
     by?: string;
+    /**
+     * Looks up contacts saved with an address but no position (before positions existed), so they
+     * say how far from home they are: once the list has come from the server and the household has
+     * a home, up to `limit` of them (`POSITION_BACKFILL_LIMIT`), one a second at most through the
+     * kit's Nominatim queue and cache, only while the page is showing. An address the map can't find
+     * is marked `geoTried` and left for 30 days. Admins and members only (ignored with `restricted`).
+     */
+    backfillPositions?: boolean | {
+        limit?: number;
+    };
     onError?: (error: Error) => void;
 }
 /**
@@ -24,7 +34,7 @@ export interface WatchContactsOptions {
  * first list waits for both, and once both have come from the server any pay details still on a
  * contact's own document are moved to `contactPay` and those of deleted contacts removed.
  */
-export declare function watchContacts(db: Firestore, householdId: string, onChange: (contacts: Contact[]) => void, { app, restricted, by, onError }?: WatchContactsOptions): Unsubscribe;
+export declare function watchContacts(db: Firestore, householdId: string, onChange: (contacts: Contact[]) => void, { app, restricted, by, backfillPositions: backfill, onError }?: WatchContactsOptions): Unsubscribe;
 /** Adds a contact; its pay details, when `input` has some, go to `contactPay` (admins and members only). */
 export declare function addContact(db: Firestore, householdId: string, input: ContactInput, by: string): Promise<string>;
 /**
