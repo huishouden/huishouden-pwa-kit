@@ -246,3 +246,86 @@ export function contactInput(fields: Omit<ContactInput, 'apps'>, apps: string[],
     private: fields.private === true,
   };
 }
+
+// ---- Positions for contacts saved before they had one ----
+
+/** How long an address the map couldn't find waits before it is looked up again: 30 days. */
+export const POSITION_RETRY_MS = 30 * 86_400_000;
+
+/** How many contacts one load looks up at most. */
+export const POSITION_BACKFILL_LIMIT = 10;
+
+/**
+ * Whether a contact document has an address but no position, and the map wasn't asked about it in
+ * the last `POSITION_RETRY_MS` (`geoTried`, the ms of a lookup that found nothing).
+ */
+export function needsPosition(data: Record<string, unknown> | undefined, now: number): boolean {
+  if (!data || typeof data.address !== 'string' || !data.address.trim() || coordinates(data)) return false;
+  const tried = data.geoTried;
+  return !(typeof tried === 'number' && Number.isFinite(tried) && now - tried < POSITION_RETRY_MS);
+}
+
+/** What the backfill writes on a contact: its position, or when the map had no match. */
+export type PositionUpdate = { lat: number; lng: number } | { geoTried: number };
+
+export interface PositionBackfillOptions {
+  /** The address's position, or null when the map has no match. Throws when the service can't answer. */
+  geocode: (address: string) => Promise<{ lat: number; lng: number } | null>;
+  write: (id: string, update: PositionUpdate) => Promise<void>;
+  /** The contact's document as it is now, so one edited or deleted meanwhile is left alone. */
+  current?: (id: string) => Record<string, unknown> | undefined;
+  /** Resolves when the page is showing; false to stop instead. */
+  whenVisible?: () => Promise<boolean>;
+  limit?: number;
+  now?: () => number;
+  signal?: AbortSignal;
+}
+
+export interface PositionBackfillResult {
+  located: string[];
+  /** Marked `geoTried`: the map had no match. */
+  missed: string[];
+}
+
+/**
+ * Looks up, one at a time, up to `limit` contacts that `needsPosition`, and writes each one's
+ * position, or `geoTried` when the map has no match. Stops at the first lookup or write that fails
+ * (the service is busy, offline, the rules refused), leaving the rest for the next load.
+ */
+export async function backfillPositions(
+  docs: { id: string; data: Record<string, unknown> }[],
+  { geocode, write, current, whenVisible, limit = POSITION_BACKFILL_LIMIT, now = Date.now, signal }: PositionBackfillOptions,
+): Promise<PositionBackfillResult> {
+  const result: PositionBackfillResult = { located: [], missed: [] };
+  const queue = docs.filter((d) => needsPosition(d.data, now())).slice(0, Math.max(0, limit));
+  for (const d of queue) {
+    if (signal?.aborted || (whenVisible && !(await whenVisible())) || signal?.aborted) break;
+    const address = String(d.data.address);
+    const unchanged = () => {
+      const latest = current ? current(d.id) : d.data;
+      return !!latest && latest.address === address && needsPosition(latest, now());
+    };
+    if (!unchanged()) continue;
+    let found: { lat: number; lng: number } | null;
+    try {
+      found = await geocode(address.trim());
+    } catch {
+      break;
+    }
+    if (signal?.aborted) break;
+    if (!unchanged()) continue;
+    const at = found && coordinates(found);
+    try {
+      if (at) {
+        await write(d.id, { lat: Math.round(at.lat * 1e6) / 1e6, lng: Math.round(at.lng * 1e6) / 1e6 });
+        result.located.push(d.id);
+      } else {
+        await write(d.id, { geoTried: Math.round(now()) });
+        result.missed.push(d.id);
+      }
+    } catch {
+      break;
+    }
+  }
+  return result;
+}
