@@ -3,6 +3,16 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## [0.98.2](https://github.com/huishouden/pwa-kit/compare/v0.98.0...v0.98.2) (2026-10-05)
+
+### Features
+
+* **reminder-source:** sourceAllowed takes personal; a Health source never counts on a shared reminder ([445debe](https://github.com/huishouden/pwa-kit/commit/445debe3cb4ef60afa189eae9dff1a5a7305d71f))
+
+### Bug Fixes
+
+* **headers-check:** a repo that serves no pages has nothing to check ([4b8f67e](https://github.com/huishouden/pwa-kit/commit/4b8f67e158c622d0adab96a7954fa4a30891919c))
+
 ## 0.98.0 (2026-10-05)
 
 ### Bug Fixes
