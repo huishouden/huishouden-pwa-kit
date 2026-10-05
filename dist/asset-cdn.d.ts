@@ -81,11 +81,13 @@ export declare function cdnHints(origin: string): string;
  * checks every page and worker names at most that origin and writes `index.site.html` (the
  * fallback, `stripCdn`) beside each index.html that names it; off, strips the CDN from every file
  * that names it. `files` are the site's files that `namesCdn` picks, by path from the site's root.
+ * `offCdn` (with an origin): files whose app's assets the CDN does not hold yet (`appsOffCdn`),
+ * stripped as if the CDN were off for that app alone.
  */
 export declare function planAssetOrigin(files: {
     path: string;
     text: string;
-}[], origin: string | null): {
+}[], origin: string | null, offCdn?: (path: string) => boolean): {
     writes: {
         path: string;
         text: string;
@@ -93,6 +95,15 @@ export declare function planAssetOrigin(files: {
     naming: number;
     error?: string;
 };
+/** The app path (`/pet/`, the portal `/`) whose folder holds `path`: the longest of `appPaths` it starts with. */
+export declare function appOf(path: string, appPaths: string[]): string | undefined;
+/**
+ * The apps (of `appPaths`) with an asset the live CDN (`live`, its manifest; null: none yet) does
+ * not hold. A deploy without the Cloudflare token can't upload them, so their pages load the
+ * site's own copy until a deploy with the token (the portal's) puts them on the CDN; every other
+ * app keeps the CDN, so no page ever names a file the CDN lacks.
+ */
+export declare function appsOffCdn(assets: string[], appPaths: string[], live: AssetManifest | null): string[];
 /** The asset origin a built file names, if any. */
 export declare function cdnOriginIn(text: string): string | null;
 /** The site's own copy of each app's page with the CDN removed (`stripCdn`), next to its index.html. */

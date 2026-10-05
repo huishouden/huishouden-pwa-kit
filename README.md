@@ -147,9 +147,7 @@ jobs:
     uses: huishouden/pwa-kit/.github/workflows/pwa.yml@v0
     permissions: { contents: write, id-token: write }
     with: { base: /groceries/ } # site-url defaults to the app's path on SUITE_SITE
-    secrets: # the asset CDN (docs/one-site.md); only these two
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    # No secrets: only the portal's deploy uploads to the asset CDN (docs/one-site.md "Asset CDN").
 ```
 
 ## Versioning

@@ -17,6 +17,10 @@
 // assemble and stale take --assets-origin <url|none> (default none): with a URL the pages keep naming
 // the CDN and the site manifest records it; with none every CDN address is removed from the pages
 // and service workers, which then load the site's own copy (docs/one-site.md "Asset CDN").
+// --cdn-held (with a URL; a deploy without the Cloudflare token, which can't upload): only apps
+// whose every asset the live CDN already holds keep naming it, the rest load the site's own copy
+// and the site manifest lists them as offCdn; stale --cdn-held then leaves them be, while a stale
+// without it (a run that can upload) counts them as stale.
 //
 // Common options: --registry <file|url> (default ./apps.json, else <owner>/portal's on main),
 // --owner <github owner> (default GITHUB_REPOSITORY_OWNER).
@@ -28,6 +32,8 @@ import {
   ASSET_MANIFEST,
   ASSET_ORIGINS,
   ASSET_RETENTION_DAYS,
+  appOf,
+  appsOffCdn,
   cdnHeaders,
   cdnWranglerConfig,
   isCdnAsset,
@@ -62,7 +68,7 @@ import { SITE_OBSERVABILITY, parseSiteObservability } from '../src/observability
 const RELEASE_TAG = 'hosting';
 const assetName = (flavor: string) => (flavor === 'staging' ? 'site-staging.tar.gz' : 'site.tar.gz');
 
-const FLAGS = new Set(['redirects']);
+const FLAGS = new Set(['redirects', 'cdn-held']);
 const [command, ...rest] = process.argv.slice(2);
 const options = new Map<string, string>();
 const positional: string[] = [];
@@ -224,7 +230,7 @@ async function pack() {
 async function assemble() {
   const flavor = opt('flavor');
   const out = opt('out');
-  if ((flavor !== 'production' && flavor !== 'staging') || !out) fail('usage: pwa-site assemble --flavor production|staging --out <dir> [--site <name>] [--own /pet/=dist] [--redirects] [--assets-origin <url|none>]');
+  if ((flavor !== 'production' && flavor !== 'staging') || !out) fail('usage: pwa-site assemble --flavor production|staging --out <dir> [--site <name>] [--own /pet/=dist] [--redirects] [--assets-origin <url|none>] [--cdn-held]');
   const registry = await loadRegistry();
   const apps = siteApps(registry);
   const site = opt('site') ?? (flavor === 'production' ? sharedSite(registry) : fail('staging needs --site (the app\'s staging site)'));
@@ -265,7 +271,10 @@ async function assemble() {
     if (!existsSync(join(pub, path, 'index.html'))) fail(`${path} has no index.html`);
   }
   if (flavor === 'production') manifest.observability = await writeObservability(portalRepo(registry), pub, included);
-  manifest.assetOrigin = applyAssetOrigin(pub, assetOriginOpt(flavor));
+  const origin = assetOriginOpt(flavor);
+  const offCdn = origin && flag('cdn-held') ? appsOffCdn(walk(pub).filter(isCdnAsset), included, await liveAssets(origin)) : [];
+  manifest.assetOrigin = applyAssetOrigin(pub, origin, offCdn, included);
+  if (offCdn.length) manifest.offCdn = offCdn;
   writeFileSync(join(pub, SITE_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
 
   const hosting: HostingSite[] = [siteConfig(site, included.map((path, i) => ({ path, features: featuresOf(policies[i]) })))];
@@ -310,13 +319,26 @@ function assetOriginOpt(flavor: string): string | null {
 }
 
 /** Applies `planAssetOrigin` (src/asset-cdn.ts) to the assembled site; returns what the manifest records. */
-function applyAssetOrigin(pub: string, origin: string | null): string | null {
+function applyAssetOrigin(pub: string, origin: string | null, offCdn: string[] = [], appPaths: string[] = []): string | null {
   const files = walk(pub).filter(namesCdn).map((path) => ({ path, text: readFileSync(join(pub, path), 'utf8') }));
-  const plan = planAssetOrigin(files, origin);
+  const off = new Set(offCdn);
+  const plan = planAssetOrigin(files, origin, (path) => off.has(appOf(path, appPaths) ?? ''));
   if (plan.error) fail(plan.error);
   for (const w of plan.writes) writeFileSync(join(pub, w.path), w.text);
-  console.log(origin ? `asset CDN ${origin}: ${plan.naming} pages and workers name it; ${plan.writes.length} fallback pages` : `asset CDN off: ${plan.writes.length} pages and workers load the site's own assets`);
+  console.log(origin ? `asset CDN ${origin}: ${plan.naming} pages and workers name it; ${plan.writes.length} rewritten (fallback pages, and apps off it)` : `asset CDN off: ${plan.writes.length} pages and workers load the site's own assets`);
+  if (offCdn.length) {
+    console.log(`not on the CDN yet, served from the site until a deploy with the Cloudflare token (the portal's): ${offCdn.join(' ')}`);
+    output('off-cdn', offCdn.join(' '));
+  }
   return origin;
+}
+
+/** The live CDN's manifest (null before its first deploy). */
+async function liveAssets(origin: string) {
+  const res = await fetchRetry(`${origin}/${ASSET_MANIFEST}?t=${Date.now()}`);
+  const live = res ? parseAssetManifest(await res.json().catch(() => null)) : null;
+  if (res && !live) fail(`${origin}/${ASSET_MANIFEST} is not an asset manifest`);
+  return live;
 }
 
 async function assetOrigin() {
@@ -394,8 +416,7 @@ async function cdnCheck() {
   const siteDir = opt('site-dir');
   if ((flavor !== 'production' && flavor !== 'staging') || !siteDir) fail('usage: pwa-site cdn-check --flavor production|staging --site-dir <assembled public dir>');
   const origin = ASSET_ORIGINS[flavor];
-  const res = await fetchRetry(`${origin}/${ASSET_MANIFEST}?t=${Date.now()}`);
-  const live = res ? parseAssetManifest(await res.json().catch(() => null)) : null;
+  const live = await liveAssets(origin);
   const missing = walk(siteDir).filter(isCdnAsset).filter((p) => !live?.files[p]);
   if (missing.length) console.log(`${origin}: ${missing.length} of this site's assets are not on the CDN: ${missing.slice(0, 5).join(' ')}${missing.length > 5 ? ' ...' : ''}`);
   else console.log(`${origin}: holds every asset of ${siteDir}`);
@@ -414,6 +435,7 @@ async function stale() {
   const paths = staleApps(manifest, latest);
   const wantOrigin = assetOriginOpt(flavor);
   if (manifest && (manifest.assetOrigin ?? null) !== wantOrigin) paths.push(`asset CDN ${wantOrigin ?? 'off'} (live: ${manifest.assetOrigin ?? 'off'})`);
+  else if (wantOrigin && !flag('cdn-held') && manifest?.offCdn?.length) paths.push(`not on the asset CDN yet: ${manifest.offCdn.join(' ')}`);
   if (flavor === 'production' && staleObservability(manifest, await latestAsset(portalRepo(registry), flavor, OBSERVABILITY_TAG, OBSERVABILITY_ASSET)))
     paths.push(`/${SITE_OBSERVABILITY}`);
   if (paths.length) console.log(`newer builds than ${from}: ${paths.join(' ')}`);

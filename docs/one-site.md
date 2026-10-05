@@ -319,26 +319,41 @@ job assembles the site as before, then, assets first:
    last recheck round), `pwa-site cdn-check` runs again and uploads once more if another repo's
    upload has replaced the CDN's files since.
 
-The recheck rounds (an app published meanwhile) repeat both. Staging does the same with its own
-Worker in `staging-site`, a job that holds the Cloudflare token and runs nothing from the ref; the
-ref's build runs in `staging-build`, which holds no credentials.
+The recheck rounds (an app published meanwhile) repeat both.
+
+**Without the token: every app's deploy.** Only the portal's deploy holds the token (below). An
+app's deploy assembles the same site with `--cdn-held`: each app whose every asset the live CDN's
+`hh-assets.json` already lists keeps naming the CDN; an app with any asset it lacks (the app's
+own new build) has the CDN stripped from its pages and service worker, as with the CDN off, and
+`hh-site.json` lists it under `offCdn`. Nothing is uploaded, and no page names a file the CDN
+lacks, so assets still come before the pages that name them. The run shows a notice naming the
+apps off the CDN. The portal's next deploy (a push to its main, or its `ci` run with
+`reconcile`, which counts `offCdn` as stale) assembles every app's build, uploads the assets with
+the retention manifest, and only then deploys the pages that name them.
+
+Staging: `staging-site` uploads to the staging Worker only when a token is passed, and none is (a
+staging run builds any ref, and the token never reaches a job that does), so staging serves the
+site's own assets. It runs nothing from the ref either way; the ref's build runs in
+`staging-build`, which holds no credentials.
 
 `smoke` GETs one CDN asset with `Origin` (status, `immutable`, JavaScript content type, CORS,
 `Cross-Origin-Resource-Policy`, compression) and HEADs the site's own copy.
 
 **Token.** `CLOUDFLARE_API_TOKEN` (an account token with Workers Scripts edit, the one the
-connector, notify and calendar Workers deploy with) and `CLOUDFLARE_ACCOUNT_ID` are secrets of
-each app repo, set by hand (`gh secret set CLOUDFLARE_API_TOKEN -R huishouden/<app>`, or one
-organization secret), and the caller's `ci.yml` passes exactly these two (`secrets:` by name, not `inherit`). Each run reads
-them from the secret and only the wrangler command gets the token; nothing stores it, so rolling
-it means updating the secrets in place. A repo without them deploys with the CDN off.
+connector, notify and calendar Workers deploy with) and `CLOUDFLARE_ACCOUNT_ID` are secrets of the
+portal's `production` environment only, whose deployment branches are `main` alone (`hh ops
+secret set portal CLOUDFLARE_API_TOKEN --env production`, the value on stdin). The deploy job runs
+in that environment, so it reads them there; no app repo holds them, and the portal's `ci.yml`
+passes none. Only the wrangler command gets the token; nothing stores it, so rolling it means
+updating the environment secret in place (and the three Workers' own, which deploy with the same
+token from their `production` environments).
 
 **Rollback.** Set the variable `HH_ASSET_CDN=off` (organization-wide, or per repo), then deploy any
 app or run the portal's `ci` with `reconcile: true`, which sees the switch differ from the live
 `hh-site.json`. The assembler then removes the CDN from every page and service worker
 (`--assets-origin none`) and the suite loads its own `assets/` from Hosting as before; installed
-copies get a new `sw.js` and refill their cache from the site. Without the token the deploy does
-the same. Remove the variable to turn the CDN back on.
+copies get a new `sw.js` and refill their cache from the site. Remove the variable to turn the
+CDN back on (an app's deploy then names it only for builds it holds; the portal's deploy, for all).
 
 **CSP.** The suite's `Content-Security-Policy` has no fetch directives, so the CDN needs no entry;
 `pwa-headers-check` fails a policy that adds `script-src`, `style-src`, `font-src`, `img-src`,

@@ -247,6 +247,12 @@ export interface SiteManifest {
   observability?: number | null;
   /** Where this deploy's pages load their hashed assets from (./asset-cdn); null: the site itself. */
   assetOrigin?: string | null;
+  /**
+   * Apps whose pages load the site's own assets although `assetOrigin` is set: their build was
+   * new to the CDN and this deploy, without the Cloudflare token, could not upload it. The next
+   * deploy with the token (the portal's) puts them on the CDN.
+   */
+  offCdn?: string[];
 }
 
 /** Paths whose published build differs from what `manifest` holds (a newer one, or one it lacks). */
