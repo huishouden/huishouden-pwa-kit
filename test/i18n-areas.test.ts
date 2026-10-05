@@ -59,3 +59,17 @@ describe('Dutch', () => {
     expect(gmailError({ code: 'popup_closed' })).toBe('Gmail is niet gekoppeld.');
   });
 });
+
+describe('Done by you', () => {
+  test('each language words the signed-in member in its own case', async () => {
+    const { doneLine } = await import('../src/react/ui');
+    const { personName } = await import('../src/people');
+    const you = () => personName('me@example.com', { email: 'me@example.com' });
+    await setLangForTests('es');
+    expect(doneLine({ by: you(), at: '8:10 p.m.' })).toBe('Hecho por ti · 8:10 p.m.');
+    expect(doneLine({ by: 'Sam' })).toBe('Hecho por Sam');
+    await setLangForTests('nl');
+    expect(doneLine({ by: you(), at: '20:10', skipped: true })).toBe('Overgeslagen door jou · 20:10');
+    expect(doneLine({ byMe: true })).toBe('Gedaan door jou');
+  });
+});
