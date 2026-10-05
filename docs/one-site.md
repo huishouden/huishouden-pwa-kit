@@ -242,7 +242,7 @@ ref's build runs in `staging-build`, which holds no credentials.
 **Token.** `CLOUDFLARE_API_TOKEN` (an account token with Workers Scripts edit, the one the
 connector, notify and calendar Workers deploy with) and `CLOUDFLARE_ACCOUNT_ID` are secrets of
 each app repo, set by hand (`gh secret set CLOUDFLARE_API_TOKEN -R huishouden/<app>`, or one
-organization secret), and the caller's `ci.yml` passes them with `secrets: inherit`. Each run reads
+organization secret), and the caller's `ci.yml` passes exactly these two (`secrets:` by name, not `inherit`). Each run reads
 them from the secret and only the wrangler command gets the token; nothing stores it, so rolling
 it means updating the secrets in place. A repo without them deploys with the CDN off.
 
@@ -351,5 +351,5 @@ Reinstalling the portal once per device fixes that; the old icons can then be re
 6. Registry, uptime checks, sign-in origins and authorized domains ("Sign-in origins") and docs
    follow the paths.
 7. Asset CDN (kit 0.100): each app repo gets the two Cloudflare secrets ("Asset CDN", Token), its
-   `ci.yml` `secrets: inherit`, and the kit bump; `HH_ASSET_CDN` stays unset. Until an app's own
+   `ci.yml` passing them by name, and the kit bump; `HH_ASSET_CDN` stays unset. Until an app's own
    deploy runs with them, its deploys serve the site's own assets, as before.
