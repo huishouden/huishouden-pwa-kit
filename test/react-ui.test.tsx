@@ -767,6 +767,21 @@ describe('Completion', () => {
     expect(summary.getAttribute('aria-expanded')).toBe('true');
   });
 
+  test('extra actions wrap below the title on phones; the fold can say its own word', () => {
+    render(
+      <ul>
+        <ui.CompletionRow name="Metformin" title="Metformin" done={false} actions={<button type="button">Skip</button>} onDone={() => {}} />
+      </ul>,
+    );
+    expect(document.querySelector('li')!.className).toContain('flex-wrap');
+    render(
+      <ui.CompletionList items={[1]} isDone={() => true} label="Bills" allDone="All paid" showDone={(n) => `Show ${n} paid`}>
+        {(x) => <ui.CompletionRow key={x} name="Power" title="Power" done onDone={() => {}} />}
+      </ui.CompletionList>,
+    );
+    expect(document.querySelector('[aria-expanded]')!.textContent).toContain('Show 1 paid');
+  });
+
   test('canUndoDone: six hours, and never past the next one', () => {
     const at = 1_000_000_000_000;
     expect(ui.canUndoDone(at, at + 5 * 3_600_000)).toBe(true);
