@@ -73,7 +73,11 @@ describe('pwa-headers-check', () => {
 
   test('a repo that serves no pages (a Worker) has nothing to check', () => {
     expect(run({})).toBe(0);
-    expect(run({ 'firebase.json': { emulators: { firestore: { port: 8080 } } } })).toBe(0);
+    expect(run({ 'firebase.json': { emulators: { firestore: { port: 8080 } } }, 'wrangler.toml': 'name = "w"' })).toBe(0);
+  });
+
+  test('a firebase.json that lost its hosting, outside a Worker, fails', () => {
+    expect(run({ 'firebase.json': { emulators: { firestore: { port: 8080 } } } })).toBe(1);
   });
 
   test('a site without the headers still fails', () => {
