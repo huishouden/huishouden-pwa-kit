@@ -47,6 +47,9 @@ mock.module('firebase/firestore', () => ({
 }));
 
 const agenda = await import('../src/agenda');
+// Another test file's DOM leaves a real localStorage behind: syncs here read every time unless a test gives its own notes.
+const published = await import('../src/published');
+published.setPublishedStorage(null);
 const {
   AGENDA_FIELDS, agendaDays, agendaDoc, agendaId, agendaStatus, agendaTime, allDayStart, inAgendaWindow,
   removeAgenda, replaceAgenda, syncAgenda, toAgendaItem, todayItems, watchAgenda,
@@ -180,6 +183,53 @@ describe('syncAgenda', () => {
     reset();
     await syncAgenda(db, H, 'bills', [job({ kind: 'bill', ref: 'bill:b1', title: 'Electric' })], BY);
     expect(await syncAgenda(db, H, 'bills', [], BY)).toEqual({ written: 0, deleted: 1, unchanged: 0 });
+  });
+});
+
+describe('a sync this device already made', () => {
+  const memory = () => {
+    const m = new Map<string, string>();
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k), key: (i: number) => [...m.keys()][i] ?? null, get length() { return m.size; } };
+  };
+
+  test('the same items again skip the read; a change, a per-record write or six hours sync again', async () => {
+    reset();
+    const { setPublishedStorage } = await import('../src/published');
+    setPublishedStorage(memory());
+    try {
+      const items = [job(), job({ ref: 'job:j2', title: 'Clean gutters' })];
+      expect(await syncAgenda(db, H, 'home', items, BY)).toEqual({ written: 2, deleted: 0, unchanged: 0 });
+      // Another device (or the Worker) removed one meanwhile: within the hours, this device doesn't look.
+      store.delete(`households/${H}/agenda/${agendaId('home', 'job:j2', job().start)}`);
+      expect(await syncAgenda(db, H, 'home', items, { ...BY, now: NOW + 60_000 })).toEqual({ written: 0, deleted: 0, unchanged: 2, skipped: true });
+      // A changed item syncs (and repairs the removed one).
+      const changed = [job({ title: 'Change the filter' }), job({ ref: 'job:j2', title: 'Clean gutters' })];
+      expect(await syncAgenda(db, H, 'home', changed, { ...BY, now: NOW + 120_000 })).toEqual({ written: 2, deleted: 0, unchanged: 0 });
+      expect(await syncAgenda(db, H, 'home', changed, { ...BY, now: NOW + 180_000 })).toMatchObject({ skipped: true });
+      // Another member on this device, or a helper's view, is its own sync.
+      expect(await syncAgenda(db, H, 'home', changed, { by: 'sam@example.com', now: NOW + 180_000 })).toEqual({ written: 0, deleted: 0, unchanged: 2 });
+      // A per-record write forgets the app's note.
+      await replaceAgenda(db, H, 'home', 'job:j2', [job({ ref: 'job:j2', title: 'Clean gutters' })], { ...BY, now: NOW + 200_000 });
+      expect(await syncAgenda(db, H, 'home', changed, { ...BY, now: NOW + 240_000 })).toEqual({ written: 0, deleted: 0, unchanged: 2 });
+      // Six hours on, the same items read again.
+      expect(await syncAgenda(db, H, 'home', changed, { ...BY, now: NOW + 6 * 3_600_000 + 240_000 })).toEqual({ written: 0, deleted: 0, unchanged: 2 });
+    } finally {
+      setPublishedStorage(null);
+    }
+  });
+
+  test('personal items keep their own note per member', async () => {
+    reset();
+    const { setPublishedStorage } = await import('../src/published');
+    setPublishedStorage(memory());
+    try {
+      const mine = [{ ...job({ ref: 'med:1' }), audience: ['alex@example.com'] }];
+      expect(await syncPersonalAgenda(db, H, 'health', mine, BY)).toEqual({ written: 1, deleted: 0, unchanged: 0 });
+      expect(await syncPersonalAgenda(db, H, 'health', mine, { ...BY, now: NOW + 1000 })).toMatchObject({ skipped: true });
+      expect(await syncPersonalAgenda(db, H, 'health', [], { ...BY, now: NOW + 2000 })).toEqual({ written: 0, deleted: 1, unchanged: 0 });
+    } finally {
+      setPublishedStorage(null);
+    }
   });
 });
 

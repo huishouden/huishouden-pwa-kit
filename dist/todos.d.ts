@@ -18,6 +18,8 @@ export interface TodoWriteResult {
     written: number;
     deleted: number;
     unchanged: number;
+    /** Nothing read or written: this device published exactly these items a short while ago (`./published`). */
+    skipped?: true;
 }
 /**
  * Makes everything this app has published exactly `items`: call it on open and a few seconds after

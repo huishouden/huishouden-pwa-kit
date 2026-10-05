@@ -6,6 +6,7 @@ import { kt } from './i18n.js';
 import { atClock } from './time.js';
 import { readSource } from './reminder-source.js';
 import { cleanTexts, localizeReminders, PERSONAL_REMINDERS, personalReminderDoc, reminderDoc, reminderId, toReminder } from './reminder-core.js';
+import { alreadyPublished, fingerprint, forgetPublishedApp, publishedKey } from './published.js';
 export * from './reminder-core.js';
 const remindersOf = (db, householdId) => collection(db, 'households', householdId, 'reminders');
 const personalOf = (db, householdId) => collection(db, 'households', householdId, PERSONAL_REMINDERS);
@@ -47,7 +48,13 @@ export async function cancelReminder(db, householdId, id) {
 export async function cancelReminders(db, householdId, ref, { restricted } = {}) {
     const snap = await getDocs(visible(db, householdId, restricted, where('ref', '==', ref)));
     await commit(db, snap.docs.map((d) => (b) => b.delete(d.ref)), restricted);
+    forgetApps(db, householdId, snap.docs.map((d) => d.data().app));
     return snap.size;
+}
+/** A per-record write changed what is stored for these apps: their next sync on this device reads again. */
+function forgetApps(db, householdId, apps) {
+    for (const app of new Set(apps.filter((a) => typeof a === 'string')))
+        forgetPublishedApp(db, householdId, 'reminders', app);
 }
 /**
  * Makes the reminders with this `ref` exactly `inputs` from now on: future ones not in the list are
@@ -68,6 +75,7 @@ export async function replaceReminders(db, householdId, ref, inputs, by, now = D
     for (const [id, data] of wanted)
         ops.push((b) => b.set(doc(remindersOf(db, householdId), id), data));
     await commit(db, ops, restricted);
+    forgetApps(db, householdId, [...existing.docs.map((d) => d.data().app), ...[...wanted.values()].map((d) => d.app)]);
     return [...wanted.keys()];
 }
 /** A reminder as it would be sent, for telling whether a stored one needs rewriting. */
@@ -90,6 +98,11 @@ export async function syncReminders(db, householdId, app, inputs, by, now = Date
         const data = reminderDoc({ ...r, app }, by, now);
         return [r.id ?? reminderId(r.ref ?? app, data.at), data];
     }));
+    // The same reminders this device scheduled a short while ago: nothing to read or write (`./published`).
+    const key = publishedKey(db, householdId, 'reminders', app, by);
+    const print = fingerprint(wanted, String(!!restricted));
+    if (alreadyPublished(key, print, now))
+        return { written: 0, deleted: 0, unchanged: wanted.size, skipped: true };
     const existing = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
     const have = new Map(existing.docs.map((d) => [d.id, d.data()]));
     const ops = [];

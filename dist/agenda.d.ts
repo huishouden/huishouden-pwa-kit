@@ -21,6 +21,8 @@ export interface AgendaWriteResult {
     written: number;
     deleted: number;
     unchanged: number;
+    /** Nothing read or written: this device published exactly these items a short while ago (`./published`). */
+    skipped?: true;
 }
 /**
  * Makes one source record's items exactly `items` (each gets `ref`): call it when the record is
@@ -34,8 +36,9 @@ export declare function removeAgenda(db: Firestore, householdId: string, app: st
 }): Promise<number>;
 /**
  * Makes everything this app has published exactly `items`: for apps that work out all their dates
- * when they open. Writes only what changed and deletes what is no longer there, so running it on
- * every open costs one read of the app's items and almost no writes.
+ * when they open. Writes only what changed and deletes what is no longer there. When this device
+ * already published exactly these items in the last few hours (`./published`), it returns without
+ * reading (`skipped`); otherwise it costs one read of the app's items and almost no writes.
  */
 export declare function syncAgenda(db: Firestore, householdId: string, app: string, items: AgendaInput[], options: AgendaWriteOptions): Promise<AgendaWriteResult>;
 /**
