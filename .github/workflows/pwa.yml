@@ -28,6 +28,13 @@
 # there, one PR comment). Production is on Firebase's free plan, 10 GB of Hosting transfer a month for
 # the whole suite (docs/one-site.md "Bandwidth"), so nothing here loads it in a browser.
 #
+# Asset CDN (docs/one-site.md "Asset CDN"): builds name their hashed files at the
+# Cloudflare Worker huishouden-assets (staging: huishouden-assets-staging), and every deploy uploads
+# the assembled site's assets/ there before Firebase gets the HTML. Needs the caller to pass
+# `secrets: inherit` (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID). Without the token, or with the
+# repository or organization variable HH_ASSET_CDN=off (the rollback switch), the deploy removes the
+# CDN from the pages and the site serves its own copy, as before.
+#
 # Staging by hand: with STAGING_GCP_WIF_PROVIDER, STAGING_GCP_DEPLOY_SA, STAGING_SITE and
 # STAGING_VITE_FIREBASE_* set (infra/bootstrap.sh --staging), a manual run given `staging-ref` builds
 # that ref against the huishouden-staging project, deploys it to https://<STAGING_SITE>.web.app and
@@ -62,9 +69,21 @@ on:
         description: Retired (0.94.0); `hh ops staging-cleanup` removes leftovers. Kept so callers that pass it don't fail
         type: boolean
         default: false
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        description: Deploys the asset CDN's Worker (Workers Scripts edit). Missing, the site serves its own assets
+        required: false
+      CLOUDFLARE_ACCOUNT_ID:
+        description: The Cloudflare account of the asset CDN
+        required: false
 
 permissions:
   contents: read
+
+env:
+  # Exact versions: the steps that run them hold production credentials or the Cloudflare token.
+  WRANGLER_VERSION: 4.147.0
+  WRANGLER_SEND_METRICS: 'false'
 
 jobs:
   leak-scan:
@@ -149,6 +168,16 @@ jobs:
         run: if [ -e node_modules/.bin/pwa-i18n-check ]; then bunx pwa-i18n-check; else echo "kit has no pwa-i18n-check"; fi
       - name: Unit tests
         run: if jq -e '.scripts.test' package.json >/dev/null; then bun run test; else echo "no test script"; fi
+      # Kits with the asset CDN name the hashed files at the asset CDN; the deploy decides whether pages keep it.
+      - name: Asset CDN for the build
+        if: inputs.base != ''
+        run: |
+          if ! grep -qs "'asset-origin'" node_modules/@huishouden/pwa-kit/scripts/site.ts; then echo "the pinned kit has no asset CDN"; exit 0; fi
+          origin=$(bunx pwa-site asset-origin --flavor production | sed -n 's/^origin=//p')
+          staging=$(bunx pwa-site asset-origin --flavor staging | sed -n 's/^origin=//p')
+          if [ -z "$origin" ] || [ -z "$staging" ]; then echo "::error::pwa-site asset-origin gave no origin"; exit 1; fi
+          echo "HH_ASSET_ORIGIN=$origin" >> "$GITHUB_ENV"
+          echo "staging_origin=$staging" >> "$RUNNER_TEMP/staging-origin.env"
       - run: bun run build
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -180,6 +209,7 @@ jobs:
           VITE_NEWRELIC_BROWSER_KEY: ''
         run: |
           if [ "$VITE_FIREBASE_PROJECT_ID" != huishouden-staging ]; then echo "::error::STAGING_VITE_FIREBASE_PROJECT_ID is not huishouden-staging"; exit 1; fi
+          if [ -n "${HH_ASSET_ORIGIN:-}" ]; then HH_ASSET_ORIGIN=$(sed -n 's/^staging_origin=//p' "$RUNNER_TEMP/staging-origin.env"); export HH_ASSET_ORIGIN; fi
           rm -rf dist && bun run build && bunx pwa-site pack dist site-assets/site-staging.tar.gz --path "$BASE"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: inputs.base != '' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.staging-ref == ''
@@ -228,15 +258,146 @@ jobs:
       - id: scope
         run: printf 'deploy=true\ntests=full\n' >> "$GITHUB_OUTPUT"
 
-  staging:
-    # Builds the PR (or staging-ref) against the staging Firebase project, deploys it to the app's
-    # staging site and tests it there, signed in as invented test users in households of the run's
-    # own (HH_STAGING_RUN), removed at the end. Runs the PR's code, so it holds only staging
-    # credentials and no GitHub write access. One staging run per app at a time, since a run tests
-    # the build on the app's one staging site: a newer PR's run cancels a running one, which its
-    # PR comment says (rerun it, or push again).
-    needs: [build, leak-scan, staging-scope]
+  staging-build:
+    # The ref's staging build. Runs the ref's code, so it holds no credentials at all.
+    needs: [staging-scope]
     if: needs.staging-scope.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VITE_FIREBASE_API_KEY: ${{ vars.STAGING_VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.STAGING_VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ vars.STAGING_VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_APP_ID: ${{ vars.STAGING_VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_GOOGLE_CLIENT_ID: ${{ vars.STAGING_VITE_GOOGLE_CLIENT_ID }}
+      VITE_CONNECTOR_URL: ${{ vars.STAGING_VITE_CONNECTOR_URL }}
+      VITE_CALENDAR_URL: ${{ vars.STAGING_VITE_CALENDAR_URL }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.staging-ref }}
+          persist-credentials: false
+      - name: Only ever the staging project
+        run: |
+          if [ "$VITE_FIREBASE_PROJECT_ID" != huishouden-staging ]; then
+            echo "::error::STAGING_VITE_FIREBASE_PROJECT_ID is '$VITE_FIREBASE_PROJECT_ID', not huishouden-staging"; exit 1
+          fi
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - name: Build (hashed files named at the staging asset CDN)
+        env:
+          BASE: ${{ inputs.base }}
+        run: |
+          if [ -n "$BASE" ] && grep -qs "'asset-origin'" node_modules/@huishouden/pwa-kit/scripts/site.ts; then
+            HH_ASSET_ORIGIN=$(bunx pwa-site asset-origin --flavor staging | sed -n 's/^origin=//p')
+            if [ -z "$HH_ASSET_ORIGIN" ]; then echo "::error::pwa-site asset-origin gave no origin"; exit 1; fi
+            export HH_ASSET_ORIGIN
+          fi
+          bun run build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: staging-dist
+          path: dist
+          retention-days: 1
+
+  staging-site:
+    # The whole suite with this build, for the app's own staging site (docs/one-site.md "Staging"),
+    # and its assets on the staging asset CDN. Holds the Cloudflare token, so it runs nothing from
+    # the ref: the ref is checked out into ref/ and read as data (the kit pin, apps.json and
+    # firebase.json); bun and wrangler run from the workspace root, so no bunfig.toml or .env of the
+    # ref applies; the assembler is the kit at the version the ref pins, wrangler an exact version.
+    needs: [staging-build]
+    if: inputs.base != ''
+    runs-on: ubuntu-latest
+    concurrency:
+      group: staging-cdn-${{ github.repository }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.staging-ref }}
+          path: ref
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: staging-dist
+          path: dist
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - name: The kit's site assembler, at the version the ref pins
+        run: |
+          spec=$(jq -r '(.devDependencies // {})["@huishouden/pwa-kit"] // (.dependencies // {})["@huishouden/pwa-kit"] // empty' ref/package.json)
+          ref=${spec##*#}
+          if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a tag (github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
+          git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
+          echo "SITE_TOOL=$RUNNER_TEMP/pwa-kit/scripts/site.ts" >> "$GITHUB_ENV"
+      - name: Asset CDN on?
+        id: cdn
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          SWITCH: ${{ vars.HH_ASSET_CDN }}
+        run: |
+          if ! grep -q "'asset-origin'" "$SITE_TOOL"; then echo "args=" >> "$GITHUB_OUTPUT"; echo "the pinned kit has no asset CDN"; exit 0; fi
+          origin=$(bun "$SITE_TOOL" asset-origin --flavor staging | sed -n 's/^origin=//p')
+          if [ -z "$origin" ]; then echo "::error::pwa-site asset-origin gave no origin"; exit 1; fi
+          if [ -z "$TOKEN" ] || [ "$SWITCH" = off ]; then
+            echo "::warning::Asset CDN off for staging ($([ -z "$TOKEN" ] && echo 'no CLOUDFLARE_API_TOKEN; the caller passes secrets: inherit' || echo 'HH_ASSET_CDN=off')): the site serves its own assets"
+            echo "args=--assets-origin none" >> "$GITHUB_OUTPUT"
+          else
+            echo "on=true" >> "$GITHUB_OUTPUT"
+            echo "args=--assets-origin $origin" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Assemble the suite with this build
+        env:
+          BASE: ${{ inputs.base }}
+          SITE: ${{ vars.STAGING_SITE }}
+          GH_TOKEN: ${{ github.token }}
+          ARGS: ${{ steps.cdn.outputs.args }}
+        run: |
+          # The ref's own registry (a portal change to apps.json) and Permissions-Policy, as data.
+          set -- $ARGS
+          if [ -f ref/apps.json ]; then set -- "$@" --registry ref/apps.json; fi
+          bun "$SITE_TOOL" assemble --flavor staging --site "$SITE" --own "$BASE=dist" --out site-out --firebase ref/firebase.json "$@"
+      # Assets first: the pages deployed after this name them. Another repo's staging upload can
+      # replace this one moments later; then upload again (its files are in the manifest by then).
+      - name: Assets to the staging asset CDN
+        if: steps.cdn.outputs.on == 'true'
+        # The token is written into the wrangler command only, not the step's environment: the
+        # kit's cdn and cdn-check run without it.
+        run: |
+          for round in 1 2 3; do
+            bun "$SITE_TOOL" cdn --flavor staging --site-dir site-out/public --out cdn-out
+            (cd cdn-out && CLOUDFLARE_API_TOKEN="${{ secrets.CLOUDFLARE_API_TOKEN }}" CLOUDFLARE_ACCOUNT_ID="${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" npx --yes "wrangler@$WRANGLER_VERSION" deploy)
+            sleep 5
+            bun "$SITE_TOOL" cdn-check --flavor staging --site-dir site-out/public > "$RUNNER_TEMP/check.txt"
+            cat "$RUNNER_TEMP/check.txt"
+            grep -q '^ok=true' "$RUNNER_TEMP/check.txt" && exit 0
+            echo "::notice::round $round: another upload replaced this one; uploading again"
+          done
+          echo "::error::the staging asset CDN still lacks this site's assets after three uploads"; exit 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: staging-site
+          path: site-out
+          include-hidden-files: true
+          retention-days: 1
+
+  staging:
+    # Deploys the staging build (staging-build, staging-site) to the app's staging site and tests it
+    # there, signed in as invented test users in households of the run's own (HH_STAGING_RUN),
+    # removed at the end. Runs the PR's code, so it holds only staging credentials and no GitHub
+    # write access. One staging run per app at a time, since a run tests the build on the app's one
+    # staging site: a newer PR's run cancels a running one, which its PR comment says (rerun it, or
+    # push again).
+    needs: [build, leak-scan, staging-scope, staging-build, staging-site]
+    if: ${{ !cancelled() && needs.staging-scope.outputs.deploy == 'true' && needs.staging-build.result == 'success' && (inputs.base == '' || needs.staging-site.result == 'success') }}
     runs-on: ubuntu-latest
     environment:
       name: staging
@@ -300,7 +461,15 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-${{ hashFiles('bun.lock') }}
       - run: bun install --frozen-lockfile
-      - run: bun run build
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: staging-dist
+          path: dist
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: inputs.base != ''
+        with:
+          name: staging-site
+          path: site-out
       - name: Deploy to ${{ vars.STAGING_SITE }}
         if: inputs.base == ''
         env:
@@ -310,18 +479,14 @@ jobs:
         run: |
           npx --yes firebase-tools@14.27.0 target:apply hosting "$TARGET" "$SITE" --project huishouden-staging
           npx --yes firebase-tools@14.27.0 deploy --only "hosting:$TARGET" --project huishouden-staging --non-interactive --message "staging $REF"
-      # The whole suite on this app's own staging site: this build under its path, every other app's
-      # latest staging build under theirs (docs/one-site.md "Staging").
+      # The whole suite on this app's own staging site (staging-site assembled it): this build under
+      # its path, every other app's latest staging build under theirs (docs/one-site.md "Staging").
       - name: Deploy the suite with this build to ${{ vars.STAGING_SITE }}
         if: inputs.base != ''
         env:
-          BASE: ${{ inputs.base }}
           SITE: ${{ vars.STAGING_SITE }}
           REF: ${{ inputs.staging-ref || github.sha }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          bunx pwa-site assemble --flavor staging --site "$SITE" --own "$BASE=dist" --out site-out
-          cd site-out && npx --yes firebase-tools@14.27.0 deploy --only "hosting:$SITE" --project huishouden-staging --non-interactive --message "staging $REF"
+        run: cd site-out && npx --yes firebase-tools@14.27.0 deploy --only "hosting:$SITE" --project huishouden-staging --non-interactive --message "staging $REF"
       # Kits from 0.72 give each run (and spec file) households of its own, seeded by the specs that
       # need them (useTestHousehold) and removed below. Older kits share one household: reseed it.
       - name: Kit's staging fixtures
@@ -425,18 +590,39 @@ jobs:
           if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a tag (github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
           git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
           echo "SITE_TOOL=$RUNNER_TEMP/pwa-kit/scripts/site.ts" >> "$GITHUB_ENV"
+      # The asset CDN (docs/one-site.md "Asset CDN"): on with the Cloudflare token unless
+      # HH_ASSET_CDN=off (repository or organization variable), the rollback switch. Off, the
+      # assembler removes the CDN from every page and the site serves its own assets.
+      - name: Asset CDN on?
+        id: cdn
+        if: inputs.base != ''
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          SWITCH: ${{ vars.HH_ASSET_CDN }}
+        run: |
+          if ! grep -q "'asset-origin'" "$SITE_TOOL"; then echo "args=" >> "$GITHUB_OUTPUT"; echo "the pinned kit has no asset CDN"; exit 0; fi
+          origin=$(bun "$SITE_TOOL" asset-origin --flavor production | sed -n 's/^origin=//p')
+          if [ -z "$origin" ]; then echo "::error::pwa-site asset-origin gave no origin"; exit 1; fi
+          if [ -z "$TOKEN" ] || [ "$SWITCH" = off ]; then
+            echo "::warning::Asset CDN off ($([ -z "$TOKEN" ] && echo 'no CLOUDFLARE_API_TOKEN; the caller passes secrets: inherit' || echo 'HH_ASSET_CDN=off')): the site serves its own assets"
+            echo "args=--assets-origin none" >> "$GITHUB_OUTPUT"
+          else
+            echo "on=true" >> "$GITHUB_OUTPUT"
+            echo "args=--assets-origin $origin" >> "$GITHUB_OUTPUT"
+          fi
       - name: Is the live site behind? Do the old sites redirect?
         id: live
         if: inputs.base != ''
         env:
           GH_TOKEN: ${{ github.token }}
           RECONCILE: ${{ inputs.reconcile }}
+          ARGS: ${{ steps.cdn.outputs.args }}
         run: |
           if [ "$RECONCILE" = true ]; then
             # The suite's site from the pinned kit (SUITE_SITE, 0.72+); older kits deploy the portal's site.
             site=$(bun "$SITE_TOOL" site 2>/dev/null | sed -n 's/^site=//p')
             site=${site:-$(jq -r '.[] | select(.path == "/") | .site' apps.json)}
-            bun "$SITE_TOOL" stale --flavor production --manifest "https://$site.web.app/hh-site.json"
+            bun "$SITE_TOOL" stale --flavor production --manifest "https://$site.web.app/hh-site.json" $ARGS
           fi
           bun "$SITE_TOOL" redirects-check
       - name: Assemble the site
@@ -445,9 +631,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REDIRECTS: ${{ steps.live.outputs.wrong }}
+          ARGS: ${{ steps.cdn.outputs.args }}
         run: |
-          if [ "$REDIRECTS" = true ]; then bun "$SITE_TOOL" assemble --flavor production --out site-out --redirects
-          else bun "$SITE_TOOL" assemble --flavor production --out site-out; fi
+          if [ "$REDIRECTS" = true ]; then bun "$SITE_TOOL" assemble --flavor production --out site-out --redirects $ARGS
+          else bun "$SITE_TOOL" assemble --flavor production --out site-out $ARGS; fi
       - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         if: inputs.base == '' || steps.site.outcome == 'success'
         with:
@@ -458,27 +645,59 @@ jobs:
       - name: Deploy the app's own site
         if: inputs.base == ''
         run: npx --yes firebase-tools@14.27.0 deploy --only "hosting:${{ inputs.hosting-target }}" --non-interactive --message "${{ github.sha }}"
+      # Assets first, to the CDN (with every earlier file still within retention), then the pages
+      # that name them, to Firebase. The token is read from the secret on each run, never stored.
       - name: Deploy the site
         if: steps.site.outcome == 'success'
         env:
           ONLY: ${{ steps.site.outputs.only }}
           GH_TOKEN: ${{ github.token }}
           WHY: ${{ inputs.reconcile && 'reconcile' || github.repository }}
+          ARGS: ${{ steps.cdn.outputs.args }}
+          CDN: ${{ steps.cdn.outputs.on }}
         run: |
+          # The CDN's upload, then a check that no other repo's upload replaced it (it read an older
+          # hh-assets.json); if one did, upload again, with that repo's files from the manifest.
+          # The token is written into the wrangler command only, not the step's environment, so
+          # neither the kit nor firebase-tools sees it.
+          assets() {
+            [ "$CDN" = true ] || return 0
+            for try in 1 2 3; do
+              bun "$SITE_TOOL" cdn --flavor production --site-dir site-out/public --out cdn-out || return 1
+              (cd cdn-out && CLOUDFLARE_API_TOKEN="${{ secrets.CLOUDFLARE_API_TOKEN }}" CLOUDFLARE_ACCOUNT_ID="${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" npx --yes "wrangler@$WRANGLER_VERSION" deploy) || return 1
+              sleep 5
+              bun "$SITE_TOOL" cdn-check --flavor production --site-dir site-out/public > "$RUNNER_TEMP/cdn-check.txt" || return 1
+              cat "$RUNNER_TEMP/cdn-check.txt"
+              grep -q '^ok=true' "$RUNNER_TEMP/cdn-check.txt" && return 0
+              echo "::notice::another upload replaced this one; uploading again"
+            done
+            echo "::error::the asset CDN still lacks this site's assets after three uploads"; return 1
+          }
+          # After the pages are live: is the CDN still holding their assets? Another repo's upload
+          # may have replaced this one since; then upload again.
+          settle() {
+            [ "$CDN" = true ] || return 0
+            bun "$SITE_TOOL" cdn-check --flavor production --site-dir site-out/public > "$RUNNER_TEMP/cdn-check.txt" || return 1
+            cat "$RUNNER_TEMP/cdn-check.txt"
+            grep -q '^ok=true' "$RUNNER_TEMP/cdn-check.txt" || assets
+          }
           deploy() { (cd site-out && npx --yes firebase-tools@14.27.0 deploy --only "$1" --project "${{ vars.VITE_FIREBASE_PROJECT_ID }}" --non-interactive --message "$WHY ${GITHUB_SHA::7}"); }
+          assets
           deploy "$ONLY"
           # Another repo may have published between this run's download and its deploy; if so, its
           # build is missing here and this deploy may have replaced one that had it. Up to three rounds.
           for round in 1 2 3; do
             sleep 20
-            bun "$SITE_TOOL" stale --flavor production --manifest site-out/public/hh-site.json > "$RUNNER_TEMP/stale.txt"
+            bun "$SITE_TOOL" stale --flavor production --manifest site-out/public/hh-site.json $ARGS > "$RUNNER_TEMP/stale.txt"
             cat "$RUNNER_TEMP/stale.txt"
-            grep -q '^stale=true' "$RUNNER_TEMP/stale.txt" || exit 0
+            if ! grep -q '^stale=true' "$RUNNER_TEMP/stale.txt"; then settle; exit 0; fi
             echo "::notice::round $round: another app published meanwhile; assembling again"
-            bun "$SITE_TOOL" assemble --flavor production --out site-out > "$RUNNER_TEMP/assemble.txt"
+            bun "$SITE_TOOL" assemble --flavor production --out site-out $ARGS > "$RUNNER_TEMP/assemble.txt"
             cat "$RUNNER_TEMP/assemble.txt"
+            assets
             deploy "hosting:$(sed -n 's/^site=//p' "$RUNNER_TEMP/assemble.txt")"
           done
+          settle
       # The version the PR's author set (build checked it was bumped): tag it and publish its
       # CHANGELOG.md section as the release, once. Replaces release-please (STANDARD.md "Versions").
       - name: Tag the version and publish its release
@@ -507,7 +726,7 @@ jobs:
     # production is on Firebase's free plan, 10 GB of Hosting transfer a month for the whole suite
     # (docs/one-site.md "Bandwidth"), and a browser visit with the service worker downloads every
     # precached file. Browser tests run on staging or locally, never against production.
-    # About 4 KB per deploy.
+    # About 4 KB of Hosting transfer per deploy; an asset on the CDN is fetched from Cloudflare.
     needs: deploy
     if: ${{ !inputs.reconcile }}
     runs-on: ubuntu-latest
@@ -550,7 +769,21 @@ jobs:
           asset=$(grep -oE '(src|href)="[^"]*/assets/[^"]+\.js"' "$RUNNER_TEMP/index.html" | head -1 | sed -E 's/^(src|href)="//; s/"$//')
           manifest=$(grep -oE '<link[^>]*rel="manifest"[^>]*>' "$RUNNER_TEMP/index.html" | grep -oE 'href="[^"]+"' | sed -E 's/^href="//; s/"$//')
           abs() { case "$1" in http*) echo "$1" ;; /*) echo "$origin$1" ;; *) echo "${LIVE_URL%/}/$1" ;; esac; }
-          if [ -z "$asset" ]; then echo "::error::no hashed /assets/*.js in index.html"; fail=1; else
+          if [ -z "$asset" ]; then echo "::error::no hashed /assets/*.js in index.html"; fail=1
+          elif [ "${asset#"$origin"}" = "$asset" ] && [ "${asset#http}" != "$asset" ]; then
+            # On the asset CDN (docs/one-site.md "Asset CDN"): GET it as the page does, with CORS
+            # (Cloudflare's transfer is free), then HEAD the site's own copy, the fallback.
+            h=$(curl -sS -o /dev/null -D - --retry 3 --retry-all-errors -H 'Accept-Encoding: br, gzip' -H "Origin: $origin" "$asset" | tr -d '\r' | tr 'A-Z' 'a-z')
+            expect "cdn asset $asset status" "$(echo "$h" | head -1)" '^http/[0-9.]+ 200'
+            expect "cdn asset cache-control" "$(header "$h" cache-control)" 'max-age=31536000.*immutable'
+            expect "cdn asset content-type" "$(header "$h" content-type)" 'javascript'
+            expect "cdn asset access-control-allow-origin" "$(header "$h" access-control-allow-origin)" "^($origin|\\*)$"
+            expect "cdn asset cross-origin-resource-policy" "$(header "$h" cross-origin-resource-policy)" '^cross-origin$'
+            expect "cdn asset content-encoding" "$(header "$h" content-encoding)" '^(br|gzip)$'
+            own=$(echo "$asset" | sed -E 's#^https?://[^/]+##')
+            h=$(probe -I "$origin$own")
+            expect "site copy $own status" "$(echo "$h" | head -1)" '^http/[0-9.]+ 200'
+          else
             h=$(probe -I "$(abs "$asset")")
             expect "asset $asset status" "$(echo "$h" | head -1)" '^http/[0-9.]+ 200'
             expect "asset cache-control" "$(header "$h" cache-control)" 'max-age=31536000.*immutable'

@@ -9,13 +9,34 @@
 //   pwa-site stale --manifest <file|url> --flavor <f>     which apps (or the observability settings) published since that deploy
 //   pwa-site redirects-check                              whether every old site redirects as apps.json says
 //   pwa-site site                                         the suite's Hosting site (SUITE_SITE), as site=<name>
+//   pwa-site asset-origin --flavor <f>                    the flavor's asset CDN (src/asset-cdn.ts), as origin=<url>
+//   pwa-site cdn --flavor <f> --site-dir <dir> --out <dir> the CDN's upload: the assembled site's assets/, earlier
+//                                                         files still within retention, _headers, hh-assets.json, wrangler.toml
+//   pwa-site cdn-check --flavor <f> --site-dir <dir>      whether the live CDN holds every asset of that site (ok=true|false)
+//
+// assemble and stale take --assets-origin <url|none> (default none): with a URL the pages keep naming
+// the CDN and the site manifest records it; with none every CDN address is removed from the pages
+// and service workers, which then load the site's own copy (docs/one-site.md "Asset CDN").
 //
 // Common options: --registry <file|url> (default ./apps.json, else <owner>/portal's on main),
 // --owner <github owner> (default GITHUB_REPOSITORY_OWNER).
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
+import {
+  ASSET_MANIFEST,
+  ASSET_ORIGINS,
+  ASSET_RETENTION_DAYS,
+  cdnHeaders,
+  cdnWranglerConfig,
+  isCdnAsset,
+  namesCdn,
+  parseAssetManifest,
+  planAssetOrigin,
+  retainAssets,
+  type Flavor,
+} from '../src/asset-cdn';
 import { headersFor } from '../src/security-headers';
 import {
   BUILD_STAMP,
@@ -203,7 +224,7 @@ async function pack() {
 async function assemble() {
   const flavor = opt('flavor');
   const out = opt('out');
-  if ((flavor !== 'production' && flavor !== 'staging') || !out) fail('usage: pwa-site assemble --flavor production|staging --out <dir> [--site <name>] [--own /pet/=dist] [--redirects]');
+  if ((flavor !== 'production' && flavor !== 'staging') || !out) fail('usage: pwa-site assemble --flavor production|staging --out <dir> [--site <name>] [--own /pet/=dist] [--redirects] [--assets-origin <url|none>]');
   const registry = await loadRegistry();
   const apps = siteApps(registry);
   const site = opt('site') ?? (flavor === 'production' ? sharedSite(registry) : fail('staging needs --site (the app\'s staging site)'));
@@ -244,6 +265,7 @@ async function assemble() {
     if (!existsSync(join(pub, path, 'index.html'))) fail(`${path} has no index.html`);
   }
   if (flavor === 'production') manifest.observability = await writeObservability(portalRepo(registry), pub, included);
+  manifest.assetOrigin = applyAssetOrigin(pub, assetOriginOpt(flavor));
   writeFileSync(join(pub, SITE_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
 
   const hosting: HostingSite[] = [siteConfig(site, included.map((path, i) => ({ path, features: featuresOf(policies[i]) })))];
@@ -264,6 +286,122 @@ async function assemble() {
   output('site', site);
 }
 
+/** Every file under `dir`, as a path from its root (`/pet/assets/x.js`). */
+function walk(dir: string): string[] {
+  const out: string[] = [];
+  const visit = (d: string) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const full = join(d, e.name);
+      if (e.isDirectory()) visit(full);
+      else if (e.isFile()) out.push(`/${relative(dir, full).split(sep).join('/')}`);
+    }
+  };
+  visit(dir);
+  return out.sort();
+}
+
+/** `--assets-origin`: the flavor's CDN origin, or null for none (the default). Any other URL is refused. */
+function assetOriginOpt(flavor: string): string | null {
+  const raw = opt('assets-origin') ?? 'none';
+  if (raw === 'none' || raw === '') return null;
+  const want = ASSET_ORIGINS[flavor as Flavor];
+  if (raw !== want) fail(`--assets-origin for ${flavor} must be ${want} or none, got ${raw}`);
+  return raw;
+}
+
+/** Applies `planAssetOrigin` (src/asset-cdn.ts) to the assembled site; returns what the manifest records. */
+function applyAssetOrigin(pub: string, origin: string | null): string | null {
+  const files = walk(pub).filter(namesCdn).map((path) => ({ path, text: readFileSync(join(pub, path), 'utf8') }));
+  const plan = planAssetOrigin(files, origin);
+  if (plan.error) fail(plan.error);
+  for (const w of plan.writes) writeFileSync(join(pub, w.path), w.text);
+  console.log(origin ? `asset CDN ${origin}: ${plan.naming} pages and workers name it; ${plan.writes.length} fallback pages` : `asset CDN off: ${plan.writes.length} pages and workers load the site's own assets`);
+  return origin;
+}
+
+async function assetOrigin() {
+  const flavor = opt('flavor') ?? 'production';
+  const origin = ASSET_ORIGINS[flavor as Flavor] ?? fail('usage: pwa-site asset-origin --flavor production|staging');
+  output('origin', origin);
+}
+
+async function fetchRetry(url: string): Promise<Response | null> {
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(url, { cache: 'no-store' }).catch(() => null);
+    if (res && (res.ok || res.status === 404)) return res.ok ? res : null;
+    if (attempt >= 3) fail(`${url}: ${res ? `${res.status} ${res.statusText}` : 'no answer'}`);
+    await Bun.sleep(2000 * attempt);
+  }
+}
+
+/**
+ * The CDN's next version: every asset of the assembled site, plus earlier files still within the
+ * retention period, downloaded back from the CDN (Cloudflare's transfer is free), so pages and
+ * service workers of earlier deploys keep finding theirs. Deploy it with `wrangler deploy -c <out>/wrangler.toml`.
+ */
+async function cdn() {
+  const flavor = opt('flavor') as Flavor;
+  const siteDir = opt('site-dir');
+  const out = opt('out');
+  if ((flavor !== 'production' && flavor !== 'staging') || !siteDir || !out) fail('usage: pwa-site cdn --flavor production|staging --site-dir <assembled public dir> --out <dir>');
+  const origin = ASSET_ORIGINS[flavor];
+  const live = walk(siteDir).filter(isCdnAsset);
+  if (!live.length) fail(`${siteDir} has no assets/ files`);
+  rmSync(out, { recursive: true, force: true });
+  const pub = join(out, 'public');
+  for (const path of live) {
+    mkdirSync(dirname(join(pub, path)), { recursive: true });
+    cpSync(join(siteDir, path), join(pub, path));
+  }
+  const res = await fetchRetry(`${origin}/${ASSET_MANIFEST}?t=${Date.now()}`);
+  const previous = res ? parseAssetManifest(await res.json().catch(() => null)) : null;
+  if (res && !previous) fail(`${origin}/${ASSET_MANIFEST} is not an asset manifest; not replacing the CDN's files blind`);
+  if (!previous) console.log(`${origin}: no ${ASSET_MANIFEST} yet (first deploy)`);
+  const { manifest, carried } = retainAssets(previous, live, flavor, new Date());
+  let kept = 0;
+  const missing: string[] = [];
+  const queue = [...carried];
+  await Promise.all(
+    Array.from({ length: 8 }, async () => {
+      for (let path = queue.shift(); path; path = queue.shift()) {
+        const r = await fetchRetry(`${origin}${path}`);
+        if (!r) {
+          missing.push(path);
+          delete manifest.files[path];
+          continue;
+        }
+        mkdirSync(dirname(join(pub, path)), { recursive: true });
+        writeFileSync(join(pub, path), new Uint8Array(await r.arrayBuffer()));
+        kept++;
+      }
+    }),
+  );
+  if (missing.length) console.log(`${missing.length} earlier files were already gone from the CDN: ${missing.slice(0, 5).join(' ')}${missing.length > 5 ? ' ...' : ''}`);
+  writeFileSync(join(pub, '_headers'), cdnHeaders(flavor));
+  writeFileSync(join(pub, ASSET_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
+  writeFileSync(join(out, 'wrangler.toml'), cdnWranglerConfig(flavor));
+  console.log(`${origin}: ${live.length} live files, ${kept} earlier ones kept (seen within ${ASSET_RETENTION_DAYS} days)`);
+  output('files', String(live.length + kept));
+  output('origin', origin);
+}
+
+/**
+ * Whether the live CDN holds every asset of the assembled site: another repo's upload that read
+ * an older manifest can replace this one's moments later. The deploy uploads again when not.
+ */
+async function cdnCheck() {
+  const flavor = opt('flavor') as Flavor;
+  const siteDir = opt('site-dir');
+  if ((flavor !== 'production' && flavor !== 'staging') || !siteDir) fail('usage: pwa-site cdn-check --flavor production|staging --site-dir <assembled public dir>');
+  const origin = ASSET_ORIGINS[flavor];
+  const res = await fetchRetry(`${origin}/${ASSET_MANIFEST}?t=${Date.now()}`);
+  const live = res ? parseAssetManifest(await res.json().catch(() => null)) : null;
+  const missing = walk(siteDir).filter(isCdnAsset).filter((p) => !live?.files[p]);
+  if (missing.length) console.log(`${origin}: ${missing.length} of this site's assets are not on the CDN: ${missing.slice(0, 5).join(' ')}${missing.length > 5 ? ' ...' : ''}`);
+  else console.log(`${origin}: holds every asset of ${siteDir}`);
+  output('ok', missing.length ? 'false' : 'true');
+}
+
 async function stale() {
   const flavor = opt('flavor') ?? 'production';
   const from = opt('manifest');
@@ -274,6 +412,8 @@ async function stale() {
   const latest: Record<string, number | null> = {};
   for (const app of apps) latest[app.path] = await latestAsset(app.repo, flavor);
   const paths = staleApps(manifest, latest);
+  const wantOrigin = assetOriginOpt(flavor);
+  if (manifest && (manifest.assetOrigin ?? null) !== wantOrigin) paths.push(`asset CDN ${wantOrigin ?? 'off'} (live: ${manifest.assetOrigin ?? 'off'})`);
   if (flavor === 'production' && staleObservability(manifest, await latestAsset(portalRepo(registry), flavor, OBSERVABILITY_TAG, OBSERVABILITY_ASSET)))
     paths.push(`/${SITE_OBSERVABILITY}`);
   if (paths.length) console.log(`newer builds than ${from}: ${paths.join(' ')}`);
@@ -310,9 +450,9 @@ async function suiteSite() {
   output('site', sharedSite(await loadRegistry()));
 }
 
-const commands: Record<string, () => Promise<void>> = { pack, assemble, stale, 'redirects-check': redirectsCheck, site: suiteSite };
+const commands: Record<string, () => Promise<void>> = { pack, assemble, stale, 'redirects-check': redirectsCheck, site: suiteSite, 'asset-origin': assetOrigin, cdn, 'cdn-check': cdnCheck };
 if (!command || !commands[command]) {
-  console.error('usage: pwa-site pack|assemble|stale|redirects-check|site ... (see the header of scripts/site.ts)');
+  console.error('usage: pwa-site pack|assemble|stale|redirects-check|site|asset-origin|cdn|cdn-check ... (see the header of scripts/site.ts)');
   process.exit(2);
 }
 await commands[command]();

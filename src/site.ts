@@ -9,17 +9,8 @@
 import { APP_PATHS_REGEX, permissionsPolicy, securityHeaders, type DeviceFeatures } from './security-headers.js';
 import { SITE_OBSERVABILITY } from './observability.js';
 
-/**
- * The suite's Firebase Hosting site (docs/one-site.md): every app is served at
- * `https://<SUITE_SITE>.web.app/<app>/`. The one place the production address is set: deploys,
- * link previews, smoke tests, sign-in origin checks and the bootstrap derive it from here
- * (docs/one-site.md "Moving the suite").
- */
-export const SUITE_SITE = 'huishouden-piekstra';
-/** `<SUITE_SITE>.web.app` */
-export const SUITE_HOST = `${SUITE_SITE}.web.app`;
-/** `https://<SUITE_SITE>.web.app` */
-export const SUITE_ORIGIN = `https://${SUITE_HOST}`;
+export { SUITE_SITE, SUITE_HOST, SUITE_ORIGIN } from './suite.js';
+import { SUITE_ORIGIN, SUITE_SITE } from './suite.js';
 
 /** One entry of the portal's `apps.json`, the suite's list of apps. */
 export interface RegistryEntry {
@@ -105,7 +96,7 @@ export function featuresOf(policy: string | undefined): DeviceFeatures {
 const NO_CACHE = [{ key: 'Cache-Control', value: 'no-cache' }];
 const IMMUTABLE = [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }];
 /** Files that must be fetched fresh for an update to reach a device. */
-export const FRESH_FILES = ['sw.js', 'registerSW.js', 'hh-push-sw.js', 'hh-share-sw.js', 'index.html', 'manifest.webmanifest', 'manifest.json'];
+export const FRESH_FILES = ['sw.js', 'registerSW.js', 'hh-push-sw.js', 'hh-share-sw.js', 'index.html', 'index.site.html', 'manifest.webmanifest', 'manifest.json'];
 
 export interface HostingSite {
   site: string;
@@ -254,6 +245,8 @@ export interface SiteManifest {
   apps: Record<string, { repo: string; asset: number | null; sha?: string; version?: string }>;
   /** The portal's `observability.json` release asset behind `/hh-observability.json` (production only). */
   observability?: number | null;
+  /** Where this deploy's pages load their hashed assets from (./asset-cdn); null: the site itself. */
+  assetOrigin?: string | null;
 }
 
 /** Paths whose published build differs from what `manifest` holds (a newer one, or one it lacks). */

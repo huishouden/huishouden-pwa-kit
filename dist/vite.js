@@ -4,6 +4,7 @@ import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
 import { LANG_BOOT_SCRIPT } from './i18n.js';
 import { THEME_BOOT_SCRIPT } from './theme.js';
 import { SUITE_ORIGIN } from './site.js';
+import { SITE_PAGE, cdnFallbackScript, cdnHints } from './asset-cdn.js';
 import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_IMAGE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource } from './share-sw.js';
 /**
  * Vite PWA plugin with the conventions every app here shares: auto-updating service worker,
@@ -12,7 +13,8 @@ import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_IMAGE_FIELD, SHARE_SW_FILE, share
 export function pwaApp(options) {
     const { overrides = {} } = options;
     const base = normalizeBase(options.base);
-    return [sitePath(base), buildStamp(), telemetryChunks(), stableChunks(), linkPreview(options), themeBoot(), langBoot(), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesFiles(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
+    const origin = assetOriginOf(options);
+    return [sitePath(base), ...(origin ? [assetCdn(base, origin)] : []), buildStamp(), telemetryChunks(), stableChunks(), linkPreview(options), themeBoot(), langBoot(), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesFiles(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
             registerType: 'autoUpdate',
             includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
             base,
@@ -21,6 +23,53 @@ export function pwaApp(options) {
             manifest: { ...webManifest(options), ...(overrides.manifest || {}) },
             workbox: pwaWorkbox(options),
         })];
+}
+/** `assetOrigin`, else `HH_ASSET_ORIGIN`; an https origin without a trailing slash, or '' for none. */
+export function assetOriginOf(options) {
+    const raw = (options.assetOrigin ?? process.env.HH_ASSET_ORIGIN ?? '').trim().replace(/\/+$/, '');
+    if (!raw)
+        return '';
+    const url = new URL(raw);
+    if (url.origin !== raw || (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1')) {
+        throw new Error(`assetOrigin must be an https origin with no path, got ${raw}`);
+    }
+    return raw;
+}
+/**
+ * The build's hashed files from the asset CDN (docs/one-site.md "Asset CDN"): index.html names
+ * them at `origin` (Vite's `renderBuiltUrl`), while JS and CSS reach each other and their images
+ * and fonts by relative URL, so a build loaded from the site's own copy stays there. index.html
+ * gets the one-time fallback script and the connection hints (`preconnect`, `dns-prefetch`) first in <head>.
+ */
+export function assetCdn(base, origin) {
+    return {
+        name: 'huishouden-asset-cdn',
+        apply: 'build',
+        config: () => ({
+            experimental: {
+                renderBuiltUrl(filename, { hostType, type }) {
+                    if (type === 'public')
+                        return undefined;
+                    return hostType === 'html' ? `${origin}${base}${filename}` : { relative: true };
+                },
+            },
+        }),
+        transformIndexHtml: {
+            order: 'post',
+            handler(html) {
+                if (html.includes('data-hh-asset-fallback'))
+                    return html;
+                return html.replace(/<head>/, `<head>\n    <script data-hh-asset-fallback>${cdnFallbackScript(origin, `${base}${SITE_PAGE}`)}</script>\n    ${cdnHints(origin)}`);
+            },
+        },
+    };
+}
+/** Workbox `manifestTransforms` entry: the precache fetches `assets/*` from `origin` (with CORS), the rest from the site. */
+export function cdnPrecache(base, origin) {
+    return async (entries) => ({
+        manifest: entries.map((e) => (e.url.startsWith('assets/') ? { ...e, url: `${origin}${base}${e.url}` } : e)),
+        warnings: [],
+    });
 }
 /** `pet`, `/pet` or `/pet/` as `/pet/`; empty or missing as `/`. */
 export function normalizeBase(base) {
@@ -41,15 +90,16 @@ export function sitePath(base) {
 export function navigationDenylist(options) {
     const paths = (options.otherApps ?? []).map((p) => p.replace(/^\/+|\/+$/g, '')).filter(Boolean);
     const escaped = paths.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-    return [...FIREBASE_RESERVED_PATHS, ...(escaped.length ? [new RegExp(`^/(?:${escaped.join('|')})(?:/|$)`)] : [])];
+    return [...FIREBASE_RESERVED_PATHS, SITE_PAGE_PATH, ...(escaped.length ? [new RegExp(`^/(?:${escaped.join('|')})(?:/|$)`)] : [])];
 }
 /**
- * The Workbox options `pwaApp` passes. The kit's entries in `importScripts`, `runtimeCaching` and
- * `globIgnores` are kept and an app's `overrides.workbox` entries are added after them; other
+ * The Workbox options `pwaApp` passes. The kit's entries in `importScripts`, `runtimeCaching`,
+ * `globIgnores` and `manifestTransforms` are kept and an app's `overrides.workbox` entries are added after them; other
  * keys in `overrides.workbox` replace the kit's.
  */
 export function pwaWorkbox(options) {
-    const { importScripts = [], runtimeCaching = [], globIgnores = [], ...workboxOverrides } = options.overrides?.workbox ?? {};
+    const { importScripts = [], runtimeCaching = [], globIgnores = [], manifestTransforms = [], ...workboxOverrides } = options.overrides?.workbox ?? {};
+    const origin = assetOriginOf(options);
     return {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
         navigateFallback: `${normalizeBase(options.base)}index.html`,
@@ -57,7 +107,8 @@ export function pwaWorkbox(options) {
         ...workboxOverrides,
         importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...(sharesFiles(options) ? [SHARE_SW_FILE] : []), ...importScripts],
         runtimeCaching: [...(options.ocr ? [OCR_CACHE] : []), ...runtimeCaching],
-        globIgnores: [TELEMETRY_CHUNKS, ...globIgnores],
+        globIgnores: [TELEMETRY_CHUNKS, ...OG_IMAGE, ...globIgnores],
+        ...(origin || manifestTransforms.length ? { manifestTransforms: [...(origin ? [cdnPrecache(normalizeBase(options.base), origin)] : []), ...manifestTransforms] } : {}),
     };
 }
 /** The web app manifest `pwaApp` writes (before `overrides.manifest`). */
@@ -146,6 +197,11 @@ export function langBoot() {
         },
     };
 }
+/**
+ * The link-preview image (`og.png`, 1200x630) is for messengers' crawlers, never shown in the app:
+ * left out of the precache, which saves every install about 25 KB of Hosting transfer.
+ */
+export const OG_IMAGE = ['og.png'];
 /** File-name prefix of the New Relic agent's chunks (`./observability`). */
 export const TELEMETRY_PREFIX = 'hh-telemetry-';
 /** Those chunks, left out of the precache (`globIgnores`), whatever the assets directory. */
@@ -288,6 +344,8 @@ export const OCR_CACHE = {
  * cached app turns "Sign in with Google" into a popup showing the app itself.
  */
 export const FIREBASE_RESERVED_PATHS = [/^\/__\//];
+/** The site's own copy of the page (./asset-cdn `SITE_PAGE`), the CDN fallback: always from the network. */
+export const SITE_PAGE_PATH = /\/index\.site\.html$/;
 /**
  * Stamps the build with `import.meta.env.VITE_APP_VERSION` (package.json version, set by the release
  * process) and `VITE_BUILD_SHA` (short commit, from CI's GITHUB_SHA), so a running app can say exactly

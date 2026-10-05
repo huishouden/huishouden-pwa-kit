@@ -8,17 +8,8 @@
  */
 import { APP_PATHS_REGEX, permissionsPolicy, securityHeaders } from './security-headers.js';
 import { SITE_OBSERVABILITY } from './observability.js';
-/**
- * The suite's Firebase Hosting site (docs/one-site.md): every app is served at
- * `https://<SUITE_SITE>.web.app/<app>/`. The one place the production address is set: deploys,
- * link previews, smoke tests, sign-in origin checks and the bootstrap derive it from here
- * (docs/one-site.md "Moving the suite").
- */
-export const SUITE_SITE = 'huishouden-piekstra';
-/** `<SUITE_SITE>.web.app` */
-export const SUITE_HOST = `${SUITE_SITE}.web.app`;
-/** `https://<SUITE_SITE>.web.app` */
-export const SUITE_ORIGIN = `https://${SUITE_HOST}`;
+export { SUITE_SITE, SUITE_HOST, SUITE_ORIGIN } from './suite.js';
+import { SUITE_ORIGIN, SUITE_SITE } from './suite.js';
 /** `pet`, `/pet` or `/pet/` as `/pet/`; empty as `/`. */
 export function normalizePath(path) {
     const trimmed = path.replace(/^\/+|\/+$/g, '');
@@ -86,7 +77,7 @@ export function featuresOf(policy) {
 const NO_CACHE = [{ key: 'Cache-Control', value: 'no-cache' }];
 const IMMUTABLE = [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }];
 /** Files that must be fetched fresh for an update to reach a device. */
-export const FRESH_FILES = ['sw.js', 'registerSW.js', 'hh-push-sw.js', 'hh-share-sw.js', 'index.html', 'manifest.webmanifest', 'manifest.json'];
+export const FRESH_FILES = ['sw.js', 'registerSW.js', 'hh-push-sw.js', 'hh-share-sw.js', 'index.html', 'index.site.html', 'manifest.webmanifest', 'manifest.json'];
 /**
  * The shared site's hosting config: `/<app>` → `/<app>/`, each app's routes to its own
  * `index.html`, everything else to the portal's; Firebase's `/__/` untouched. `entries` are the
