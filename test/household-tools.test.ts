@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { checkArgs, runTool, Session, TOOLS, toolNamed } from '../src/household-tools';
+
+process.env.TZ = 'UTC';
 import en from '../src/household-tools/locales/en';
 import es from '../src/household-tools/locales/es';
 import nl from '../src/household-tools/locales/nl';
@@ -117,6 +119,18 @@ describe('household tools', () => {
     const { db } = fakeDb({ query: async () => [] });
     const call = await runTool(session(db), toolNamed('today')!, {});
     expect(call.result).toEqual({ text: en['error.noHousehold'], error: true });
+  });
+
+  test('runTool refuses to run outside a UTC process, before reading anything', async () => {
+    const { db, commits } = fakeDb();
+    const real = Date.prototype.getTimezoneOffset;
+    Date.prototype.getTimezoneOffset = () => 300;
+    try {
+      await expect(runTool(session(db), toolNamed('today')!, {})).rejects.toThrow('needs a UTC process');
+    } finally {
+      Date.prototype.getTimezoneOffset = real;
+    }
+    expect(commits).toEqual([]);
   });
 
   test('runTool: a refused rate limit runs nothing', async () => {

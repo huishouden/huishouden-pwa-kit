@@ -72,6 +72,15 @@ export function checkArgs(tool: ToolDef, raw: Record<string, unknown>): { ok: tr
   return { ok: false, issues: parsed.error.issues.map((i) => `${i.path.join('.') || '(arguments)'}: ${i.message}`) };
 }
 
+/**
+ * Throws unless this process runs in UTC (summer and winter): every time the tools show and every
+ * local day would otherwise be off by the machine's offset, Health's dose times included.
+ */
+export function assertUtcProcess(): void {
+  if (new Date(Date.UTC(2000, 0, 1)).getTimezoneOffset() !== 0 || new Date(Date.UTC(2000, 6, 1)).getTimezoneOffset() !== 0)
+    throw new Error('household-tools needs a UTC process: set TZ=UTC before anything uses a Date');
+}
+
 /** One tool call's outcome: the answer (Health ones with their note) and what it touched, for logs and audits. */
 export interface ToolCall {
   result: ToolResult;
@@ -94,6 +103,7 @@ export interface RunOptions {
  * clock, then the tool. Never throws for the person's or the rules' reasons: the result says why.
  */
 export async function runTool(session: Session, tool: ToolDef, args: Record<string, unknown>, { allow }: RunOptions = {}): Promise<ToolCall> {
+  assertUtcProcess();
   let lang: Lang = 'en';
   let householdId: string | undefined;
   let touched: ToolCall['touched'] = {};

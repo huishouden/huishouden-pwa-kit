@@ -7,7 +7,7 @@ ones are described in their PR titles and tags.
 
 ### Features
 
-* `@huishouden/pwa-kit/household-tools`: every tool the AI connector offers (today, calendar, to-dos, groceries, tasks, bills, pet, home, appointments, contacts, Health, the household's home), moved from huishouden/connector so `hh data` runs the same implementation. `runTool`, `checkArgs`, `TOOLS`, `toolNamed`, `Session` (`via: 'assistant'` only when the session says so). Needs `zod` (optional peer) and a UTC process.
+* `@huishouden/pwa-kit/household-tools`: every tool the AI connector offers (today, calendar, to-dos, groceries, tasks, bills, pet, home, appointments, contacts, Health, the household's home), moved from huishouden/connector so `hh data` runs the same implementation. `runTool`, `checkArgs`, `TOOLS`, `toolNamed`, `Session` (`via: 'assistant'` only when the session says so). Needs `zod` (optional peer) and a UTC process (`runTool` refuses to run otherwise).
 * `signin-handoff`: the `hh` command line signs in through `/connect` with a loopback address and a PKCE proof key: `cliConnectUrl`, `isLoopbackRedirect` (exactly `http://127.0.0.1:<1024-65535>/callback` or `http://[::1]:<port>/callback`), `pkceChallenge`, `storeCliHandoff` and `takeCliHandoff` (one use, two minutes, bound to state, redirect and challenge), `CLI_HANDOFF_PATH`, `CLI_TOKEN_PATH`.
 * `oauth-origins`: `redirectStatus` and `signInRedirectUris` check the auth handler is an Authorized redirect URI; `expectedAuthorizedDomains` and `compareAuthorizedDomains` for Firebase Auth's authorized domains.
 

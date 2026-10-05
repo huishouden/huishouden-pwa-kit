@@ -67,11 +67,20 @@ export function checkArgs(tool, raw) {
     return { ok: false, issues: parsed.error.issues.map((i) => `${i.path.join('.') || '(arguments)'}: ${i.message}`) };
 }
 /**
+ * Throws unless this process runs in UTC (summer and winter): every time the tools show and every
+ * local day would otherwise be off by the machine's offset, Health's dose times included.
+ */
+export function assertUtcProcess() {
+    if (new Date(Date.UTC(2000, 0, 1)).getTimezoneOffset() !== 0 || new Date(Date.UTC(2000, 6, 1)).getTimezoneOffset() !== 0)
+        throw new Error('household-tools needs a UTC process: set TZ=UTC before anything uses a Date');
+}
+/**
  * Runs `tool` as `session`'s person with already-checked `args` (`checkArgs`, or an MCP server's
  * own validation): the household (`args.household` or the one the apps open), their language and
  * clock, then the tool. Never throws for the person's or the rules' reasons: the result says why.
  */
 export async function runTool(session, tool, args, { allow } = {}) {
+    assertUtcProcess();
     let lang = 'en';
     let householdId;
     let touched = {};

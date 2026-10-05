@@ -14,6 +14,11 @@ export declare function checkArgs(tool: ToolDef, raw: Record<string, unknown>): 
     ok: false;
     issues: string[];
 };
+/**
+ * Throws unless this process runs in UTC (summer and winter): every time the tools show and every
+ * local day would otherwise be off by the machine's offset, Health's dose times included.
+ */
+export declare function assertUtcProcess(): void;
 /** One tool call's outcome: the answer (Health ones with their note) and what it touched, for logs and audits. */
 export interface ToolCall {
     result: ToolResult;
