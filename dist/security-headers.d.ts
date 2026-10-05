@@ -17,7 +17,18 @@ export interface DeviceFeatures {
     geolocation?: boolean;
 }
 export declare const permissionsPolicy: ({ camera, geolocation }?: DeviceFeatures) => string;
+/**
+ * No fetch directives (script-src, style-src...), so the asset CDN (./asset-cdn) needs no entry. A
+ * site that adds one must allow the CDN in it: `cspBlocksAssets` says where it doesn't.
+ */
 export declare const CONTENT_SECURITY_POLICY = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'";
+/** The CSP directives that decide whether the page may load the CDN's scripts, styles, fonts, images and the service worker's precache fetches. */
+export declare const ASSET_DIRECTIVES: readonly ["script-src", "style-src", "font-src", "img-src", "connect-src"];
+/**
+ * The directives of `csp` that would block the asset CDN at `origin`: each of `ASSET_DIRECTIVES`
+ * (or `default-src` standing in for it) that is set without the origin, `*` or `https:`.
+ */
+export declare function cspBlocksAssets(csp: string, origin?: string): string[];
 /** The headers, in firebase.json's `{ key, value }` form. */
 export declare function securityHeaders(features?: DeviceFeatures): {
     key: string;

@@ -7,17 +7,7 @@
  * In an app, only `appUrl` is for the browser.
  */
 import { type DeviceFeatures } from './security-headers.js';
-/**
- * The suite's Firebase Hosting site (docs/one-site.md): every app is served at
- * `https://<SUITE_SITE>.web.app/<app>/`. The one place the production address is set: deploys,
- * link previews, smoke tests, sign-in origin checks and the bootstrap derive it from here
- * (docs/one-site.md "Moving the suite").
- */
-export declare const SUITE_SITE = "huishouden-piekstra";
-/** `<SUITE_SITE>.web.app` */
-export declare const SUITE_HOST = "huishouden-piekstra.web.app";
-/** `https://<SUITE_SITE>.web.app` */
-export declare const SUITE_ORIGIN = "https://huishouden-piekstra.web.app";
+export { SUITE_SITE, SUITE_HOST, SUITE_ORIGIN } from './suite.js';
 /** One entry of the portal's `apps.json`, the suite's list of apps. */
 export interface RegistryEntry {
     name?: string;
@@ -155,6 +145,8 @@ export interface SiteManifest {
     }>;
     /** The portal's `observability.json` release asset behind `/hh-observability.json` (production only). */
     observability?: number | null;
+    /** Where this deploy's pages load their hashed assets from (./asset-cdn); null: the site itself. */
+    assetOrigin?: string | null;
 }
 /** Paths whose published build differs from what `manifest` holds (a newer one, or one it lacks). */
 export declare function staleApps(manifest: SiteManifest | null, latest: Record<string, number | null>): string[];

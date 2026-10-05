@@ -75,7 +75,8 @@ short name unless sharing is the point, and say so.
 ## Deploys without cross-repo secrets
 
 Firebase Hosting replaces a whole site on each deploy, so every deploy ships every app. Each repo
-keeps its own credentials (Workload Identity Federation, the same deploy account it already uses)
+keeps its own credentials (Workload Identity Federation, the same deploy account it already uses,
+and for the asset CDN the Cloudflare token secret, "Asset CDN")
 and reads the other apps only from public release assets:
 
 1. `build` (every run) builds `dist`. On `main` it also builds `dist-staging` with the
@@ -89,8 +90,11 @@ and reads the other apps only from public release assets:
    asset id, unpacks each under its path, puts this run's own `dist` under its own, writes the
    combined `firebase.json` and `/hh-site.json` (which asset of each app is in this deploy), and
    `/hh-observability.json` (each included app's New Relic browser settings, from the portal's
-   `observability` release asset; production only, docs/observability.md) and deploys. Then `pwa-site stale` asks GitHub for the assets again; if any app published since the
-   download, it assembles and deploys again (up to three rounds). Apps without an asset yet are
+   `observability` release asset; production only, docs/observability.md). With the asset CDN on,
+   it uploads the assets there first (`pwa-site cdn`, `wrangler deploy`, "Asset CDN") and then
+   deploys to Firebase. Then `pwa-site stale` asks GitHub for the assets again; if any app
+   published since the download, it assembles, uploads to the CDN and deploys again (up to three
+   rounds). Apps without an asset yet are
    left out (their path falls to the portal).
 4. `smoke` checks the live app over HTTP, no browser (see Bandwidth).
 
@@ -124,7 +128,9 @@ copies its `Permissions-Policy` into the build's stamp for the assembler.
 
 Same shape, staging builds: a staging deploy (the PR author's, or a manual `staging-ref` run) assembles the branch's build with the latest
 `site-staging.tar.gz` of every other app and deploys the whole suite to that app's own staging site
-(`huishouden-staging-<app>.web.app`, the portal's is `huishouden-staging.web.app`). The signed-in
+(`huishouden-staging-<app>.web.app`, the portal's is `huishouden-staging.web.app`). Its assets go
+first to the staging asset CDN (`huishouden-assets-staging`, "Asset CDN"), from a job that holds
+the Cloudflare token and runs nothing from the ref; the build runs in a job with no credentials. The signed-in
 tests run at `https://<staging site>/<app>/`. Each app keeps its own staging site so two repos' PRs
 never overwrite each other mid-test; every staging site is a full mirror (portal at `/`, all apps
 under their paths), so cross-app checks (one sign-in, tiles) work on any of them. Only
@@ -138,12 +144,14 @@ project (every app, the old per-app sites, preview channels), and at 10 GB Hosti
 until the month resets. Staging (`huishouden-staging`) is a separate project with its own 10 GB.
 
 Budget: households use well under 1 GB a month. A first visit to an app costs its precache (the
-service worker downloads every file of the build, compressed: 0.3 to 1.5 MB per app); a later
-visit costs index.html (about 3 KB) and whatever changed. So a browser session against production
+service worker downloads every file of the build, compressed: 0.3 to 1.5 MB per app, of which only
+the icons, the manifest and the Workbox runtime, about 100 KB, come from Hosting since the asset
+CDN); a later visit costs index.html (about 3 KB) and the service worker check. So a browser session against production
 costs as much as a new household member. CI therefore never opens production in a browser:
 
-- each deploy's `smoke` is one GET of index.html and HEAD requests for one hashed asset, the web
-  manifest and `sw.js`: about 4 KB per deploy, 4 MB for 1,000 deploys;
+- each deploy's `smoke` is one GET of index.html and HEAD requests for the site's copy of one hashed
+  asset, the web manifest and `sw.js`: about 4 KB per deploy, 4 MB for 1,000 deploys (the asset
+  itself is fetched from the CDN);
 - pull requests run no CI; their browser tests and screenshots run on staging or locally, never
   on production;
 - `pwa-bandwidth-check`, run by `pwa.yml` before the build, fails any workflow step that runs a
@@ -158,6 +166,96 @@ preset, Vite 8), so a deploy that changes only the app changes one chunk of abou
 Hashed files under `/assets/` are `public, max-age=31536000, immutable`; HTML, `sw.js` and
 manifests are `no-cache` (revalidated with the ETag, a 304 costs headers only). Hosting compresses
 text with Brotli or gzip.
+
+The hashed files themselves are served from the asset CDN (next section), so what Hosting sends per
+page load is the HTML, the service worker check and the manifest.
+
+## Asset CDN
+
+Every build's hashed files (`<base>assets/*`: JS, CSS, fonts, wasm, imported images) are served
+from a Cloudflare Worker with static assets, which Cloudflare serves free and without a request
+limit ("Requests to static assets are free and unlimited",
+https://developers.cloudflare.com/workers/platform/pricing/). Everything else stays on Firebase
+Hosting at the same address: `index.html`, `sw.js`, `registerSW.js`, the web manifest, icons. So
+the app's address, its service worker's scope and its install identity are unchanged, and an
+update still arrives through the same-origin `sw.js`.
+
+| | Production | Staging |
+|---|---|---|
+| Worker | `huishouden-assets` | `huishouden-assets-staging` |
+| Origin | `https://huishouden-assets.huishouden-app.workers.dev` | `https://huishouden-assets-staging.huishouden-app.workers.dev` |
+| `Access-Control-Allow-Origin` | `https://huishouden-piekstra.web.app` (`SUITE_ORIGIN`) | `*` (a staging site per app, local previews) |
+
+A page opened at the project's other host, `huishouden-piekstra.firebaseapp.com`, is not in that
+list: its CDN requests fail CORS and the fallback loads the site's own `assets/` (correct, from
+Hosting).
+
+`src/asset-cdn.ts` holds these. Paths on the CDN match the site's: `/spending/assets/index-abc.js`
+on the CDN is `/spending/assets/index-abc.js` on the site.
+
+**Build.** `pwa.yml` sets `HH_ASSET_ORIGIN` to the flavor's origin (production for `site.tar.gz`,
+staging for `site-staging.tar.gz` and staging runs). `pwaApp` then:
+
+- names the entry script, its module preloads and stylesheets in `index.html` at the CDN
+  (`renderBuiltUrl`), as `type="module" crossorigin` scripts and `crossorigin` links, after a
+  `preconnect` (with `crossorigin`) and a `dns-prefetch` for the CDN;
+- has JS and CSS reach each other, fonts and images by relative URL, so a build loaded from the
+  site's own copy keeps loading from there;
+- has the service worker precache `assets/*` from the CDN (Workbox `manifestTransforms`), fetched
+  with CORS, and answer the page's CDN requests from that cache, so the app opens offline as before;
+- puts a small inline script first in `<head>`: when a script or stylesheet from the CDN fails to
+  load, or a CDN script fails to parse while the page loads, it replaces the page once with
+  `<base>index.site.html`, the same page naming the site's own `assets/` (the assembler writes it
+  beside each `index.html`), keeping the address in the fragment, which that page puts back before
+  the app starts. The service worker leaves `index.site.html` to the network.
+
+A local build (no `HH_ASSET_ORIGIN`) is exactly as before.
+
+**Deploy.** Firebase keeps a full copy of every asset (it costs nothing unless used). The deploy
+job assembles the site as before, then, assets first:
+
+1. `pwa-site cdn` builds the CDN's next version: every `assets/` file of the assembled site, plus
+   every earlier file the CDN's `/hh-assets.json` saw in a live build within 30 days, downloaded
+   back from the CDN (free), so pages and service workers of earlier deploys still find theirs.
+   It writes `_headers` (CORS, `Cross-Origin-Resource-Policy: cross-origin`, `nosniff`, a year
+   immutable on `assets/`), the manifest and `wrangler.toml`. The files are uploaded as built and
+   Cloudflare compresses them per request, at a lower Brotli level than Hosting's precompressed
+   files (the suite's vendor chunk: 248 KB from the CDN, 209 KB from Hosting). Uploading them
+   already compressed does not work: with `Content-Encoding: br` in `_headers`, Cloudflare
+   compresses the stored Brotli again and browsers receive it double-encoded. A Worker version holds at most 20,000
+   files on the free plan; the oldest earlier files give way past 18,000.
+2. `wrangler deploy` (an exact version, `WRANGLER_VERSION` in `pwa.yml`) uploads it; unchanged
+   files are not sent again. `pwa-site cdn-check` then reads `hh-assets.json` back: another
+   repo's upload that started from an older manifest can replace this one, and then the upload
+   runs again (up to three times), now carrying that repo's files too.
+3. `firebase deploy` publishes the pages that name them. After the pages are live (and after the
+   last recheck round), `pwa-site cdn-check` runs again and uploads once more if another repo's
+   upload has replaced the CDN's files since.
+
+The recheck rounds (an app published meanwhile) repeat both. Staging does the same with its own
+Worker in `staging-site`, a job that holds the Cloudflare token and runs nothing from the ref; the
+ref's build runs in `staging-build`, which holds no credentials.
+
+`smoke` GETs one CDN asset with `Origin` (status, `immutable`, JavaScript content type, CORS,
+`Cross-Origin-Resource-Policy`, compression) and HEADs the site's own copy.
+
+**Token.** `CLOUDFLARE_API_TOKEN` (an account token with Workers Scripts edit, the one the
+connector, notify and calendar Workers deploy with) and `CLOUDFLARE_ACCOUNT_ID` are secrets of
+each app repo, set by hand (`gh secret set CLOUDFLARE_API_TOKEN -R huishouden/<app>`, or one
+organization secret), and the caller's `ci.yml` passes them with `secrets: inherit`. Each run reads
+them from the secret and only the wrangler command gets the token; nothing stores it, so rolling
+it means updating the secrets in place. A repo without them deploys with the CDN off.
+
+**Rollback.** Set the variable `HH_ASSET_CDN=off` (organization-wide, or per repo), then deploy any
+app or run the portal's `ci` with `reconcile: true`, which sees the switch differ from the live
+`hh-site.json`. The assembler then removes the CDN from every page and service worker
+(`--assets-origin none`) and the suite loads its own `assets/` from Hosting as before; installed
+copies get a new `sw.js` and refill their cache from the site. Without the token the deploy does
+the same. Remove the variable to turn the CDN back on.
+
+**CSP.** The suite's `Content-Security-Policy` has no fetch directives, so the CDN needs no entry;
+`pwa-headers-check` fails a policy that adds `script-src`, `style-src`, `font-src`, `img-src`,
+`connect-src` or `default-src` without the CDN's origin.
 
 ## Sign-in origins
 
@@ -192,11 +290,12 @@ list is printed as not needed; `bootstrap.sh --prune-domains` removes it.
 
 ## The suite's address
 
-`SUITE_SITE` in `src/site.ts` is the one place the production address is set. Derived from it:
+`SUITE_SITE` in `src/suite.ts` (re-exported by `./site`) is the one place the production address is set. Derived from it:
 
 - the deploy target (`sharedSite`, `pwa-site assemble`, `pwa-site site`) and the reconcile run's
   live-site check;
 - each app's link preview (`og:url`, `og:image`; `pwaApp({ base })` without `url`);
+- the production asset CDN's `Access-Control-Allow-Origin` (`ASSET_CORS_ORIGINS`, "Asset CDN");
 - the smoke tests' and PR screenshots' live URL (`pwa.yml` without `site-url`);
 - absolute links built where there is no page (`SUITE_ORIGIN`, `suiteUrl(base, path)`: Playwright
   defaults, fallbacks in agenda and reminder code, tests);
@@ -213,7 +312,7 @@ site, so sign-in moves with it):
 1. Create the site; add `https://<new>.web.app` to the OAuth web client's Authorized JavaScript
    origins and `https://<new>.web.app/__/auth/handler` to its redirect URIs (console only), and
    `<new>.web.app` to Firebase Auth's authorized domains.
-2. Change `SUITE_SITE`, release the kit, bump every app; each deploy then goes to the new site and
+2. Change `SUITE_SITE` (the asset CDN's CORS origin follows it), release the kit, bump every app; each deploy then goes to the new site and
    the old one keeps its last build.
 3. Point the Workers' site settings at it, and `VITE_FIREBASE_AUTH_DOMAIN` if sign-in should show
    the new host; rebuild.
@@ -251,3 +350,6 @@ Reinstalling the portal once per device fixes that; the old icons can then be re
 5. Portal: tiles become paths, `apps.json` marks the old sites `redirect`, the old sites redirect.
 6. Registry, uptime checks, sign-in origins and authorized domains ("Sign-in origins") and docs
    follow the paths.
+7. Asset CDN (kit 0.100): each app repo gets the two Cloudflare secrets ("Asset CDN", Token), its
+   `ci.yml` `secrets: inherit`, and the kit bump; `HH_ASSET_CDN` stays unset. Until an app's own
+   deploy runs with them, its deploys serve the site's own assets, as before.

@@ -32,4 +32,6 @@ jobs:
       base: /APP_PATH/ # the app's path on the suite's one site (docs/one-site.md)
       site-url: https://FAMILY_SITE.web.app/APP_PATH/
       staging-ref: ${{ inputs.staging-ref }}
+    # CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, for the asset CDN (pwa-kit docs/one-site.md "Asset CDN").
+    secrets: inherit
 
