@@ -501,7 +501,8 @@ patch, `!` or `BREAKING CHANGE:` major (minor before 1.0); `chore`, `docs`, `tes
 and `style` alone release nothing. CI creates the annotated tag and a GitHub release with generated
 notes; packages that ship built code (the kit, `hh`) attach their tarball
 (`pwa-kit-X.Y.Z.tgz`, built in CI: `dist/` is not in git). `package.json` stays `0.0.0` and there is
-no CHANGELOG.md. Apps embed the tag and commit in the build (`VITE_APP_VERSION`, `VITE_BUILD_SHA`:
+no CHANGELOG.md. The Workers and the rules repo call `tag-release.yml` (after their tests, before
+their deploy); apps get the same from `pwa.yml`. Apps embed the tag and commit in the build (`VITE_APP_VERSION`, `VITE_BUILD_SHA`:
 the About screen and New Relic). Release-please and Renovate are retired.
 
 **The kit is current when you touch a repo**: `hh dev verify|evidence|review|ready` commit

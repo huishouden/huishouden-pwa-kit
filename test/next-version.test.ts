@@ -8,12 +8,14 @@ import { join } from 'node:path';
 const SCRIPT = join(import.meta.dir, '..', 'scripts', 'next-version.py');
 const body = (text: string) => text.slice(text.indexOf('import re, subprocess'));
 
-test('pwa.yml inlines scripts/next-version.py unchanged', () => {
-  const wf = Bun.YAML.parse(readFileSync(join(import.meta.dir, '..', '.github', 'workflows', 'pwa.yml'), 'utf8')) as { jobs: { build: { steps: { id?: string; run?: string }[] } } };
-  const run = wf.jobs.build.steps.find((s) => s.id === 'next')!.run!;
-  const inline = /# next-version:begin\n([\s\S]*?)# next-version:end/.exec(run)![1];
-  expect(body(inline).trim()).toBe(body(readFileSync(SCRIPT, 'utf8')).trim().replace(/\n# next-version:end$/, ''));
-});
+for (const [file, job] of [['pwa.yml', 'build'], ['tag-release.yml', 'release']]) {
+  test(`${file} inlines scripts/next-version.py unchanged`, () => {
+    const wf = Bun.YAML.parse(readFileSync(join(import.meta.dir, '..', '.github', 'workflows', file), 'utf8')) as { jobs: Record<string, { steps: { id?: string; run?: string }[] }> };
+    const run = wf.jobs[job].steps.find((s) => s.id === 'next')!.run!;
+    const inline = /# next-version:begin\n([\s\S]*?)# next-version:end/.exec(run)![1];
+    expect(body(inline).trim()).toBe(body(readFileSync(SCRIPT, 'utf8')).trim());
+  });
+}
 
 function repo() {
   const dir = mkdtempSync(join(tmpdir(), 'next-version-'));
