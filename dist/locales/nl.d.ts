@@ -31,6 +31,10 @@ declare const _default: {
     'ui.allDone': string;
     'ui.showDone': string;
     'ui.hideDone': string;
+    'ui.doneByYou': string;
+    'ui.doneByYouAt': string;
+    'ui.skippedByYou': string;
+    'ui.skippedByYouAt': string;
     'todos.addedToday': string;
     'todos.addedYesterday': string;
     'todos.addedDays': string;

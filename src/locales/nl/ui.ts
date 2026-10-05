@@ -34,4 +34,8 @@ export default {
   'ui.allDone': 'Alles gedaan',
   'ui.showDone': '{count} gedaan tonen',
   'ui.hideDone': 'Verbergen',
+  'ui.doneByYou': 'Gedaan door jou',
+  'ui.doneByYouAt': 'Gedaan door jou · {at}',
+  'ui.skippedByYou': 'Overgeslagen door jou',
+  'ui.skippedByYouAt': 'Overgeslagen door jou · {at}',
 } satisfies CatalogueOf<typeof en>;

@@ -31,6 +31,10 @@ declare const _default: {
     readonly 'ui.allDone': "All done";
     readonly 'ui.showDone': "Show {count} done";
     readonly 'ui.hideDone': "Hide";
+    readonly 'ui.doneByYou': "Done by you";
+    readonly 'ui.doneByYouAt': "Done by you · {at}";
+    readonly 'ui.skippedByYou': "Skipped by you";
+    readonly 'ui.skippedByYouAt': "Skipped by you · {at}";
     readonly 'todos.addedToday': "Added today";
     readonly 'todos.addedYesterday': "Added yesterday";
     readonly 'todos.addedDays': "Added {n} days ago";

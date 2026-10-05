@@ -766,15 +766,22 @@ export function CompleteButton({ done, name, onDone, onUndo, verb, label, undoLa
   );
 }
 
-/** "Done by You · 8:10 PM" (or "Skipped by …"); `at` is a moment or words already said. */
-export function doneLine({ by, at, skipped }: { by?: string; at?: number | string; skipped?: boolean }): string {
+/**
+ * "Done by Sam · 8:10 PM" (or "Skipped by …"); `at` is a moment or words already said. Done by the
+ * signed-in member (`byMe`, or `by` being `personName`'s "You") it says "Done by you", which each
+ * language words in its own case ("Hecho por ti", "Gedaan door jou").
+ */
+export function doneLine({ by, at, skipped, byMe }: { by?: string; at?: number | string; skipped?: boolean; byMe?: boolean }): string {
   const time = typeof at === 'number' ? clockWords(toHhmm(at)) : at;
+  const me = byMe || (by !== undefined && by === kt('people.you'));
   if (skipped) {
+    if (me) return time ? kt('ui.skippedByYouAt', { at: time }) : kt('ui.skippedByYou');
     if (by && time) return kt('ui.skippedByAt', { name: by, at: time });
     if (by) return kt('ui.skippedBy', { name: by });
     if (time) return kt('ui.skippedAt', { at: time });
     return kt('ui.skipped');
   }
+  if (me) return time ? kt('ui.doneByYouAt', { at: time }) : kt('ui.doneByYou');
   if (by && time) return kt('ui.doneByAt', { name: by, at: time });
   if (by) return kt('ui.doneBy', { name: by });
   if (time) return kt('ui.doneAt', { at: time });
@@ -791,6 +798,8 @@ export interface CompletionRowProps extends Omit<CompleteButtonProps, 'className
   attention?: boolean;
   /** Who did it, as shown ("You", "Sam"), and when (a moment, or words). */
   by?: string;
+  /** Done by the signed-in member: "Done by you". */
+  byMe?: boolean;
   at?: number | string;
   /** The done line in other words ("Given late 11:02 AM by Jo"); `doneLine({ by, at })` by default. */
   status?: ReactNode;
@@ -811,12 +820,12 @@ export interface CompletionRowProps extends Omit<CompleteButtonProps, 'className
  * check badge, the title muted (never struck through), "Done by You · 8:10 PM" and a small Undo.
  * Renders an `<li>`; put it in a `<ul>`, or a `CompletionList` that sorts done after open.
  */
-export function CompletionRow({ title, meta, attention, by, at, status, leading, onOpen, openLabel, actions, children, ...button }: CompletionRowProps) {
+export function CompletionRow({ title, meta, attention, by, byMe, at, status, leading, onOpen, openLabel, actions, children, ...button }: CompletionRowProps) {
   useKitT();
   const { done, skipped, size = 'md' } = button;
   const lg = size === 'lg';
   const heading = `${lg ? 'text-2xl sm:text-3xl tracking-tight' : 'text-lg'} leading-snug font-semibold [overflow-wrap:anywhere] ${done ? 'text-muted' : attention && lg ? 'text-attention' : 'text-ink'}`;
-  const line = done ? (status ?? doneLine({ by, at, skipped })) : meta;
+  const line = done ? (status ?? doneLine({ by, byMe, at, skipped })) : meta;
   const lineClass = `${lg ? 'text-lg' : 'text-base'} ${!done && attention ? 'font-semibold text-attention' : 'text-muted'}`;
   const text = (
     <>
