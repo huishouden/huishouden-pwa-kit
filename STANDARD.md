@@ -443,9 +443,10 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 | Job | Runs on | Does |
 |---|---|---|
 | `leak-scan` | push to `main` | gitleaks on the added commits (`actions/leak-scan`) |
-| `build` | push to `main` | the version check (see Versions), `bun install --frozen-lockfile`, `pwa-bandwidth-check`, lint (`tsc --noEmit`), `pwa-design-check`, `pwa-write-check`, `pwa-headers-check`, unit tests, build |
+| `build` | push to `main` | the next version from the commit titles (see Versions; embedded as `VITE_APP_VERSION`), `bun install --frozen-lockfile`, `pwa-bandwidth-check`, lint (`tsc --noEmit`), `pwa-design-check`, `pwa-write-check`, `pwa-headers-check`, unit tests, build |
+| `release` | push to `main`, after `build` and `leak-scan` | the version's annotated tag and its GitHub release with generated notes, when the commit titles since the last tag call for one (nothing is committed; see Versions) |
 | `publish` | push to `main`, with `base` | The build (and a staging build) as `site.tar.gz` / `site-staging.tar.gz` on the repo's `hosting` pre-release |
-| `deploy` | push to `main`; a manual run with `reconcile` | Keyless via Workload Identity Federation for Firebase; the Cloudflare token only in the portal's `production` environment; with `base`, `pwa-site assemble` (every app's latest asset under its path, the combined `firebase.json`); in an app (no token) the CDN only for builds it already holds (`--cdn-held`, the rest from the site until the portal's next deploy); in the portal the assets to the asset CDN (`pwa-site cdn`, `wrangler deploy`, then `pwa-site cdn-check`, which uploads again, up to three times, if another repo's upload replaced them; docs/one-site.md "Asset CDN") and then `firebase deploy`, `cdn-check` once more after the pages are live, rechecked for builds published meanwhile; without, `firebase deploy --only hosting:<target>`. Then tags `v<version>` and publishes its CHANGELOG.md section as the GitHub release, once per version |
+| `deploy` | push to `main`; a manual run with `reconcile` | Keyless via Workload Identity Federation for Firebase; the Cloudflare token only in the portal's `production` environment; with `base`, `pwa-site assemble` (every app's latest asset under its path, the combined `firebase.json`); in an app (no token) the CDN only for builds it already holds (`--cdn-held`, the rest from the site until the portal's next deploy); in the portal the assets to the asset CDN (`pwa-site cdn`, `wrangler deploy`, then `pwa-site cdn-check`, which uploads again, up to three times, if another repo's upload replaced them; docs/one-site.md "Asset CDN") and then `firebase deploy`, `cdn-check` once more after the pages are live, rechecked for builds published meanwhile; without, `firebase deploy --only hosting:<target>`. |
 | `smoke` | after `deploy` | One HTTP check of the live app path (index.html, a hashed asset on the CDN with its CORS and caching headers and the site's own copy, the manifest, `sw.js`, their caching and compression); no browser (docs/one-site.md "Bandwidth") |
 | `staging-build`, `staging-site`, `staging` | manual runs with `staging-ref` | Build against the staging project (no credentials); assemble the suite, serving its own assets (no job that builds a ref holds the Cloudflare token; nothing from the ref runs); deploy to the app's staging site, `e2e` and `e2e:signed-in` there in households of the run's own, then remove them (see Staging) |
 
@@ -462,7 +463,7 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
   no Renovate). The Workers' own product schedules (notifications, calendar sync) are product, not
   process.
 - Apps' and Workers' pull requests run no jobs, by decision (the kit's own `ci.yml` still checks its PRs: it publishes nothing to Hosting): hosted CI runs only on `main` (and on manual `staging-ref`
-  runs), where a failing build or unit test, or a version not bumped, stops the deploy. The PR's
+  runs), where a failing build or unit test stops the deploy. The PR's
   author verifies it before it is ready (see Pull requests); `leak-scan` on `main` still scans
   every push. No browser runs against production (docs/one-site.md "Bandwidth": Hosting on Spark
   serves 10 GB a month for the whole suite; `pwa-bandwidth-check` fails a workflow step that would).
@@ -472,7 +473,7 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 ## Pull requests
 
 The author owns everything before `main`; nothing hosted runs on a PR. The `hh` CLI
-(huishouden/cli, `bunx github:huishouden/cli#v1 dev …`) does each step, and the `huishouden`
+(huishouden/cli; it updates itself) does each step, and the `huishouden`
 Claude Code plugin (huishouden/claude-plugins, skill `pr-lifecycle`) tells agents to:
 
 1. **Open it as a draft**: `gh pr create --draft`.
@@ -485,22 +486,27 @@ Claude Code plugin (huishouden/claude-plugins, skill `pr-lifecycle`) tells agent
    change touches rules, Workers, sign-in, Google or notifications, local otherwise
    (`--staging`/`--local` override), and posts or updates one PR comment with the results and
    images for the head commit. Never production.
-4. **Version and changelog**: `hh dev release` bumps package.json (semver from the branch's
-   Conventional Commits) and writes the CHANGELOG.md section, in the same PR.
-5. **Ready**: `hh dev ready` checks the review bar, evidence green for the head commit and the
-   version bump, then runs `gh pr ready`; it refuses otherwise.
-6. **Merge**: `main` builds, tests, deploys, smoke-checks over HTTP and tags the version.
+4. **Ready**: `hh dev ready` checks the review bar and evidence green for the head commit, then
+   runs `gh pr ready`; it refuses otherwise. If the kit is behind it first commits `chore: kit
+   vX.Y.Z` on the branch (pin, `bun.lock`, workflow refs); a review or evidence of an earlier
+   commit stands when only the kit moved since.
+5. **Merge** (squash; the PR title is a Conventional Commit): `main` builds, tests, releases and
+   deploys. There is no version or CHANGELOG in a PR.
 
 ## Versions
 
-Every repo's `package.json` version is set by the PR that changes code, with its `## <version>`
-section in CHANGELOG.md (`hh dev release`). `main`'s build fails, so nothing deploys, when code
-changed since the current version's tag (docs, `*.md` and workflows alone need no bump). After the
-deploy, `pwa.yml` tags `v<version>` and publishes the section as the release. release-please and
-Renovate are retired.
+Versions are made by CI on merge to `main`, never by a commit. The next semver comes from the
+Conventional Commit titles since the last `v*` tag: `feat` is minor, `fix`, `perf` and `refactor`
+patch, `!` or `BREAKING CHANGE:` major (minor before 1.0); `chore`, `docs`, `test`, `ci`, `build`
+and `style` alone release nothing. CI creates the annotated tag and a GitHub release with generated
+notes; packages that ship built code (the kit, `hh`) attach their tarball
+(`pwa-kit-X.Y.Z.tgz`, built in CI: `dist/` is not in git). `package.json` stays `0.0.0` and there is
+no CHANGELOG.md. Apps embed the tag and commit in the build (`VITE_APP_VERSION`, `VITE_BUILD_SHA`:
+the About screen and New Relic). Release-please and Renovate are retired.
 
-**Update the kit when you touch a repo**: `hh dev bump-kit` moves `@huishouden/pwa-kit` to the
-latest tag (package.json and bun.lock) and runs the checks; include it in the PR. Nothing bumps
+**The kit is current when you touch a repo**: `hh dev verify|evidence|review|ready` commit
+`chore: kit vX.Y.Z` (the pin as the release tarball URL, `bun.lock`, the exact workflow refs) on the
+branch when it is behind; `hh dev bump-kit` does it by hand. Nothing bumps
 dependencies on a schedule.
 
 ## Staging
@@ -609,7 +615,7 @@ nothing deployed or tested there can read or write real household data.
   byte for byte (the official text from polyformproject.org and the line
   `Required Notice: Copyright (c) 2026 Caleb Piekstra (https://github.com/huishouden)`), and
   `package.json` says `"license": "PolyForm-Shield-1.0.0"` and `"private": true` (nothing is
-  published to npm; the kit is installed from its git tags).
+  published to npm; the kit is installed from its release tarball, `pwa-kit-X.Y.Z.tgz`; git tags through v0.105.0).
 - The README ends with a License section: the terms in one sentence, and that the Huishouden name
   and logo are the project's brand.
 - CI checks both: `pwa.yml` runs `actions/license-check` in its leak-scan job; the Workers and the

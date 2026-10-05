@@ -22,8 +22,8 @@
 # without `base`: on the suite's site the deploy serves /hh-observability.json, docs/observability.md;
 # staging gets neither, so staging sends no reports). Optional package.json script: test (unit).
 #
-# Only main runs (STANDARD.md "CI/CD"): build and unit tests, leak and license scans, publish,
-# deploy, then one HTTP smoke check of the live app, no browser. Pull requests run no CI: their
+# Only main runs (STANDARD.md "CI/CD"): build and unit tests, leak and license scans, the version's
+# tag and release (nothing committed), publish, deploy, then one HTTP smoke check of the live app, no browser. Pull requests run no CI: their
 # author verifies it (build, deploy to the app's staging site, browser tests and screenshots
 # there, one PR comment). Production is on Firebase's free plan, 10 GB of Hosting transfer a month for
 # the whole suite (docs/one-site.md "Bandwidth"), so nothing here loads it in a browser.
@@ -102,6 +102,9 @@ jobs:
   build:
     if: ${{ github.event_name != 'pull_request' && !inputs.reconcile }}
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+      prev: ${{ steps.next.outputs.prev }}
     env:
       VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -121,28 +124,55 @@ jobs:
         with:
           ref: ${{ inputs.staging-ref }} # empty: the event's own commit
           fetch-depth: 0 # tags, for the version check
-      # The PR's author bumps package.json and adds the CHANGELOG.md section (`hh dev release`,
-      # STANDARD.md "Versions"); deploy tags it. Code changed since the current version's tag means
-      # the bump was forgotten: no deploy. Docs, *.md and workflows alone need no bump.
-      - name: Version bumped, with a CHANGELOG.md section
+      # Versions are CI's (STANDARD.md "Versions"): the next semver from the Conventional Commit
+      # titles since the last v* tag. feat is minor, fix/perf/refactor patch, `!` or BREAKING CHANGE:
+      # major (minor before 1.0); chore, docs, test, ci, build and style alone release nothing. The
+      # build embeds the tag (VITE_APP_VERSION); the release job creates it after the checks pass.
+      - name: Next version, from the commit titles since the last tag
+        id: next
         if: github.ref == 'refs/heads/main' && inputs.staging-ref == ''
         run: |
-          v=$(jq -r .version package.json)
-          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
-            changed=$(git diff --name-only "v$v" HEAD | grep -vE '^docs/|\.md$|^LICENSE$|^\.github/|^renovate\.json$' || true)
-            if [ -n "$changed" ]; then
-              echo "::error title=Version not bumped: nothing deploys::v$v is already tagged and code changed since ($(echo $changed | head -c 300)). Fix: on a branch from main run 'bunx github:huishouden/cli#v1 dev release --commit', open a draft PR, then 'hh dev review', 'hh dev evidence', 'hh dev ready' and merge (pwa-kit STANDARD.md Pull requests). Until then main deploys nothing."
-              exit 1
-            fi
-            echo "v$v is tagged; nothing but docs changed since"
-          else
-            if [ ! -f CHANGELOG.md ]; then echo "::error title=No CHANGELOG.md::package.json says $v; add CHANGELOG.md with a '## $v' section (hh dev release)."; exit 1; fi
-            if ! grep -qE "^##+ \[?v?$(echo "$v" | sed 's/\./\\./g')([] (]|$)" CHANGELOG.md; then
-              echo "::error title=No CHANGELOG.md section: nothing deploys::package.json says $v but CHANGELOG.md has no '## $v' section. Fix: 'bunx github:huishouden/cli#v1 dev release --commit' on a branch from main, then the PR lifecycle (pwa-kit STANDARD.md Pull requests)."
-              exit 1
-            fi
-            echo "v$v is new: deploy tags it"
-          fi
+          git fetch --tags --force -q
+          python3 - <<'PY' > "$RUNNER_TEMP/next.txt"
+          # next-version:begin
+          import re, subprocess
+          def git(*a):
+              return subprocess.run(['git', *a], capture_output=True, text=True, check=True).stdout
+          tags = [t for t in git('tag', '--list', 'v[0-9]*.[0-9]*.[0-9]*').split() if re.fullmatch(r'v\d+\.\d+\.\d+', t)]
+          tags.sort(key=lambda t: tuple(int(x) for x in t[1:].split('.')))
+          last = tags[-1] if tags else ''
+          raw = git('log', '--no-merges', '--format=%s%x1f%b%x1e', f'{last}..HEAD' if last else 'HEAD')
+          level = None
+          for rec in raw.split('\x1e'):
+              rec = rec.strip()
+              if not rec:
+                  continue
+              subject, _, body = rec.partition('\x1f')
+              m = re.match(r'^(\w+)(?:\([^)]*\))?(!)?:\s*\S', subject)
+              kind = m.group(1).lower() if m else ''
+              if (m and m.group(2)) or re.search(r'^BREAKING[ -]CHANGE:', body, re.M):
+                  level = 'major'
+              elif kind == 'feat' and level != 'major':
+                  level = 'minor'
+              elif kind in ('fix', 'perf', 'refactor') and level is None:
+                  level = 'patch'
+          nxt = ''
+          if level:
+              major, minor, patch = (int(x) for x in (last[1:] if last else '1.0.0').split('.'))
+              if not last:
+                  nxt = 'v1.0.0'
+              else:
+                  if level == 'major' and major == 0:
+                      level = 'minor'
+                  nxt = 'v' + {'major': f'{major + 1}.0.0', 'minor': f'{major}.{minor + 1}.0', 'patch': f'{major}.{minor}.{patch + 1}'}[level]
+          print(f'tag={nxt}')
+          print(f'prev={last}')
+          print(f'label={nxt or last or "v0.0.0"}')
+          # next-version:end
+          PY
+          cat "$RUNNER_TEMP/next.txt" | tee -a "$GITHUB_OUTPUT"
+          # What the About screen and New Relic call this build; the release job creates the tag.
+          echo "VITE_APP_VERSION=$(sed -n 's/^label=//p' "$RUNNER_TEMP/next.txt")" >> "$GITHUB_ENV"
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -220,11 +250,53 @@ jobs:
           path: site-assets
           retention-days: 1
 
-  publish:
-    # The only job that writes to the repo's releases. It installs and runs nothing from the repo:
-    # it uploads the tarballs the build job packed, replacing the previous ones.
+  release:
+    # The version's tag and GitHub release, once the build, tests and scans passed and before
+    # anything is published or deployed. Nothing is committed: the tag is the version (STANDARD.md
+    # "Versions"). A tag whose release is missing (a cancelled run) is finished by the next run.
     needs: [build, leak-scan]
-    if: inputs.base != '' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.staging-ref == '' && !inputs.reconcile
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.staging-ref == '' && !inputs.reconcile && needs.build.result == 'success' && needs.leak-scan.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Tag it and create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --tags --force -q
+          if [ -n "$TAG" ]; then
+            if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              # Two pushes close together can compute the same tag: it must be this commit's, or this build is mislabelled.
+              if [ "$(git rev-list -n 1 "$TAG")" != "$GITHUB_SHA" ]; then echo "::error title=$TAG is another commit's::$TAG already points to $(git rev-list -n 1 "$TAG"), not $GITHUB_SHA: a newer push was tagged first; rerun this workflow"; exit 1; fi
+              echo "$TAG is already tagged"
+            else
+              git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+              git push origin "$TAG"
+            fi
+          else
+            echo "nothing to release: only chore, docs, test or ci commits since the last tag"
+          fi
+          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -n "$last" ] && ! gh release view "$last" >/dev/null 2>&1; then
+            prev=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | sed -n 2p)
+            gh release create "$last" --verify-tag --title "$last" --generate-notes ${prev:+--notes-start-tag "$prev"}
+          fi
+
+  publish:
+    # Uploads to the hosting pre-release (the only other job that writes to the repo's releases). It
+    # installs and runs nothing from the repo: it uploads the tarballs the build job packed,
+    # replacing the previous ones.
+    needs: [build, leak-scan, release]
+    if: inputs.base != '' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.staging-ref == '' && !inputs.reconcile && needs.release.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -335,8 +407,13 @@ jobs:
         run: |
           spec=$(jq -r '(.devDependencies // {})["@huishouden/pwa-kit"] // (.dependencies // {})["@huishouden/pwa-kit"] // empty' ref/package.json)
           ref=${spec##*#}
-          if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a tag (github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
-          git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
+          if [[ "$spec" =~ ^https://github\.com/huishouden/pwa-kit/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/pwa-kit-[0-9]+\.[0-9]+\.[0-9]+\.tgz$ ]]; then
+            # The kit's release tarball: scripts and src, nothing built or installed. Only that exact URL shape.
+            mkdir -p "$RUNNER_TEMP/pwa-kit" && curl -fsSL --retry 3 "$spec" | tar -xz -C "$RUNNER_TEMP/pwa-kit" --strip-components=1
+          else
+            if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a release (its tarball URL, or github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
+            git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
+          fi
           echo "SITE_TOOL=$RUNNER_TEMP/pwa-kit/scripts/site.ts" >> "$GITHUB_ENV"
       - name: Asset CDN off for staging
         id: cdn
@@ -530,11 +607,11 @@ jobs:
     # latest published build (this run's own was published just before), then checked again in case
     # another app published meanwhile. Runs nothing from the repo with these credentials: the
     # assembler comes from the kit at the version the repo pins, firebase-tools at an exact version.
-    needs: [build, leak-scan, publish]
+    needs: [build, leak-scan, release, publish]
     if: >-
       !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.GCP_WIF_PROVIDER != '' && inputs.staging-ref == ''
       && (inputs.reconcile && inputs.base != ''
-          || !inputs.reconcile && needs.build.result == 'success' && needs.leak-scan.result == 'success' && (inputs.base == '' || needs.publish.result == 'success'))
+          || !inputs.reconcile && needs.build.result == 'success' && needs.leak-scan.result == 'success' && needs.release.result == 'success' && (inputs.base == '' || needs.publish.result == 'success'))
     runs-on: ubuntu-latest
     environment: production
     concurrency:
@@ -542,7 +619,7 @@ jobs:
       group: deploy-${{ github.repository }}
       cancel-in-progress: false
     permissions:
-      contents: write # the version's tag and GitHub release, after the deploy
+      contents: read
       id-token: write # keyless auth to Google Cloud via Workload Identity Federation
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -560,8 +637,13 @@ jobs:
         run: |
           spec=$(jq -r '(.devDependencies // {})["@huishouden/pwa-kit"] // (.dependencies // {})["@huishouden/pwa-kit"] // empty' package.json)
           ref=${spec##*#}
-          if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a tag (github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
-          git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
+          if [[ "$spec" =~ ^https://github\.com/huishouden/pwa-kit/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/pwa-kit-[0-9]+\.[0-9]+\.[0-9]+\.tgz$ ]]; then
+            # The kit's release tarball: scripts and src, nothing built or installed. Only that exact URL shape.
+            mkdir -p "$RUNNER_TEMP/pwa-kit" && curl -fsSL --retry 3 "$spec" | tar -xz -C "$RUNNER_TEMP/pwa-kit" --strip-components=1
+          else
+            if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a release (its tarball URL, or github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
+            git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
+          fi
           echo "SITE_TOOL=$RUNNER_TEMP/pwa-kit/scripts/site.ts" >> "$GITHUB_ENV"
       # The asset CDN (docs/one-site.md "Asset CDN"): with the Cloudflare token (the portal), on and
       # uploaded; without it (every app), on for the builds the CDN already holds (--cdn-held), the
@@ -681,27 +763,6 @@ jobs:
             deploy "hosting:$(sed -n 's/^site=//p' "$RUNNER_TEMP/assemble.txt")"
           done
           settle
-      # The version the PR's author set (build checked it was bumped): tag it and publish its
-      # CHANGELOG.md section as the release, once. Replaces release-please (STANDARD.md "Versions").
-      - name: Tag the version and publish its release
-        if: ${{ !inputs.reconcile && (inputs.base == '' || steps.site.outcome == 'success') }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-        run: |
-          v=$(jq -r .version package.json)
-          if gh release view "v$v" -R "$REPO" >/dev/null 2>&1; then echo "v$v already released"; exit 0; fi
-          if [ -f CHANGELOG.md ]; then
-            V="$v" python3 -c 'import os,re,sys; v=re.escape(os.environ["V"]); out=[]; on=False
-          for l in open("CHANGELOG.md"):
-              if re.match(r"^##+ \[?v?"+v+r"([\] (]|$)", l): on=True; continue
-              if on and re.match(r"^#{1,2} ", l): break
-              if on: out.append(l)
-          sys.stdout.write("".join(out).strip()+"\n")' > "$RUNNER_TEMP/notes.md"
-          fi
-          [ -s "$RUNNER_TEMP/notes.md" ] || git log -1 --format=%B "$GITHUB_SHA" > "$RUNNER_TEMP/notes.md" 2>/dev/null || echo "v$v" > "$RUNNER_TEMP/notes.md"
-          # An existing tag (a rerun after the tag was pushed) keeps its commit; --target only applies to a new one.
-          gh release create "v$v" -R "$REPO" --target "$GITHUB_SHA" --title "v$v" --notes-file "$RUNNER_TEMP/notes.md"
 
   smoke:
     # One HTTP check of the live app right after the site changes: index.html (GET), then HEAD of one
