@@ -100,6 +100,15 @@ describe('health_log_dose', () => {
     expect(commits).toEqual([]);
   });
 
+  test("giving a dose someone else marked skipped is refused, not re-signed", async () => {
+    const theirs = { personId: 'p1', medId: 'm1', slot: SLOT, at: NOW - 600_000, status: 'skipped', by: ALEX, createdAt: NOW - 600_000 };
+    const { db, docs, commits } = household({ [DOSE]: theirs });
+    const call = await run(SAM, db, 'health_log_dose', { person: 'Nan', medicine: 'Examplamine', dose_time: '08:00' });
+    expect(call.result.text).toContain('Someone else already marked that dose');
+    expect(commits).toEqual([]);
+    expect(docs.get(DOSE)).toEqual(theirs);
+  });
+
   test("someone else's mark is theirs: nothing is overwritten, confirmed or not", async () => {
     const theirs = { personId: 'p1', medId: 'm1', slot: SLOT, at: NOW - 600_000, status: 'given', by: ALEX, createdAt: NOW - 600_000 };
     for (const args of [{ status: 'skipped' }, { status: 'skipped', confirm: true }, { confirm: true }]) {
