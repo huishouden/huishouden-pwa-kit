@@ -301,7 +301,7 @@ fi
 if ! $STAGING; then
   step "Firestore read alert"
   if [[ -n "${ALERT_EMAIL:-}" ]]; then
-    "$(dirname "${BASH_SOURCE[0]}")/read-alert.sh" "$PROJECT" || echo "  The read alert failed; re-run infra/read-alert.sh $PROJECT"
+    "$(dirname "${BASH_SOURCE[0]}")/read-alert.sh" "$PROJECT" || { echo "The read alert failed; re-run infra/read-alert.sh $PROJECT" >&2; exit 1; }
   else
     echo "  ALERT_EMAIL not set: no email when reads near the free plan's daily limit (infra/read-alert.sh)"
   fi
