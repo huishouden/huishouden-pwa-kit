@@ -28,6 +28,11 @@ export declare function assertStagingProject(projectId: string | undefined, what
  * `e2e-emulator` on the emulators and `e2e-local` on staging from a laptop.
  */
 export declare function testRunId(env?: Env): string;
+/**
+ * A run from a laptop (`pwa-staging run`): `e2e-local-<who>-<time>`, unique per run, so two people's
+ * (or one person's two) runs never share a household, and the sweep knows it by its `e2e-` prefix.
+ */
+export declare function localRunId(who: string, now?: number): string;
 /** The kit's jobs' run id: `e2e-<repo>-<run id>-<attempt>`. */
 export declare function ciRunId(repository: string, runId: string | number, attempt: string | number): string;
 /**
