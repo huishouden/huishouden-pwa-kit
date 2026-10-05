@@ -3,6 +3,12 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## 0.100.1 (2026-10-05)
+
+### Tests
+
+* `backfillPositions`: the one-request-a-second check measures from the booked turns, so a busy CI runner no longer fails it (973 ms between two records on main twice).
+
 ## 0.100.0 (2026-10-05)
 
 ### Features
