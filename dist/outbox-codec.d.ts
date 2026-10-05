@@ -4,6 +4,8 @@ import { FieldValue, type Firestore } from 'firebase/firestore';
  * export, so it can change without a release note).
  */
 export declare const TAG = "__hhOutbox";
+/** Tags `encode` gives values (a Timestamp, a GeoPoint, Bytes, a reference); every other tag is a field sentinel. */
+export declare const VALUE_TAGS: ReadonlySet<string>;
 /** A note older than this is dropped unread: whatever it held is stale by now. */
 export declare const MAX_AGE_MS: number;
 export type Json = null | boolean | number | string | Json[] | {
@@ -47,3 +49,11 @@ export declare function encode(value: unknown): Json;
 export declare function decode(value: Json, db?: Firestore): unknown;
 /** Whether two encoded values are the same, whatever the order of their keys. */
 export declare function sameJson(a: Json, b: Json): boolean;
+/** Whether `value` holds a field sentinel of kind `tag` anywhere. */
+export declare function hasTag(value: Json, tag: string): boolean;
+/**
+ * Whether the cached document already shows every field `data` writes: an update's keys are field
+ * paths (`a.b`) and its maps replace; a merge's maps merge. Sentinels other than deleteField can't
+ * be told from the result, so they never count as shown.
+ */
+export declare function shows(cached: Json, data: Json, update: boolean): boolean;
