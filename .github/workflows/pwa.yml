@@ -115,7 +115,8 @@ jobs:
             fi
             echo "v$v is tagged; nothing but docs changed since"
           else
-            if [ -f CHANGELOG.md ] && ! grep -qE "^##+ \[?v?$(echo "$v" | sed 's/\./\\./g')([] (]|$)" CHANGELOG.md; then
+            if [ ! -f CHANGELOG.md ]; then echo "::error title=No CHANGELOG.md::package.json says $v; add CHANGELOG.md with a '## $v' section (hh dev release)."; exit 1; fi
+            if ! grep -qE "^##+ \[?v?$(echo "$v" | sed 's/\./\\./g')([] (]|$)" CHANGELOG.md; then
               echo "::error title=No CHANGELOG.md section::package.json says $v but CHANGELOG.md has no '## $v' section (hh dev release)."
               exit 1
             fi
@@ -487,7 +488,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           v=$(jq -r .version package.json)
-          if gh api "repos/$REPO/git/ref/tags/v$v" >/dev/null 2>&1; then echo "v$v already tagged"; exit 0; fi
+          if gh release view "v$v" -R "$REPO" >/dev/null 2>&1; then echo "v$v already released"; exit 0; fi
           if [ -f CHANGELOG.md ]; then
             V="$v" python3 -c 'import os,re,sys; v=re.escape(os.environ["V"]); out=[]; on=False
           for l in open("CHANGELOG.md"):
@@ -497,6 +498,7 @@ jobs:
           sys.stdout.write("".join(out).strip()+"\n")' > "$RUNNER_TEMP/notes.md"
           fi
           [ -s "$RUNNER_TEMP/notes.md" ] || git log -1 --format=%B "$GITHUB_SHA" > "$RUNNER_TEMP/notes.md" 2>/dev/null || echo "v$v" > "$RUNNER_TEMP/notes.md"
+          # An existing tag (a rerun after the tag was pushed) keeps its commit; --target only applies to a new one.
           gh release create "v$v" -R "$REPO" --target "$GITHUB_SHA" --title "v$v" --notes-file "$RUNNER_TEMP/notes.md"
 
   smoke:

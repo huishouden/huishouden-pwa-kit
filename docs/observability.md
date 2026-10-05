@@ -202,7 +202,7 @@ app's repo instead (apps served from a site of their own; needs `gh` with admin 
 |---|---|---|
 | Data ingest | 100 GB/month | Under 0.1 GB: about 2 KB per page view, 288 notify events a day |
 | Full platform users | 1 | 1 |
-| Ping monitors | Unlimited | 10 apps × 2 locations × 4/hour ≈ 58,000 checks/month, not billed |
+| Ping monitors | Unlimited | 10 apps × 2 locations × 2/hour ≈ 29,000 checks/month, not billed |
 | Other synthetic checks | 500/month | 0 |
 | Alerts, dashboards, pipeline cloud rules | Included | 5 conditions, 1 dashboard, 5 rules |
 

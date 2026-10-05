@@ -560,7 +560,7 @@ nothing deployed or tested there can read or write real household data.
 
 - **Unit tests** (`bun test`) for parsing and money logic, with inputs and expected outputs in
   fixture files (`__fixtures__/`, `fixtures/`), scrubbed of real names, emails and card digits.
-- **Smoke tests** (`bun run e2e`, Playwright, headless Chromium) against the deployed site.
+- **Smoke tests** (`bun run e2e`, Playwright, headless Chromium) against staging or a local preview, never production (CI/CD; docs/one-site.md "Bandwidth").
   Minimum set, from `@huishouden/pwa-kit/e2e`:
   1. Loads with no runtime errors.
   2. Installable: manifest has a 512 icon, every icon URL loads, a service worker controls the

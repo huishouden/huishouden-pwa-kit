@@ -146,6 +146,9 @@ costs as much as a new household member. CI therefore never opens production in 
   manifest and `sw.js`: about 4 KB per deploy, 4 MB for 1,000 deploys;
 - pull requests run no CI; their browser tests and screenshots run on staging or locally, never
   on production;
+- `pwa-bandwidth-check`, run by `pwa.yml` before the build, fails any workflow step that runs a
+  browser naming production or without `BASE_URL`; a step whose config only targets localhost says
+  so with a `# pwa-bandwidth-check: local` comment line;
 - the New Relic uptime monitors are pings (one GET of index.html, about 3 KB) every 30 minutes
   from two locations: about 0.1 GB a month for the suite.
 
@@ -237,7 +240,7 @@ Reinstalling the portal once per device fixes that; the old icons can then be re
 1. Kit: `base`, `otherApps`, `appUrl`, scope-aware push worker and app bar, `./site` and
    `pwa-site`, `pwa.yml` `base` and `reconcile` inputs. Callers without `base` keep today's
    per-site deploys, so moving `v0` changes nothing for them.
-2. Portal: `base: '/'`, assembles and deploys the combined site; reconcile schedule. (Its own site
+2. Portal: `base: '/'`, assembles and deploys the combined site; reconcile by hand (`reconcile: true`). (Its own site
    is the combined one, so nothing changes for a visitor.)
 3. Each app: `base: '/<app>/'`, publishes assets, deploys the combined site, smoke at `/<app>/`.
    Its old site is no longer deployed and keeps serving the last build until step 5.
