@@ -64,9 +64,12 @@ describe('backfillPositions', () => {
       contact('stale', { geoTried: NOW - 31 * DAY }),
       contact('d'),
     ];
+    const started = Date.now();
     const result = await backfillPositions(docs, { geocode, write, limit: 3, now: () => NOW });
     expect(asked.map((a) => a.q)).toEqual(['a Example Lane, Springfield', 'b Example Lane, Springfield', 'stale Example Lane, Springfield']);
-    for (let i = 1; i < asked.length; i++) expect(asked[i].at - asked[i - 1].at).toBeGreaterThanOrEqual(990);
+    // Turns are booked a second apart from the first; measured against that, not against when a
+    // busy event loop happened to record the previous one (CI saw 973 ms between two records).
+    for (let i = 1; i < asked.length; i++) expect(asked[i].at - started).toBeGreaterThanOrEqual(i * 1000 - 5);
     expect(writes).toEqual([
       { id: 'a', update: { lat: 39.7817, lng: -89.6501 } },
       { id: 'b', update: { geoTried: NOW } },
