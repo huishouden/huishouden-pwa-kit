@@ -210,13 +210,13 @@ shows the portal all day, and about fifteen app opens a day, two of them Spendin
 
 | Source | What it reads | Reads a day |
 |---|---|---|
-| Calendar Worker, checks | per Google-synced member: the household and their settings (`batchGet`, 2) and four aggregations, every 5 minutes while the household changed in the last hour, every 15 otherwise | ~1,500 |
-| Calendar Worker, syncs and feeds | per change: an aggregation per list, then only the documents changed since the cached copy; a full read when something was deleted or once a day | ~400 |
+| Calendar Worker, checks | per Google-synced member: the household and their settings (`batchGet`, 2) and four aggregations (at least 1 each); Google's side every 5 minutes (no Firestore read), the household's every 5 minutes while it changed in the last hour, every 15 otherwise (assumed active a quarter of the day: 144 checks) | ~1,700 |
+| Calendar Worker, syncs and feeds | per change and member: an aggregation per list, then only documents changed since the kept copy (`src/lists.ts` in calendar); a whole list when something was deleted, and once a day | ~400 |
 | Calendar Worker, alert inbox | Gmail first (no Firestore read); cards, rules and settings every 12 hours (~125); the import's few days of transactions | ~300 |
 | Spending | per open after 30 minutes: this and last month's transactions (~250), rules, cards, settings; an older month when opened | ~800 |
 | Portal on the always-on screen | per wake after 30 minutes asleep: a week of agenda (the Calendar tab: all of it), to-dos, contacts, members, settings (~75) | ~800 |
 | Other app opens | each app's own lists (10 to 60), and its agenda, to-dos and reminders only when they changed or this device's last sync of them is over 6 hours old (`./published`) | ~600 |
-| **Household total** | | **~4,400** |
+| **Household total** | | **~4,600** |
 
 Fixed, once for the project: Notify's due-reminder queries, two every 5 minutes (`FIRESTORE_NOTIFY_READS`
 caps the rest), ~600 a day.
