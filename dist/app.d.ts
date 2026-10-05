@@ -12,6 +12,7 @@
 import { type FirebaseApp } from 'firebase/app';
 import { type Auth } from 'firebase/auth';
 import { type Firestore } from 'firebase/firestore';
+export { emulatorPort } from './emulator-port';
 import { type FirebaseWebConfig } from './firebase.js';
 export interface InitAppOptions {
     /** The app's short name, as in observability and the agenda: 'car'. */
@@ -19,7 +20,8 @@ export interface InitAppOptions {
     /**
      * `import.meta.env`: the `VITE_FIREBASE_*`, `VITE_GOOGLE_CLIENT_ID` and `VITE_NEWRELIC_*` build
      * variables. `VITE_USE_EMULATORS=true` (the kit's app-tests job) connects Auth and Firestore to
-     * the emulators on 127.0.0.1 (`VITE_EMULATOR_HOST`), ports 9099 and 8080.
+     * the emulators on 127.0.0.1 (`VITE_EMULATOR_HOST`), ports 9099 and 8080 (`VITE_EMULATOR_AUTH_PORT`,
+     * `VITE_EMULATOR_FIRESTORE_PORT`, so runs side by side on one machine don't collide).
      */
     env: Record<string, string | boolean | undefined>;
     /** Web config for builds without the Firebase variables. */

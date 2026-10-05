@@ -110,14 +110,14 @@ jobs:
           if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
             changed=$(git diff --name-only "v$v" HEAD | grep -vE '^docs/|\.md$|^LICENSE$|^\.github/|^renovate\.json$' || true)
             if [ -n "$changed" ]; then
-              echo "::error title=Version not bumped::v$v is already tagged and these changed since: $(echo $changed | head -c 300). Bump package.json and add its CHANGELOG.md section in the PR (hh dev release)."
+              echo "::error title=Version not bumped: nothing deploys::v$v is already tagged and code changed since ($(echo $changed | head -c 300)). Fix: on a branch from main run 'bunx github:huishouden/cli#v1 dev release --commit', open a draft PR, then 'hh dev review', 'hh dev evidence', 'hh dev ready' and merge (pwa-kit STANDARD.md Pull requests). Until then main deploys nothing."
               exit 1
             fi
             echo "v$v is tagged; nothing but docs changed since"
           else
             if [ ! -f CHANGELOG.md ]; then echo "::error title=No CHANGELOG.md::package.json says $v; add CHANGELOG.md with a '## $v' section (hh dev release)."; exit 1; fi
             if ! grep -qE "^##+ \[?v?$(echo "$v" | sed 's/\./\\./g')([] (]|$)" CHANGELOG.md; then
-              echo "::error title=No CHANGELOG.md section::package.json says $v but CHANGELOG.md has no '## $v' section (hh dev release)."
+              echo "::error title=No CHANGELOG.md section: nothing deploys::package.json says $v but CHANGELOG.md has no '## $v' section. Fix: 'bunx github:huishouden/cli#v1 dev release --commit' on a branch from main, then the PR lifecycle (pwa-kit STANDARD.md Pull requests)."
               exit 1
             fi
             echo "v$v is new: deploy tags it"

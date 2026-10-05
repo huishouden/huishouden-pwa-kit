@@ -629,7 +629,7 @@ export async function signInTestUser(page: Page, { as, email, household, path = 
       const cred = await signInWithCustomToken(auth, token);
       return cred.user.email as string | null;
     },
-    { config, token: cached.token, base: `https://www.gstatic.com/firebasejs/${sdkVersion}`, authEmulator: emulator ? `http://${env.HH_EMULATOR_HOST || '127.0.0.1'}:9099` : '' },
+    { config, token: cached.token, base: `https://www.gstatic.com/firebasejs/${sdkVersion}`, authEmulator: emulator ? `http://${env.HH_EMULATOR_HOST || '127.0.0.1'}:${env.HH_EMULATOR_AUTH_PORT || 9099}` : '' },
   );
   expect(signedIn, 'signed in as the test user').toBe(user.email);
   // Not networkidle: a signed-in app keeps Firestore's listen channel open.
