@@ -50,6 +50,7 @@ describe('readSource', () => {
 });
 
 describe('sourceAllowed', () => {
+  const P = { personal: true };
   const doses: ReminderSource = { checks: [{ doc: 'healthPeople/p1/doses/m1_0800', absent: true }], any: true };
 
   test("bills only from admins and members; kids' sources never", () => {
@@ -62,15 +63,18 @@ describe('sourceAllowed', () => {
   test("a Health record only from an admin or one of the person's readers", () => {
     expect(sourceReads('health', doses)).toEqual(['healthPeople/p1/doses/m1_0800', 'healthPeople/p1']);
     const person = docs({ 'healthPeople/p1': { readers: ['Bob@example.com', 'helen@example.com'] } });
-    expect(sourceAllowed('health', doses, 'bob@example.com', 'member', person)).toBe(true);
-    expect(sourceAllowed('health', doses, 'helen@example.com', 'helper', person)).toBe(true);
-    expect(sourceAllowed('health', doses, 'carol@example.com', 'member', person)).toBe(false);
-    expect(sourceAllowed('health', doses, 'carol@example.com', 'admin', docs({}))).toBe(true);
-    expect(sourceAllowed('health', doses, 'bob@example.com', 'member', docs({ 'healthPeople/p1': null }))).toBe(false);
-    expect(sourceAllowed('health', doses, 'bob@example.com', 'member', docs({}))).toBeUndefined();
+    expect(sourceAllowed('health', doses, 'bob@example.com', 'member', person, P)).toBe(true);
+    expect(sourceAllowed('health', doses, 'helen@example.com', 'helper', person, P)).toBe(true);
+    expect(sourceAllowed('health', doses, 'carol@example.com', 'member', person, P)).toBe(false);
+    expect(sourceAllowed('health', doses, 'carol@example.com', 'admin', docs({}), P)).toBe(true);
+    expect(sourceAllowed('health', doses, 'bob@example.com', 'member', docs({ 'healthPeople/p1': null }), P)).toBe(false);
+    expect(sourceAllowed('health', doses, 'bob@example.com', 'member', docs({}), P)).toBeUndefined();
     // Never a kid, even one named; never a helper who isn't a reader.
-    expect(sourceAllowed('health', doses, 'kim@example.com', 'kid', docs({ 'healthPeople/p1': { readers: ['kim@example.com'] } }))).toBe(false);
-    expect(sourceAllowed('health', doses, 'hank@example.com', 'helper', person)).toBe(false);
+    expect(sourceAllowed('health', doses, 'kim@example.com', 'kid', docs({ 'healthPeople/p1': { readers: ['kim@example.com'] } }), P)).toBe(false);
+    expect(sourceAllowed('health', doses, 'hank@example.com', 'helper', person, P)).toBe(false);
+    // Never on a shared reminder, which every member reads.
+    expect(sourceAllowed('health', doses, 'bob@example.com', 'member', person)).toBe(false);
+    expect(sourceAllowed('bills', bill, 'alex@example.com', 'member', docs({}), { personal: false })).toBe(true);
   });
 });
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 // Usage: pwa-headers-check [firebase.json]. Exit 1 when the site's own pages lack the security
 // headers (STANDARD.md "Security headers") or a Firebase /__/ path would be frame-denied. A repo
-// that serves no pages (a Worker such as huishouden/notify: no firebase.json, or one without
-// `hosting`) has nothing to check.
+// that serves no pages (a Worker such as huishouden/notify: no firebase.json, or a wrangler.toml
+// beside one without `hosting`) has nothing to check.
 import { existsSync, readFileSync } from 'node:fs';
 import { APP_PATHS_REGEX, checkSecurityHeaders } from '../src/security-headers';
 
@@ -19,8 +19,14 @@ try {
   process.exit(2);
 }
 if (!(config as { hosting?: unknown })?.hosting) {
-  console.log(`headers check: ${file} has no hosting, so no pages to check`);
-  process.exit(0);
+  // A Worker's emulator-only firebase.json (huishouden/connector): no pages. Anywhere else a
+  // missing hosting block is a mistake, never a reason to skip the check.
+  if (existsSync('wrangler.toml')) {
+    console.log(`headers check: ${file} has no hosting and this is a Worker (wrangler.toml), so no pages to check`);
+    process.exit(0);
+  }
+  console.error(`headers check: ${file} has no hosting section`);
+  process.exit(1);
 }
 const problems = checkSecurityHeaders(config);
 if (problems.length) {
