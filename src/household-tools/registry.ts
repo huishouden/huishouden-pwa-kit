@@ -51,8 +51,12 @@ export const idempotency = {
     .describe('Any unique string for this one change. A retry with the same key does nothing new and answers the same.'),
 };
 
-export function defineTool<S extends z.ZodRawShape>(def: ToolDef<S>): ToolDef<S> {
-  return def;
+/**
+ * A tool, checked against its own input (`run`'s arguments are the schema's) and then widened, so
+ * the list of every tool needs no cast.
+ */
+export function defineTool<S extends z.ZodRawShape>(def: ToolDef<S>): ToolDef {
+  return def as unknown as ToolDef;
 }
 
 /** Text in the person's language: `fn` runs with the kit's language switched (it must not await). */
@@ -66,7 +70,7 @@ export function withHealthNote(result: ToolResult, lang: Lang, health = false): 
 /** What a failure tells the assistant, in the person's language; nothing about the data. */
 export function failureText(e: unknown, lang: Lang): string {
   return render(lang, () => {
-    if (e instanceof UserError) return t(e.key as Parameters<typeof t>[0], e.vars);
+    if (e instanceof UserError) return t(e.key, e.vars);
     if (e instanceof FirestoreError) {
       if (e.code === 'permission-denied') return t('error.denied');
       if (e.code === 'unavailable') return t('error.unavailable');

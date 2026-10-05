@@ -1,7 +1,7 @@
 import { type AgendaItem } from '../agenda-core.js';
 import { type TodoItem } from '../todo-core.js';
 import type { LocalClock } from '../local-clock.js';
-import type { Here, Session } from './context.js';
+import { type Here, type Session } from './context.js';
 /**
  * The household's agenda as the portal shows it to this person (shared items they may read and the
  * personal ones naming them), in the local frame (`../clock`): `start` and `end` moved so the kit's

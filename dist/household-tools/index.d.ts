@@ -1,10 +1,8 @@
 import type { Lang } from '../i18n.js';
 import { type AuditEntry, type Session } from './context.js';
 import { type ToolDef, type ToolResult } from './registry.js';
-export { Session, UserError, isDenied, pickHousehold, toHousehold, type AuditEntry, type Here, type Household, type Profile, type SessionProps } from './context.js';
-export { common, defineTool, failureText, idempotency, render, withHealthNote, type ToolContext, type ToolDef, type ToolResult } from './registry.js';
-export { t as toolText, type ToolMessageKey } from './i18n.js';
-export { GROCERY_CATEGORIES, writesOf } from './lists.js';
+export { Session, UserError, type AuditEntry, type Here, type Household, type SessionProps } from './context.js';
+export type { ToolContext, ToolDef, ToolResult } from './registry.js';
 /** Every tool, in the order clients list them. */
 export declare const TOOLS: readonly ToolDef[];
 export declare const toolNamed: (name: string) => ToolDef | undefined;

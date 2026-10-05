@@ -182,6 +182,7 @@ declare const _default: {
     readonly 'guard.max': "{count} given in the last 24 hours, the most for {med}.";
     readonly 'guard.tooSoon': "Last given {ago}; {med} needs {count, plural, one {# hour} other {# hours}} between doses.";
     readonly 'guard.already': "{med} was already given {ago} by {name}. Give it again?";
+    readonly 'guard.unmark': "{med} was marked given at {time}. Mark it skipped instead?";
     readonly 'today.noMeds': "No medicines at the moment.";
     readonly 'today.allergies': "Allergies: {allergies}";
     readonly 'today.whenNeeded': "When needed";
