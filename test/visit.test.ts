@@ -7,7 +7,7 @@ import {
 import { todoDoc, todoOpsAllowed } from '../src/todo-core';
 import { personalAgendaDoc } from '../src/agenda-core';
 import { namedIn } from '../src/people';
-import { visitRecipients } from '../src/visit';
+import { publishedContact, visitRecipients } from '../src/visit';
 import { personAudience } from '../src/audience';
 
 const local = (y: number, m: number, d: number, h = 0, min = 0) => new Date(y, m - 1, d, h, min).getTime();
@@ -15,6 +15,7 @@ const AT = local(2031, 5, 15, 10, 0);
 const NOW = local(2031, 5, 13, 12, 0);
 const person = { id: 'p1', name: 'Ana' };
 const audience = ['admin@example.com', 'jo@example.com'];
+const household = { members: ['admin@example.com', 'jo@example.com'], roles: { 'jo@example.com': 'helper' as const } };
 const url = 'https://example.com/health/?tab=visits&person=p1&visit=v1';
 
 const visit = (over: Partial<Visit> = {}): Visit => ({
@@ -63,23 +64,23 @@ describe('visit documents', () => {
 
 describe('publishing', () => {
   test('the agenda item says only "Appointment for Ana"; the rest is calendar detail', () => {
-    const item = visitAgendaItem(visit({ prep: ['Fasting from midnight'], medList: true }), { person, audience, url, contact: { name: 'Dr. Example', address: '12 Example Street' } });
+    const item = visitAgendaItem(visit({ prep: ['Fasting from midnight'], medList: true }), { person, audience, household, url, contact: { name: 'Dr. Example', address: '12 Example Street', private: false } });
     expect(item).toMatchObject({ ref: 'visit:p1:v1', kind: 'appointment', title: 'Appointment for Ana', start: AT, end: AT + 3_600_000, allDay: false, who: 'Ana', private: true });
     expect(item.detail).toBeUndefined();
     expect(item.calendarDetail).toBe('Dentist: Cleaning with Dr. Example · 12 Example Street · Fasting from midnight · bring the medicine list');
-    expect(visitAgendaItem(visit({ status: 'attended' }), { person, audience, url }).status).toBe('done');
+    expect(visitAgendaItem(visit({ status: 'attended' }), { person, audience, household, url }).status).toBe('done');
     expect(() => personalAgendaDoc('health', item, 'admin@example.com', NOW)).not.toThrow();
   });
 
   test('reminders the day before and two hours before, to the carers, until it is marked', () => {
-    const list = visitReminders(visit({ link: 'https://video.example.com/1' }), { person, audience, url, recipients: ['jo@example.com'], now: NOW, contact: { name: 'Dr. Example' } });
+    const list = visitReminders(visit({ link: 'https://video.example.com/1' }), { person, audience, household, url, recipients: ['jo@example.com'], now: NOW, contact: { name: 'Dr. Example', private: false } });
     expect(list.map((r) => r.at)).toEqual([AT - 86_400_000, AT - 2 * 3_600_000]);
     expect(list[0]).toMatchObject({ app: 'health', title: 'Appointment for Ana', recipients: ['jo@example.com'], ref: 'health:visit:v1', private: true, audience });
     expect(list[0].body).toBe('Tomorrow at 10 AM: Dentist: Cleaning with Dr. Example, Video visit.');
     expect(list[1].body).toBe('At 10 AM: Dentist: Cleaning with Dr. Example, Video visit.');
-    expect(visitReminders(visit(), { person, audience, url, recipients: ['jo@example.com'], now: AT - 3_600_000 })).toHaveLength(0);
-    expect(visitReminders(visit({ status: 'attended' }), { person, audience, url, recipients: ['jo@example.com'], now: NOW })).toHaveLength(0);
-    expect(visitReminders(visit(), { person, audience, url, recipients: [], now: NOW })).toHaveLength(0);
+    expect(visitReminders(visit(), { person, audience, household, url, recipients: ['jo@example.com'], now: AT - 3_600_000 })).toHaveLength(0);
+    expect(visitReminders(visit({ status: 'attended' }), { person, audience, household, url, recipients: ['jo@example.com'], now: NOW })).toHaveLength(0);
+    expect(visitReminders(visit(), { person, audience, household, url, recipients: [], now: NOW })).toHaveLength(0);
   });
 
   test('an all-day visit is reminded at 9 AM the day before and 8 AM on the day', () => {
@@ -105,7 +106,7 @@ describe('publishing', () => {
     const shift = 5 * 3_600_000;
     const atUtc = AT; // absolute
     const v = visit({ at: atUtc });
-    const [first] = visitReminders(v, { person, audience, url, recipients: ['jo@example.com'], now: NOW, local: (t) => t - shift });
+    const [first] = visitReminders(v, { person, audience, household, url, recipients: ['jo@example.com'], now: NOW, local: (t) => t - shift });
     expect(first.at).toBe(AT - 86_400_000);
     expect(first.body?.startsWith('Tomorrow at 5 AM')).toBe(true);
   });
@@ -121,7 +122,7 @@ describe('publishing', () => {
   test('words in Spanish and Dutch', async () => {
     await loadLang('es');
     await loadLang('nl');
-    expect(withLang('es', () => visitAgendaItem(visit(), { person, audience, url }).title)).toBe('Cita para Ana');
+    expect(withLang('es', () => visitAgendaItem(visit(), { person, audience, household, url }).title)).toBe('Cita para Ana');
     expect(withLang('nl', () => leadWords(1440))).toBe('De dag ervoor');
     expect(withLang('en', () => leadWords(120))).toBe('2 hours before');
     expect(withLang('en', () => leadWords(10080))).toBe('A week before');
@@ -165,5 +166,28 @@ describe('who reads and who is told', () => {
     expect(visitRecipients({ carers: ['Jo@example.com', 'kid@example.com'] }, h)).toEqual(['jo@example.com']);
     expect(visitRecipients({ carers: ['kid@example.com'], email: 'alex@example.com' }, h)).toEqual(['alex@example.com']);
     expect(visitRecipients({ carers: [], email: 'kid@example.com' }, h)).toEqual(['sam@example.com']);
+  });
+});
+
+describe('a private doctor in what is published', () => {
+  const h = { members: ['sam@example.com', 'jo@example.com', 'alex@example.com'], roles: { 'jo@example.com': 'helper' as const } };
+  const doctor = { name: 'Dr. Example', address: '1 Example Way', private: true };
+  test('named only when no helper reads it', () => {
+    expect(publishedContact(doctor, ['jo@example.com', 'sam@example.com'], h)).toBeUndefined();
+    expect(publishedContact(doctor, ['alex@example.com', 'sam@example.com'], h)).toEqual({ name: 'Dr. Example', address: '1 Example Way' });
+    expect(publishedContact({ ...doctor, private: false }, ['jo@example.com', 'sam@example.com'], h)).toEqual({ name: 'Dr. Example', address: '1 Example Way' });
+    expect(publishedContact({ name: 'Old' }, ['jo@example.com'], h)).toBeUndefined();
+  });
+});
+
+describe('publishing never names a private doctor to a helper carer', () => {
+  test('agenda and reminders drop it on their own when a helper reads them', () => {
+    const doctor = { name: 'Dr. Private', address: '9 Example Lane', private: true };
+    const item = visitAgendaItem(visit(), { person, audience, household, url, contact: doctor });
+    const reminders = visitReminders(visit(), { person, audience, household, url, contact: doctor, recipients: ['jo@example.com'], now: NOW });
+    expect(JSON.stringify([item, ...reminders])).not.toContain('Private');
+    expect(JSON.stringify([item, ...reminders])).not.toContain('9 Example Lane');
+    const staffOnly = visitAgendaItem(visit(), { person, audience: ['admin@example.com'], household, url, contact: doctor });
+    expect(staffOnly.calendarDetail).toContain('Dr. Private');
   });
 });

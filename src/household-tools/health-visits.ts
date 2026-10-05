@@ -45,9 +45,10 @@ function publishOptions(ctx: ToolContext, p: Person, v: Visit, contacts: Contact
   return {
     person: { id: p.id, name: p.name },
     audience: audienceOf(ctx, p),
+    household: ctx.here,
     url: visitUrl(ctx, v),
     local: (at) => ctx.clock.local(at),
-    ...(c ? { contact: { name: c.name, ...(c.address ? { address: c.address } : {}) } } : {}),
+    ...(c ? { contact: { name: c.name, ...(c.address ? { address: c.address } : {}), private: c.private } } : {}),
   };
 }
 

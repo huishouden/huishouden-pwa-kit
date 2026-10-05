@@ -3,6 +3,12 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## 0.101.0 (2026-10-05)
+
+### Features
+
+* **visit:** a private doctor is never named in what a helper carer reads. `visitAgendaItem` and `visitReminders` take the contact as stored (with `private`) and the `household`, and name a contact marked private only when everyone in the audience may read private records (`publishedContact`, `./audience` `audienceSeesPrivate`, `can(role, 'see-private')`).
+
 ## 0.100.2 (2026-10-05)
 
 ### Bug Fixes

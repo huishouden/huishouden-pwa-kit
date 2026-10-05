@@ -37,3 +37,5 @@ export declare const householdAdmins: (h: AudienceHousehold) => string[];
 export declare function personAudience(p: {
     readers: readonly string[];
 }, h: AudienceHousehold): string[];
+/** Whether everyone in `audience` may read records marked private (`./role-core` `can(role, 'see-private')`). */
+export declare function audienceSeesPrivate(h: AudienceHousehold, audience: readonly string[]): boolean;

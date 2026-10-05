@@ -177,7 +177,9 @@ describe('Health visits', () => {
     expect(visit[1]).toMatchObject({ personId: 'p1', kind: 'eye', title: 'Eye exam', at, contactId: 'c1', prep: ['Bring her glasses'], remindBefore: [1440, 120], by: SAM });
     expect(docs.get(`${NAN}/visitNotes/${visit[0].split('/').pop()}`)).toMatchObject({ text: 'Drops: no driving after', by: SAM });
     const agenda = [...docs.entries()].filter(([p]) => p.startsWith(`${H}/personalAgenda/`)).map(([, d]) => d);
-    expect(agenda).toEqual([expect.objectContaining({ app: 'health', kind: 'appointment', title: 'Appointment for Nan', start: at, audience: [ALEX, SAM], calendarDetail: 'Eye doctor: Eye exam with Dr. Example · 1 Example Way · Bring her glasses' })]);
+    expect(agenda).toEqual([expect.objectContaining({ app: 'health', kind: 'appointment', title: 'Appointment for Nan', start: at, audience: [ALEX, SAM], calendarDetail: 'Eye doctor: Eye exam · Bring her glasses' })]);
+    // The doctor is a private contact and a helper carer reads what is published: not named.
+    expect(JSON.stringify(agenda)).not.toContain('Dr. Example');
     const reminders = [...docs.entries()].filter(([p]) => p.startsWith(`${H}/personalReminders/`)).map(([, d]) => d as { at: number; body: string; recipients: string[] });
     expect(reminders.map((r) => r.at).sort()).toEqual([at - 86_400_000, at - 2 * 3_600_000]);
     expect(reminders[0].recipients).toEqual([ALEX, SAM]);
