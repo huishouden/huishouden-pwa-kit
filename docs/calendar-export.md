@@ -19,7 +19,7 @@ Plus an **Add to calendar** button on single items (`AddToCalendar`), which need
 - Personal items (Health) only for their `audience`: the person, their carers and the admins.
 - Their settings (`calendarSettings/{email}`, `CalendarSettings`): apps left out, to-dos with a due
   day (on by default), bills (on), finished things (on), and Health's detail, **off by default**: a
-  Health item then reads "Medicine for Ana" with nothing else, since calendars are often shared
+  Health item then reads "Medicine for Ana" or "Appointment for Ana" with nothing else, since calendars are often shared
   with people outside the household.
 - Their language: each item's `texts` in it, the words the export adds in it.
 
@@ -63,8 +63,9 @@ rules still decide. Kinds: `reschedule` (moved), `retime` (a series' usual time)
 do: a change in Google that has no edit is put back as the app has it.
 
 **`calendarDetail`**: up to 200 characters that the portal never shows, for the reader's own
-calendar when they turn on detail. Health puts a dose's medicine names here, since `detail` shows
-on the portal, which may be on a wall tablet.
+calendar when they turn on detail. Health puts a dose's medicine names here, and a visit's kind,
+doctor, place and what to bring (`./visit` `visitAgendaItem`), since `detail` shows on the portal,
+which may be on a wall tablet.
 
 ## Add to calendar
 

@@ -27,6 +27,7 @@ import suggestions from './en/suggestions.js';
 import time from './en/time.js';
 import todos from './en/todos.js';
 import ui from './en/ui.js';
+import visit from './en/visit.js';
 
 export default {
   ...agenda,
@@ -57,4 +58,5 @@ export default {
   ...time,
   ...todos,
   ...ui,
+  ...visit,
 } as const;

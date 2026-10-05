@@ -1,9 +1,10 @@
 export default {
     'calendarExport.medicineFor': 'Medicijnen voor {who}',
+    'calendarExport.appointmentFor': 'Afspraak voor {who}',
     'calendarExport.healthFor': 'Gezondheid: {who}',
     'calendarExport.health': 'Gezondheid',
     'calendarExport.done': '✓ {title}',
-    'calendarExport.todo': 'Te doen: {title}',
+    'calendarExport.todo': 'Taak: {title}',
     'calendarExport.description': 'Uit Huishouden: afspraken, vaste gebeurtenissen en dingen die thuis moeten gebeuren.',
     'calendarExport.add': 'Aan agenda toevoegen',
     'calendarExport.addTo': '{title} aan een agenda toevoegen',

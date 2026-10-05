@@ -165,6 +165,17 @@ declare const _default: {
     readonly 'health.medUpdated': "Updated {med} for {name}: {schedule}. [Health]({url})";
     readonly 'health.medStopped': "Stopped {med} for {name} from today. [Health]({url})";
     readonly 'health.refillMarked': "Marked a refill of {med} for {name} as ordered.";
+    readonly 'visits.title': "Visits";
+    readonly 'visits.none': "No visits in those days.";
+    readonly 'visits.video': "video visit";
+    readonly 'visits.medList': "bring the medicine list";
+    readonly 'visits.notes': "notes: {notes}";
+    readonly 'visits.state.upcoming': "coming up";
+    readonly 'visits.state.now': "now";
+    readonly 'visits.state.unmarked': "over, not marked yet";
+    readonly 'visits.state.attended': "attended";
+    readonly 'visits.state.missed': "missed";
+    readonly 'visits.notesKeepersOnly': "Only admins, and members who care for this person, can keep notes on their visits. Leave `notes` out; the place, time and what to bring are fine.";
     readonly 'health.printLink': "Printable list: {url}";
     readonly 'meds.refillsLeft': "{count, plural, one {# refill left} other {# refills left}}";
     readonly 'meds.asNeeded': "As needed";

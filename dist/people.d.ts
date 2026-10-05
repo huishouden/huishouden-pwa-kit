@@ -17,3 +17,11 @@ export declare function personInitial(email: string, me?: {
 export declare const PERSON_COLOURS: string[];
 /** A member's colour: by their place in `members`, so two members never share one; a stable hash for anyone else. */
 export declare function personColour(email: string, members: string[]): string;
+/**
+ * The one person a text names, by full name, else by first or last name ("Ana's dentist" → Ana),
+ * as a whole word in any language; null when it names nobody or more than one. Never a guess from
+ * there being only one person: whose a health visit or a baby's checkup is gets asked, not assumed.
+ */
+export declare function namedIn<P extends {
+    name: string;
+}>(text: string, people: readonly P[]): P | null;

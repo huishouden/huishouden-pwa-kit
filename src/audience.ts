@@ -1,3 +1,5 @@
+import { householdRole, type Role } from './role-core.js';
+
 /**
  * Items for named people only. The household agenda, to-do list and reminders are read by every
  * admin and member (and helpers and kids see what isn't private). Some records are about one
@@ -25,4 +27,30 @@ export function cleanAudience(emails: readonly string[]): string[] {
 /** Whether `email` is in a stored item's audience (as read back, defensively). */
 export function inAudience(audience: unknown, email: string | null | undefined): boolean {
   return Array.isArray(audience) && !!email && audience.includes(email.trim().toLowerCase());
+}
+
+/** The household as `personAudience` needs it: its members and their roles. */
+export interface AudienceHousehold {
+  members: readonly string[];
+  roles?: Readonly<Record<string, Role>>;
+}
+
+const roleIn = (h: AudienceHousehold, email: string) => householdRole({ members: [...h.members], roles: { ...(h.roles ?? {}) } }, email);
+
+/** A member who may be in an audience: in the household and not a kid. */
+export const audienceMember = (h: AudienceHousehold, email: string): boolean => {
+  const r = roleIn(h, email.trim().toLowerCase());
+  return r !== null && r !== 'kid';
+};
+
+/** The household's admins, in member order. */
+export const householdAdmins = (h: AudienceHousehold): string[] => h.members.filter((m) => roleIn(h, m) === 'admin');
+
+/**
+ * Who reads what Health publishes about a person (their medicines' and visits' agenda items, to-dos
+ * and reminders): the household's admins and the person's readers (carers and the person) who are
+ * members and not kids. Lowercase and sorted.
+ */
+export function personAudience(p: { readers: readonly string[] }, h: AudienceHousehold): string[] {
+  return cleanAudience([...householdAdmins(h), ...p.readers.filter((e) => audienceMember(h, e))]);
 }

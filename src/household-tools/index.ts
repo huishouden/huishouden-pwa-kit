@@ -26,6 +26,7 @@ import { billsDue } from './money.js';
 import { petLogDose, petLogFeeding, petToday } from './pet.js';
 import { homeAddEvent, homeUpkeepDue } from './home.js';
 import { addAppointment, contactsAdd, contactsSearch } from './people.js';
+import { healthAppointments } from './health-visits.js';
 import { healthAddMedicine, healthDoctorList, healthDue, healthHistory, healthLogDose, healthMedicines, healthPeople, healthUpdateMedicine } from './health.js';
 
 export { Session, UserError, type AuditEntry, type Here, type Household, type SessionProps } from './context.js';
@@ -61,6 +62,7 @@ export const TOOLS: readonly ToolDef[] = [
   healthAddMedicine,
   healthUpdateMedicine,
   healthDoctorList,
+  healthAppointments,
 ];
 
 export const toolNamed = (name: string): ToolDef | undefined => TOOLS.find((tool) => tool.name === name);
