@@ -2,7 +2,7 @@ import { reminderId } from './reminder-core.js';
 import { capitalize, formatList, getLang, kt } from './i18n.js';
 import { addDays, atClock, DAY, formatDayShort, HOUR, MINUTE, shortDate, toHhmm, toYmd, ymdToTime } from './time.js';
 import { addInterval } from './schedule.js';
-import { audienceMember, cleanAudience, householdAdmins } from './audience.js';
+import { audienceMember, audienceSeesPrivate, cleanAudience, householdAdmins } from './audience.js';
 /**
  * Health visits (huishouden/health): a person's appointments with a doctor, a dentist, a lab, under
  * `households/{id}/healthPeople/{personId}/visits/{visitId}`, with their notes apart in
@@ -273,6 +273,19 @@ export function visitRecipients(p, h) {
         return [own];
     return householdAdmins(h).slice(0, 1);
 }
+/**
+ * The doctor or clinic as a visit's published items may name it: a contact marked private (admins
+ * and members only; one without the flag counts as private) only when everyone in the audience may
+ * read private records, so a helper carer never learns it from a reminder or a calendar.
+ * `visitAgendaItem` and `visitReminders` apply it themselves.
+ */
+export function publishedContact(c, audience, h) {
+    if (!c)
+        return undefined;
+    if (c.private !== false && !audienceSeesPrivate(h, audience))
+        return undefined;
+    return { name: c.name, ...(c.address ? { address: c.address } : {}) };
+}
 /** The agenda item's `ref`: one per visit. */
 export const visitRef = (v) => `visit:${v.personId}:${v.id}`;
 /**
@@ -281,7 +294,8 @@ export const visitRef = (v) => `visit:${v.personId}:${v.id}`;
  * `calendarDetail`.
  */
 export function visitAgendaItem(v, o) {
-    const detail = [visitWhat(v, o.contact), ...visitWhere(v, o.contact), ...prepWords(v)].join(' · ').slice(0, 200);
+    const contact = publishedContact(o.contact, o.audience, o.household);
+    const detail = [visitWhat(v, contact), ...visitWhere(v, contact), ...prepWords(v)].join(' · ').slice(0, 200);
     return {
         ref: visitRef(v),
         kind: 'appointment',
@@ -316,12 +330,13 @@ export function reminderTimes(v) {
 export function visitReminders(v, o) {
     if (v.status || !o.recipients.length)
         return [];
-    const where = visitWhere(v, o.contact);
+    const contact = publishedContact(o.contact, o.audience, o.household);
+    const where = visitWhere(v, contact);
     const prep = prepWords(v);
     return reminderTimes(v)
         .filter((at) => at > o.now && at < v.at + (v.allDay ? DAY : 1))
         .map((at) => {
-        const what = [visitWhat(v, o.contact), ...where].join(', ');
+        const what = [visitWhat(v, contact), ...where].join(', ');
         const body = kt('visit.reminderBody', { when: visitWhen(v, at, o.local), what }) + (prep.length ? ` ${capitalize(formatList(prep))}.` : '');
         return {
             id: reminderId(visitReminderRef(v), at),

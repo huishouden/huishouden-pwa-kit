@@ -4,7 +4,7 @@ import { reminderId, type PersonalReminderInput } from './reminder-core.js';
 import { capitalize, formatList, getLang, kt, type Lang } from './i18n.js';
 import { addDays, atClock, DAY, formatDayShort, HOUR, MINUTE, shortDate, toHhmm, toYmd, ymdToTime, type Ymd } from './time.js';
 import { addInterval } from './schedule.js';
-import { audienceMember, cleanAudience, householdAdmins, type AudienceHousehold } from './audience.js';
+import { audienceMember, audienceSeesPrivate, cleanAudience, householdAdmins, type AudienceHousehold } from './audience.js';
 
 /**
  * Health visits (huishouden/health): a person's appointments with a doctor, a dentist, a lab, under
@@ -372,6 +372,18 @@ export function visitRecipients(p: { carers: readonly string[]; email?: string }
   return householdAdmins(h).slice(0, 1);
 }
 
+/**
+ * The doctor or clinic as a visit's published items may name it: a contact marked private (admins
+ * and members only; one without the flag counts as private) only when everyone in the audience may
+ * read private records, so a helper carer never learns it from a reminder or a calendar.
+ * `visitAgendaItem` and `visitReminders` apply it themselves.
+ */
+export function publishedContact(c: VisitContact | undefined, audience: readonly string[], h: AudienceHousehold): { name: string; address?: string } | undefined {
+  if (!c) return undefined;
+  if (c.private !== false && !audienceSeesPrivate(h, audience)) return undefined;
+  return { name: c.name, ...(c.address ? { address: c.address } : {}) };
+}
+
 // ---- Publishing ----
 
 export interface VisitPerson {
@@ -379,14 +391,24 @@ export interface VisitPerson {
   name: string;
 }
 
+/** A visit's doctor or clinic as the household's contacts hold it. */
+export interface VisitContact {
+  name: string;
+  address?: string;
+  /** Admins and members only; absent counts as private. */
+  private?: boolean;
+}
+
 export interface PublishVisitOptions {
   person: VisitPerson;
   /** Who may read what it publishes: `./audience` `personAudience`. */
   audience: readonly string[];
+  /** The household's members and roles: whether the audience may see a private doctor. */
+  household: AudienceHousehold;
   /** The deep link into Health for this visit. */
   url: string;
-  /** The doctor or clinic, when it has one. */
-  contact?: { name: string; address?: string };
+  /** The doctor or clinic, when it has one, as stored: named only as `publishedContact` allows. */
+  contact?: VisitContact;
   /** Absolute to the household's local frame, on a server. */
   local?: (t: number) => number;
 }
@@ -400,7 +422,8 @@ export const visitRef = (v: Pick<Visit, 'id' | 'personId'>): string => `visit:${
  * `calendarDetail`.
  */
 export function visitAgendaItem(v: Visit, o: PublishVisitOptions): PersonalAgendaInput {
-  const detail = [visitWhat(v, o.contact), ...visitWhere(v, o.contact), ...prepWords(v)].join(' · ').slice(0, 200);
+  const contact = publishedContact(o.contact, o.audience, o.household);
+  const detail = [visitWhat(v, contact), ...visitWhere(v, contact), ...prepWords(v)].join(' · ').slice(0, 200);
   return {
     ref: visitRef(v),
     kind: 'appointment',
@@ -437,12 +460,13 @@ export function reminderTimes(v: Pick<Visit, 'at' | 'allDay' | 'remindBefore'>):
  */
 export function visitReminders(v: Visit, o: PublishVisitOptions & { /** `visitRecipients`. */ recipients: readonly string[]; now: number }): PersonalReminderInput[] {
   if (v.status || !o.recipients.length) return [];
-  const where = visitWhere(v, o.contact);
+  const contact = publishedContact(o.contact, o.audience, o.household);
+  const where = visitWhere(v, contact);
   const prep = prepWords(v);
   return reminderTimes(v)
     .filter((at) => at > o.now && at < v.at + (v.allDay ? DAY : 1))
     .map((at) => {
-      const what = [visitWhat(v, o.contact), ...where].join(', ');
+      const what = [visitWhat(v, contact), ...where].join(', ');
       const body = kt('visit.reminderBody', { when: visitWhen(v, at, o.local), what }) + (prep.length ? ` ${capitalize(formatList(prep))}.` : '');
       return {
         id: reminderId(visitReminderRef(v), at),
@@ -465,7 +489,7 @@ export function visitReminders(v: Visit, o: PublishVisitOptions & { /** `visitRe
  * both mark the visit (`followUpDoneAt`), as the reader who taps them: `givers` (its readers among
  * the audience) and admins.
  */
-export function followUpTodo(v: Visit, visits: readonly Pick<Visit, 'followUpOf'>[], o: Omit<PublishVisitOptions, 'contact'> & { givers: readonly string[]; now: number }): PersonalTodoInput | null {
+export function followUpTodo(v: Visit, visits: readonly Pick<Visit, 'followUpOf'>[], o: Omit<PublishVisitOptions, 'contact' | 'household'> & { givers: readonly string[]; now: number }): PersonalTodoInput | null {
   if (!followUpOpen(v, visits, o.now)) return null;
   const day = followUpDay(v, o.local)!;
   const end = visitEnd(v);
