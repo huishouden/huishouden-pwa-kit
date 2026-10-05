@@ -42,7 +42,7 @@ export interface Contact {
 }
 
 export const CONTACT_FIELDS = [
-  'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'apps', 'private', 'createdAt', 'updatedAt', 'by',
+  'name', 'role', 'phone', 'email', 'website', 'address', 'lat', 'lng', 'geoTried', 'mapsUrl', 'notes', 'apps', 'private', 'createdAt', 'updatedAt', 'by', 'via',
 ] as const;
 
 /**

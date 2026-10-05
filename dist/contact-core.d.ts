@@ -38,7 +38,7 @@ export interface Contact {
     updatedAt?: number;
     by: string;
 }
-export declare const CONTACT_FIELDS: readonly ["name", "role", "phone", "email", "website", "address", "mapsUrl", "notes", "apps", "private", "createdAt", "updatedAt", "by"];
+export declare const CONTACT_FIELDS: readonly ["name", "role", "phone", "email", "website", "address", "lat", "lng", "geoTried", "mapsUrl", "notes", "apps", "private", "createdAt", "updatedAt", "by", "via"];
 /**
  * Where a contact's pay details live: `households/{id}/contactPay/{contactId}`, admins and members
  * only. Its fields are the ways of paying plus `updatedAt` and `by` (CONTACT_PAY_FIELDS).

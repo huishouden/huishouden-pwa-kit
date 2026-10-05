@@ -3,6 +3,16 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## [0.104.0](https://github.com/huishouden/pwa-kit/compare/v0.103.0...v0.104.0) (2026-10-05)
+
+### Features
+
+* **food:** `pseudonymousFood(food, others?)`: the household's food preferences for a prompt to a model outside the household. Each person becomes "Person A", "Person B", … by list position, keeping diets, allergies, spice and note but no name, id or email; names, first names and emails written in notes are replaced (an unknown email, or a name from `others`, as "someone"). Avoid lists stay as written (a first name can be a food). `restore(text)` puts the real names back in what the model wrote. STANDARD.md "Nobody named to a model".
+
+### Bug Fixes
+
+* **contact-core:** `CONTACT_FIELDS` names every field the rules allow on a contact: `lat`, `lng` and `geoTried` (the map position the kit writes) and `via` were missing.
+
 ## [0.103.0](https://github.com/huishouden/pwa-kit/compare/v0.102.0...v0.103.0) (2026-10-05)
 
 ### Features

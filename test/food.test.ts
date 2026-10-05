@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import fixture from './fixtures/food.json';
-import { DEFAULT_PANTRY, DIETS, DIET_STRICT, GENTLE_DIETS, householdDietPreferences, isStrict, DIET_GUIDANCE, DIET_LABELS, FOOD_LIMITS, foodDoc, householdDietRules, householdDiets, pantryText, toFood, withMembers } from '../src/food';
+import { DEFAULT_PANTRY, DIETS, DIET_STRICT, GENTLE_DIETS, householdDietPreferences, isStrict, DIET_GUIDANCE, DIET_LABELS, FOOD_LIMITS, foodDoc, householdDietRules, householdDiets, householdSpiceLines, pantryText, pseudonymousFood, toFood, withMembers } from '../src/food';
 
 describe('reading the stored document', () => {
   test('keeps valid people once, known diets only, avoid lists trimmed and de-duplicated', () => {
@@ -118,5 +118,44 @@ describe('spice tolerance', () => {
     expect(householdMaxHeat({ people: [people[2]] })).toBeUndefined();
     expect(householdSpiceLines({ people })[0]).toContain('Amanda: keep meals mild, heat 0 of 3; a slight touch of heat (1) is tolerable now and then but not ideal.');
     expect(householdDietPreferences({ people })).toEqual(householdSpiceLines({ people }));
+  });
+});
+
+describe('pseudonymous food for a model', () => {
+  const food = toFood({
+    people: [
+      { id: 'amanda@example.com', name: 'Amanda Rivera', member: 'amanda@example.com', diets: ['gerd', 'nut allergy'], avoid: ['mushrooms'], spice: 'mild', note: 'Amanda is pregnant; ask amanda@example.com or Bob first' },
+      { id: 'bob@example.com', name: 'Bob', member: 'bob@example.com', diets: ['vegetarian'], avoid: ['cilantro'], note: 'Cooks for Rivera family; writes to kim.lee@example.org' },
+      { id: 'kid-1', name: 'Noor', diets: ['halal'], avoid: [] },
+    ],
+  });
+  const real = ['Amanda', 'Rivera', 'Bob', 'Noor', 'amanda@example.com', 'bob@example.com', 'kim.lee@example.org', 'Kim'];
+
+  test('names nobody: no name, first name or email in any prompt line', () => {
+    const { food: anon } = pseudonymousFood(food, [{ email: 'kim.lee@example.org', name: 'Kim Lee' }]);
+    const text = [...householdDietRules(anon), ...householdDietRules(anon, { strictOnly: true }), ...householdDietPreferences(anon), ...householdSpiceLines(anon)].join('\n');
+    for (const r of real) expect(text).not.toMatch(new RegExp(`\\b${r}\\b`, 'i'));
+    expect(JSON.stringify(anon.people)).not.toMatch(/@|Amanda|Bob|Rivera/);
+  });
+
+  test('keeps every condition, tied to a stand-in, and the avoid lists as written', () => {
+    const { food: anon } = pseudonymousFood(food);
+    expect(anon.people.map((p) => p.name)).toEqual(['Person A', 'Person B', 'Person C']);
+    expect(anon.people.map((p) => p.diets)).toEqual(food.people.map((p) => p.diets));
+    expect(anon.people[0].avoid).toEqual(['mushrooms']);
+    expect(anon.people[0].note).toBe('Person A is pregnant; ask Person A or Person B first');
+    expect(anon.people[1].note).toBe('Cooks for Person A family; writes to someone');
+    expect(householdDietRules(anon).filter((r) => r.startsWith('Person C'))).toHaveLength(1);
+  });
+
+  test('leaves avoid lists as written, even when a name is also a food', () => {
+    const { food: anon } = pseudonymousFood(toFood({ people: [{ id: 'olive', name: 'Olive', diets: [], avoid: ['olive oil'] }] }));
+    expect(householdDietRules(anon)).toEqual(['Person A avoids olive oil.']);
+  });
+
+  test('is stable for the same list and puts real names back', () => {
+    const a = pseudonymousFood(food);
+    expect(pseudonymousFood(food).food).toEqual(a.food);
+    expect(a.restore('Too spicy for Person A; Person C and Person Z')).toBe('Too spicy for Amanda Rivera; Noor and Person Z');
   });
 });

@@ -125,5 +125,27 @@ export declare function householdDietRules(food: Pick<FoodPreferences, 'people'>
  * { strictOnly: true })`: most meals should lean this way, not every one.
  */
 export declare function householdDietPreferences(food: Pick<FoodPreferences, 'people'>): string[];
+/** What `pseudonymousFood` returns: the people under stand-in names, and the way back. */
+export interface PseudonymousFood<T extends Pick<FoodPreferences, 'people'>> {
+    /** The same preferences with each person as "Person A", "Person B", … (in list order), no email or id of theirs, and names and emails taken out of their notes. */
+    food: T;
+    /** Puts the real names back in text that came back from a model: "Person B" becomes the second person's name. */
+    restore: (text: string) => string;
+}
+/**
+ * The household's food preferences with nobody named, for a prompt sent to a model outside the
+ * household (Gemini): each person becomes "Person A", "Person B", … by their place in the list, so
+ * the stand-ins are stable while the list is, and diets, allergies and notes stay but are not tied
+ * to anyone's name or email. Names, first names and emails written in a note are replaced as well
+ * (an email of someone not in the list as "someone"); `others` names more people to take out of
+ * notes, such as household members not in the list. Avoid lists are ingredients and stay as
+ * written: a first name can be a food ("Olive"), and "olive oil" must reach the model intact. Build the
+ * prompt's rules from `food` (householdDietRules, householdDietPreferences, householdSpiceLines);
+ * show the household anything the model wrote about a person through `restore`.
+ */
+export declare function pseudonymousFood<T extends Pick<FoodPreferences, 'people'>>(food: T, others?: {
+    email?: string;
+    name?: string;
+}[]): PseudonymousFood<T>;
 /** "Assume the kitchen already has salt, black pepper and cooking oil." or '' when the list is empty. */
 export declare function pantryText(food: Pick<FoodPreferences, 'pantryAssumed'>): string;

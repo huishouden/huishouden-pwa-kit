@@ -288,6 +288,67 @@ export function householdDietPreferences(food) {
         ...householdSpiceLines(food),
     ];
 }
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/g;
+/**
+ * The household's food preferences with nobody named, for a prompt sent to a model outside the
+ * household (Gemini): each person becomes "Person A", "Person B", … by their place in the list, so
+ * the stand-ins are stable while the list is, and diets, allergies and notes stay but are not tied
+ * to anyone's name or email. Names, first names and emails written in a note are replaced as well
+ * (an email of someone not in the list as "someone"); `others` names more people to take out of
+ * notes, such as household members not in the list. Avoid lists are ingredients and stay as
+ * written: a first name can be a food ("Olive"), and "olive oil" must reach the model intact. Build the
+ * prompt's rules from `food` (householdDietRules, householdDietPreferences, householdSpiceLines);
+ * show the household anything the model wrote about a person through `restore`.
+ */
+export function pseudonymousFood(food, others = []) {
+    const label = (i) => `Person ${String.fromCharCode(65 + (i % 26))}${i >= 26 ? Math.floor(i / 26) + 1 : ''}`;
+    const real = food.people.map((p) => p.name);
+    // Longest first, so "Mary Ann" goes before "Mary"; whole words only, any case.
+    const swaps = [];
+    const add = (term, to) => {
+        const t = term?.trim();
+        if (t && t.length >= 2)
+            swaps.push([t, to]);
+    };
+    food.people.forEach((p, i) => {
+        add(p.name, label(i));
+        for (const word of p.name.split(/\s+/))
+            if (word.length >= 3)
+                add(word, label(i));
+        add(p.member, label(i));
+        if (p.member)
+            add(p.member.split('@')[0], label(i));
+        if (p.id.includes('@'))
+            add(p.id, label(i));
+    });
+    for (const o of others) {
+        add(o.email, 'someone');
+        add(o.name, 'someone');
+        for (const word of o.name?.split(/\s+/) ?? [])
+            if (word.length >= 3)
+                add(word, 'someone');
+        if (o.email)
+            add(o.email.split('@')[0], 'someone');
+    }
+    swaps.sort((a, b) => b[0].length - a[0].length);
+    const pattern = swaps.length ? new RegExp(`(?<![\\p{L}\\p{N}])(?:${swaps.map(([t]) => escapeRegExp(t)).join('|')})(?![\\p{L}\\p{N}])`, 'giu') : null;
+    const scrub = (text) => {
+        const emailsOut = text.replace(EMAIL, (m) => swaps.find(([t]) => t.toLowerCase() === m.toLowerCase())?.[1] ?? 'someone');
+        return pattern ? emailsOut.replace(pattern, (m) => swaps.find(([t]) => t.toLowerCase() === m.toLowerCase())?.[1] ?? m) : emailsOut;
+    };
+    const people = food.people.map((p, i) => ({
+        id: `person-${i + 1}`,
+        name: label(i),
+        diets: [...p.diets],
+        avoid: [...p.avoid],
+        ...(p.spice ? { spice: p.spice } : {}),
+        ...(p.note ? { note: scrub(p.note) } : {}),
+    }));
+    const back = new Map(real.map((name, i) => [label(i), name]));
+    const restore = (text) => text.replace(/\bPerson ([A-Z])(\d*)\b/g, (m) => back.get(m) ?? m);
+    return { food: { ...food, people }, restore };
+}
 /** "Assume the kitchen already has salt, black pepper and cooking oil." or '' when the list is empty. */
 export function pantryText(food) {
     return food.pantryAssumed.length ? `Assume the kitchen already has ${list(food.pantryAssumed)}.` : '';

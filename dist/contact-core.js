@@ -1,6 +1,6 @@
 import { kt } from './i18n.js';
 export const CONTACT_FIELDS = [
-    'name', 'role', 'phone', 'email', 'website', 'address', 'mapsUrl', 'notes', 'apps', 'private', 'createdAt', 'updatedAt', 'by',
+    'name', 'role', 'phone', 'email', 'website', 'address', 'lat', 'lng', 'geoTried', 'mapsUrl', 'notes', 'apps', 'private', 'createdAt', 'updatedAt', 'by', 'via',
 ];
 /**
  * Where a contact's pay details live: `households/{id}/contactPay/{contactId}`, admins and members
