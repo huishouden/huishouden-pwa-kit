@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { APP_PATHS_REGEX, checkSecurityHeaders, globToRegExp, headersFor, permissionsPolicy, securityHeaders } from '../src/security-headers';
 import template from '../templates/firebase.json';
@@ -57,5 +60,23 @@ describe('security headers', () => {
     expect(globToRegExp('/!(__)/**').test('/__/auth/handler')).toBe(false);
     expect(globToRegExp('/!(__)/**').test('/meds/c1')).toBe(true);
     expect(headersFor(template.hosting.headers, '/index.html').get('cache-control')).toBe('no-cache');
+  });
+});
+
+describe('pwa-headers-check', () => {
+  const script = new URL('../scripts/headers-check.ts', import.meta.url).pathname;
+  const run = (files: Record<string, unknown>) => {
+    const dir = mkdtempSync(join(tmpdir(), 'headers-check-'));
+    for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, name), JSON.stringify(body));
+    return Bun.spawnSync(['bun', script], { cwd: dir }).exitCode;
+  };
+
+  test('a repo that serves no pages (a Worker) has nothing to check', () => {
+    expect(run({})).toBe(0);
+    expect(run({ 'firebase.json': { emulators: { firestore: { port: 8080 } } } })).toBe(0);
+  });
+
+  test('a site without the headers still fails', () => {
+    expect(run({ 'firebase.json': { hosting: { public: 'dist' } } })).toBe(1);
   });
 });
