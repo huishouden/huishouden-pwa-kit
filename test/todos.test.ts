@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
 import * as real from 'firebase/firestore';
 import { daysBetween } from '../src/time';
 
@@ -53,7 +53,8 @@ const {
   TODO_FIELDS, TODO_ACTION_FIELDS, addedText, applyTodo, canDo, olderThan, resolveOps, sortTodos, syncTodos, todoDoc, todoDueText, todoId,
   todoOpsAllowed, todoOverdue, toTodoItem, watchTodos, TodoActionError, personalTodoDoc, syncPersonalTodos, PERSONAL_TODO_FIELDS,
 } = await import('../src/todos');
-const { clearPageNotes, memoryNotes } = await import('./published-notes');
+const { memoryNotes, withoutPageStorage } = await import('./published-notes');
+withoutPageStorage(beforeAll, afterAll);
 type TodoInput = import('../src/todos').TodoInput;
 type TodoItem = import('../src/todos').TodoItem;
 
@@ -66,7 +67,6 @@ const SAM = 'sam@example.com';
 const url = 'https://huishouden.example.web.app/tasks/?item=i1';
 const base = `households/${H}`;
 const reset = () => {
-  clearPageNotes();
   store.clear();
   refuse.clear();
   writes = 0;

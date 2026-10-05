@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
 import * as real from 'firebase/firestore';
 import { formatTime } from '../src/time';
 
@@ -47,7 +47,8 @@ mock.module('firebase/firestore', () => ({
 }));
 
 const agenda = await import('../src/agenda');
-const { clearPageNotes, memoryNotes } = await import('./published-notes');
+const { memoryNotes, withoutPageStorage } = await import('./published-notes');
+withoutPageStorage(beforeAll, afterAll);
 const {
   AGENDA_FIELDS, agendaDays, agendaDoc, agendaId, agendaStatus, agendaTime, allDayStart, inAgendaWindow,
   removeAgenda, replaceAgenda, syncAgenda, toAgendaItem, todayItems, watchAgenda,
@@ -64,7 +65,6 @@ const at = (m: number, d: number, h = 0, min = 0) => new Date(2026, m - 1, d, h,
 const url = 'https://home.example.com/jobs/j1';
 const stored = () => [...store.entries()].filter(([p]) => p.startsWith(`households/${H}/agenda/`)).map(([p, d]) => toAgendaItem(p.split('/').pop()!, d));
 const reset = () => {
-  clearPageNotes();
   store.clear();
   refuse.clear();
   writes = 0;
