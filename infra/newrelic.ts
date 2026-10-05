@@ -183,7 +183,7 @@ async function uptime() {
     const monitor = {
       name,
       uri,
-      period: 'EVERY_15_MINUTES',
+      period: 'EVERY_30_MINUTES',
       status: 'ENABLED',
       locations: { public: ['AWS_US_EAST_1', 'AWS_US_WEST_1'] },
       advancedOptions: { responseValidationText: FAMILY, useTlsValidation: true, redirectIsFailure: false, shouldBypassHeadRequest: true },
@@ -294,7 +294,7 @@ const CONDITIONS: Condition[] = [
   },
   {
     name: 'Site down',
-    description: 'A site failed its uptime check twice in a row (checked every 15 minutes from two locations).',
+    description: 'A site failed its uptime check twice in a row (checked every 30 minutes from two locations).',
     query: `SELECT filter(count(*), WHERE result = 'FAILED') FROM SyntheticCheck WHERE monitorName LIKE '${FAMILY} %' FACET monitorName`,
     operator: 'ABOVE_OR_EQUALS', threshold: 2, window: 1800, duration: 1800,
   },

@@ -1,15 +1,12 @@
 name: ci
 
+# main only: pull requests run no hosted CI; their author verifies them (pwa-kit STANDARD.md
+# "Pull requests"). Each push to main builds, tests, deploys, smoke-checks over HTTP and tags the
+# package.json version.
+
 on:
   push:
     branches: [main]
-  pull_request:
-    # Release PRs (release-please, opened by github-actions[bot]) touch only these two files. GitHub
-    # holds runs for bot-opened PRs until someone approves them, and an unapproved run expires as a
-    # failure with no jobs; skipping them here means no run is created at all. A job-level `if:`
-    # can't do this: the approval gate is on the whole run, before any job is evaluated. The merge
-    # to main still runs everything (push has no path filter).
-    paths-ignore: [CHANGELOG.md, package.json]
   workflow_dispatch:
     inputs:
       staging-ref:
@@ -29,16 +26,10 @@ jobs:
   pwa:
     uses: huishouden/pwa-kit/.github/workflows/pwa.yml@v0
     permissions:
-      contents: write # README screenshots, PR evidence branch, the hosting release asset
+      contents: write # the hosting release asset, the version's tag and release
       id-token: write
-      pull-requests: write # before/after comment on PRs
     with:
       base: /APP_PATH/ # the app's path on the suite's one site (docs/one-site.md)
       site-url: https://FAMILY_SITE.web.app/APP_PATH/
       staging-ref: ${{ inputs.staging-ref }}
 
-  release:
-    uses: huishouden/pwa-kit/.github/workflows/release.yml@v0
-    permissions:
-      contents: write
-      pull-requests: write
