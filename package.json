@@ -106,6 +106,10 @@
       "types": "./dist/household.d.ts",
       "default": "./dist/household.js"
     },
+    "./household-tools": {
+      "types": "./dist/household-tools/index.d.ts",
+      "default": "./dist/household-tools/index.js"
+    },
     "./home": {
       "types": "./dist/home.d.ts",
       "default": "./dist/home.js"
@@ -351,7 +355,8 @@
     "react": ">=19",
     "react-dom": ">=19",
     "sharp": ">=0.33",
-    "vite-plugin-pwa": ">=1.0"
+    "vite-plugin-pwa": ">=1.0",
+    "zod": ">=4"
   },
   "peerDependenciesMeta": {
     "@playwright/test": {
@@ -370,6 +375,9 @@
       "optional": true
     },
     "sharp": {
+      "optional": true
+    },
+    "zod": {
       "optional": true
     }
   },
@@ -393,6 +401,7 @@
     "tesseract.js": "7.0.0",
     "typescript": "^5.9.0",
     "vite": "^8.3.0",
-    "vite-plugin-pwa": "^1.3.0"
+    "vite-plugin-pwa": "^1.3.0",
+    "zod": "^4.6.5"
   }
 }

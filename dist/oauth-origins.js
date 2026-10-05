@@ -47,3 +47,55 @@ export function missingOriginMessage(origins, project) {
         'List only the suite site and firebaseapp.com: Google allows an unverified app 10 authorized domains.',
     ].join('\n');
 }
+/**
+ * The redirect URI Firebase's popup and redirect sign-in send Google back to: the auth handler on
+ * the project's `authDomain` (`<project>.firebaseapp.com`, what bootstrap sets every app to). It must
+ * be among the OAuth web client's Authorized redirect URIs.
+ */
+export function signInRedirectUris(project) {
+    return [`https://${project}.firebaseapp.com/__/auth/handler`];
+}
+/**
+ * Whether `redirectUri` is an Authorized redirect URI of the client: Google sends an unregistered
+ * one to its error page with `redirect_uri_mismatch` (base64 in `authError`) and a registered one on
+ * to sign in. Nothing is shown to anyone; the request carries no cookies.
+ */
+export async function redirectStatus(clientId, redirectUri, fetchImpl = fetch) {
+    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    url.search = new URLSearchParams({ client_id: clientId, response_type: 'code', scope: 'openid', redirect_uri: redirectUri }).toString();
+    const res = await fetchImpl(url.toString(), { redirect: 'manual' });
+    const location = res.headers.get('location') ?? '';
+    if (res.status >= 300 && res.status < 400) {
+        const authError = new URL(location, 'https://accounts.google.com').searchParams.get('authError');
+        if (!authError)
+            return 'registered';
+        let decoded = '';
+        try {
+            decoded = atob(authError.replace(/-/g, '+').replace(/_/g, '/'));
+        }
+        catch {
+            return 'unknown';
+        }
+        return decoded.includes('redirect_uri_mismatch') ? 'missing' : 'unknown';
+    }
+    if (res.status === 400 && (await res.text()).includes('redirect_uri_mismatch'))
+        return 'missing';
+    return res.status === 200 ? 'registered' : 'unknown';
+}
+/**
+ * Firebase Auth's authorized domains a project should have (docs/one-site.md "Sign-in origins"):
+ * the suite's site and the auth handler's domain; staging adds each app's own staging site (its
+ * pull requests sign in there) and `localhost` (local runs against staging).
+ */
+export function expectedAuthorizedDomains(project, suiteSite, staging) {
+    const out = [`${suiteSite}.web.app`, `${project}.firebaseapp.com`];
+    if (staging)
+        out.push(...staging.appSites.map((s) => `${s}.web.app`), 'localhost');
+    return [...new Set(out)].sort();
+}
+/** What is missing from and extra on a project's authorized domains, against the expected set. */
+export function compareAuthorizedDomains(actual, expected) {
+    const have = new Set(actual);
+    const want = new Set(expected);
+    return { missing: expected.filter((d) => !have.has(d)), extra: actual.filter((d) => !want.has(d)) };
+}
