@@ -3,8 +3,7 @@ import { toContact } from '../contact-core.js';
 import { addDays, clockWords, DAY, daysBetween, formatTime, longDate, toYmd } from '../time.js';
 import { asNeededCheck } from '../dose.js';
 import { t } from './i18n.js';
-import { UserError } from './context.js';
-import { FirestoreError } from '../firestore-rest.js';
+import { isDenied, UserError } from './context.js';
 import { common, defineTool, idempotency, render } from './registry.js';
 import { alreadyThere, clip, pick, recordId } from './shared.js';
 import { adherenceOf, ageOn, cleanRule, daysLeft, daysLeftText, doseId, doseText, guardFor, isCurrent, isEventRule, isStopped, loadDoses, loadMeds, loadPeople, logsOf, medLabel, medUrl, personUrl, printUrl, refillDue, rowsBetween, scheduleText, supplyLeft, toMed, } from './health-data.js';
@@ -35,11 +34,12 @@ function chooseMed(meds, wanted) {
     throw new UserError(ambiguous || byName.ambiguous ? 'health.ambiguousMed' : 'health.unknownMed', { name: wanted, meds: meds.map(medLabel).join(', ') || '-' });
 }
 async function contactsById(ctx) {
-    const docs = await ctx.session.openRecords(ctx.here, 'contacts', true).catch(() => []);
+    // A reader the rules don't let see contacts gets none; any other failure is said as itself.
+    const docs = await ctx.session.openRecords(ctx.here, 'contacts', true).catch((e) => (isDenied(e) ? [] : Promise.reject(e)));
     return new Map(docs.map((d) => [d.id, toContact(d.id, d.data)]));
 }
 async function namesOf(ctx) {
-    const docs = await ctx.session.db.query(`households/${ctx.here.id}`, 'profiles').catch(() => []);
+    const docs = await ctx.session.db.query(`households/${ctx.here.id}`, 'profiles').catch((e) => (isDenied(e) ? [] : Promise.reject(e)));
     const names = new Map(docs.map((d) => [d.id, typeof d.data.name === 'string' ? d.data.name : '']));
     return (email) => (email === ctx.session.email ? t('health.you') : names.get(email) || email.split('@')[0]);
 }
@@ -306,6 +306,16 @@ export const healthLogDose = defineTool({
         if (!slot && args.idempotency_key && doses.some((d) => d.id === id)) {
             return render(ctx.lang, () => ({ text: t('health.doseGiven', { med: medLabel(med), name: person.name, time: formatTime(ctx.clock.local(when.at)), url: personUrl(ctx, person.id) }), data: { written: true, id, person: person.id, medicine: med.id, status, repeated: true } }));
         }
+        // A slot's dose is one record, and the rules keep its `by` on every change (huishouden/rules,
+        // doses): someone else's mark is theirs, and turning a given dose into a skipped one asks first.
+        const existing = slot ? doses.find((d) => d.id === id) : undefined;
+        if (existing && existing.by !== ctx.session.email)
+            throw new UserError('health.someoneElsesDose');
+        if (existing?.status === 'given' && status === 'skipped' && !args.confirm) {
+            const warning = render(ctx.lang, () => t('guard.unmark', { med: medLabel(med), time: formatTime(ctx.clock.local(existing.at)) }));
+            ctx.touched('health', `healthPeople/${person.id}/meds/${med.id}`);
+            return { text: render(ctx.lang, () => t('health.guardAsk', { warning })), data: { written: false, needs_confirmation: true, warning } };
+        }
         if (status === 'given' && !args.confirm) {
             const warning = render(ctx.lang, () => guardFor(ctx, med, doses, when.at, nameOf, slot));
             if (warning) {
@@ -323,7 +333,7 @@ export const healthLogDose = defineTool({
         catch (e) {
             if (alreadyThere(e))
                 repeated = true;
-            else if (e instanceof FirestoreError && e.code === 'permission-denied' && slot && doses.some((d) => d.id === id))
+            else if (isDenied(e) && slot && doses.some((d) => d.id === id))
                 throw new UserError('health.someoneElsesDose');
             else
                 throw e;
@@ -424,7 +434,7 @@ function medDoc(ctx, person, old, a, contacts) {
     };
 }
 const keeperOnly = (e) => {
-    if (e instanceof FirestoreError && e.code === 'permission-denied')
+    if (isDenied(e))
         throw new UserError('health.keepersOnly');
     throw e;
 };
@@ -480,8 +490,10 @@ export const healthUpdateMedicine = defineTool({
         const path = `households/${ctx.here.id}/healthPeople/${person.id}/meds/${old.id}`;
         const now = ctx.clock.now();
         const today = ctx.clock.today();
-        const { person: _p, medicine: _m, stop, restart, refill_ordered, household: _h, lang: _l, time_zone: _z, ...changes } = args;
-        const changing = Object.values(changes).some((v) => v !== undefined) || stop || restart;
+        const { stop, restart, refill_ordered } = args;
+        // Only the medicine's own fields are a change; anything else (household, language) is not.
+        const changes = Object.fromEntries(Object.keys(medFields).filter((k) => args[k] !== undefined).map((k) => [k, args[k]]));
+        const changing = Object.keys(changes).length > 0 || stop || restart;
         if (refill_ordered && !changing) {
             // Any carer may mark a refill ordered (the rules allow exactly these two fields).
             await ctx.session.db.commit([{ path, merge: { refillOrderedAt: now, updatedAt: now } }]);

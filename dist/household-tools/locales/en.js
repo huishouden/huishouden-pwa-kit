@@ -183,6 +183,7 @@ export default {
     'guard.max': '{count} given in the last 24 hours, the most for {med}.',
     'guard.tooSoon': 'Last given {ago}; {med} needs {count, plural, one {# hour} other {# hours}} between doses.',
     'guard.already': '{med} was already given {ago} by {name}. Give it again?',
+    'guard.unmark': '{med} was marked given at {time}. Mark it skipped instead?',
     'today.noMeds': 'No medicines at the moment.',
     'today.allergies': 'Allergies: {allergies}',
     'today.whenNeeded': 'When needed',
@@ -201,5 +202,4 @@ export default {
     'print.stoppedItem': '{med}, stopped {date}',
     'print.adherence': 'Doses given in the last 30 days: {percent}.',
     'print.doctors': 'Doctors and pharmacy',
-    // The consent page (the Worker's own page, before the portal signs the person in).
 };

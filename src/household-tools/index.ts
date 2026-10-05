@@ -26,10 +26,8 @@ import { homeAddEvent, homeUpkeepDue } from './home.js';
 import { addAppointment, contactsAdd, contactsSearch } from './people.js';
 import { healthAddMedicine, healthDoctorList, healthDue, healthHistory, healthLogDose, healthMedicines, healthPeople, healthUpdateMedicine } from './health.js';
 
-export { Session, UserError, isDenied, pickHousehold, toHousehold, type AuditEntry, type Here, type Household, type Profile, type SessionProps } from './context.js';
-export { common, defineTool, failureText, idempotency, render, withHealthNote, type ToolContext, type ToolDef, type ToolResult } from './registry.js';
-export { t as toolText, type ToolMessageKey } from './i18n.js';
-export { GROCERY_CATEGORIES, writesOf } from './lists.js';
+export { Session, UserError, type AuditEntry, type Here, type Household, type SessionProps } from './context.js';
+export type { ToolContext, ToolDef, ToolResult } from './registry.js';
 
 /** Every tool, in the order clients list them. */
 export const TOOLS: readonly ToolDef[] = [
@@ -61,7 +59,7 @@ export const TOOLS: readonly ToolDef[] = [
   healthAddMedicine,
   healthUpdateMedicine,
   healthDoctorList,
-] as ToolDef[];
+];
 
 export const toolNamed = (name: string): ToolDef | undefined => TOOLS.find((tool) => tool.name === name);
 

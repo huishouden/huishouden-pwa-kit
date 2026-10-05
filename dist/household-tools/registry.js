@@ -16,6 +16,10 @@ export const idempotency = {
         .optional()
         .describe('Any unique string for this one change. A retry with the same key does nothing new and answers the same.'),
 };
+/**
+ * A tool, checked against its own input (`run`'s arguments are the schema's) and then widened, so
+ * the list of every tool needs no cast.
+ */
 export function defineTool(def) {
     return def;
 }

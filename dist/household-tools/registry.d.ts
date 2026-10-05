@@ -43,7 +43,11 @@ export declare const common: {
 export declare const idempotency: {
     idempotency_key: z.ZodOptional<z.ZodString>;
 };
-export declare function defineTool<S extends z.ZodRawShape>(def: ToolDef<S>): ToolDef<S>;
+/**
+ * A tool, checked against its own input (`run`'s arguments are the schema's) and then widened, so
+ * the list of every tool needs no cast.
+ */
+export declare function defineTool<S extends z.ZodRawShape>(def: ToolDef<S>): ToolDef;
 /** Text in the person's language: `fn` runs with the kit's language switched (it must not await). */
 export declare const render: <T>(lang: Lang, fn: () => T) => T;
 /** Health answers end with the one-line not-medical-advice note, in the person's language. */

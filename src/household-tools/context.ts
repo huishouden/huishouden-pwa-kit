@@ -3,6 +3,7 @@ import { isLang, loadLang, type Lang } from '../i18n.js';
 import { LocalClock, isTimeZone } from '../local-clock.js';
 import { FirestoreRest, FirestoreError, type Doc } from '../firestore-rest.js';
 import { toHome, type HouseholdHome } from '../home.js';
+import type { ToolMessageKey } from './i18n.js';
 
 /** Who a session acts as, and how (the connector's grant, the `hh` command line's sign-in). */
 export interface SessionProps {
@@ -51,8 +52,11 @@ export function toHousehold(id: string, d: Record<string, unknown>): Household {
   };
 }
 
-/** The household the apps open (`@huishouden/pwa-kit/household` pickHousehold): joined first, then oldest. */
-export function pickHousehold(households: Household[], email: string): Household | null {
+/**
+ * The household the apps open, as `../household` pickHousehold picks it: joined first, then the
+ * oldest. `email` is normalized (`Session` does it once).
+ */
+export function defaultHousehold(households: Household[], email: string): Household | null {
   const sorted = [...households].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
   return sorted.find((h) => h.joined.includes(email)) ?? sorted[0] ?? null;
 }
@@ -81,7 +85,7 @@ export interface Here extends Household {
 /** Thrown for anything the person should hear in their language (an unknown pet, no household). */
 export class UserError extends Error {
   constructor(
-    readonly key: string,
+    readonly key: ToolMessageKey,
     readonly vars: Record<string, string | number> = {},
   ) {
     super(key);
@@ -104,8 +108,9 @@ export class Session {
     private readonly audit: (household: string, entry: AuditEntry) => void = () => {},
   ) {}
 
+  /** Trimmed and lowercase, as the apps and the rules compare emails. */
   get email(): string {
-    return this.props.email;
+    return this.props.email.trim().toLowerCase();
   }
 
   /** What every write by this session carries: `{ via: 'assistant' }` for the connector, else nothing. */
@@ -123,9 +128,10 @@ export class Session {
   /** The household `id`, or the one the apps open; throws a UserError when there is none. */
   async here(id?: string): Promise<Here> {
     const all = await this.households();
-    const h = id ? all.find((x) => x.id === id || x.name.toLowerCase() === id.toLowerCase()) : pickHousehold(all, this.email);
+    const h = id ? all.find((x) => x.id === id || x.name.toLowerCase() === id.toLowerCase()) : defaultHousehold(all, this.email);
     if (!h) throw new UserError(id ? 'error.noSuchHousehold' : 'error.noHousehold');
-    const role = householdRole(h, this.email) ?? 'member';
+    // Fails closed: a role that can't be read is treated as a helper's (private records filtered).
+    const role = householdRole(h, this.email) ?? 'helper';
     return { ...h, role, restricted: isRestricted(role) };
   }
 
@@ -142,7 +148,13 @@ export class Session {
             ...(isTimeZone(data.timeZone) ? { timeZone: data.timeZone as string } : {}),
           };
         })
-        .catch(() => ({}));
+        .catch((e) => {
+          // No profile to read (refused) answers with the defaults; anything else is said as itself
+          // and tried again on the next call.
+          if (isDenied(e) || (e instanceof FirestoreError && e.code === 'not-found')) return {};
+          this.profiles.delete(householdId);
+          throw e;
+        });
       this.profiles.set(householdId, p);
     }
     return p;

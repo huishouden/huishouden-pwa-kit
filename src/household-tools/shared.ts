@@ -2,13 +2,13 @@ import { toAgendaItem, agendaWords, type AgendaItem } from '../agenda-core.js';
 import { PERSONAL_TODOS, toTodoItem, todoWords, type TodoItem } from '../todo-core.js';
 import { PERSONAL_AGENDA } from '../agenda-core.js';
 import type { LocalClock } from '../local-clock.js';
-import type { Here, Session } from './context.js';
+import { isDenied, type Here, type Session } from './context.js';
 import { FirestoreError } from '../firestore-rest.js';
 
 /** Collections the person may lack rules for (the personal lists, before they existed): an empty list then. */
 async function orEmpty<T>(p: Promise<T[]>): Promise<T[]> {
   return p.catch((e) => {
-    if (e instanceof FirestoreError && e.code === 'permission-denied') return [];
+    if (isDenied(e)) return [];
     throw e;
   });
 }

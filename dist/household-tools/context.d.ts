@@ -3,6 +3,7 @@ import { type Lang } from '../i18n.js';
 import { LocalClock } from '../local-clock.js';
 import { FirestoreRest, type Doc } from '../firestore-rest.js';
 import { type HouseholdHome } from '../home.js';
+import type { ToolMessageKey } from './i18n.js';
 /** Who a session acts as, and how (the connector's grant, the `hh` command line's sign-in). */
 export interface SessionProps {
     uid: string;
@@ -33,8 +34,11 @@ export interface Household {
     createdAt: number;
 }
 export declare function toHousehold(id: string, d: Record<string, unknown>): Household;
-/** The household the apps open (`@huishouden/pwa-kit/household` pickHousehold): joined first, then oldest. */
-export declare function pickHousehold(households: Household[], email: string): Household | null;
+/**
+ * The household the apps open, as `../household` pickHousehold picks it: joined first, then the
+ * oldest. `email` is normalized (`Session` does it once).
+ */
+export declare function defaultHousehold(households: Household[], email: string): Household | null;
 export interface Profile {
     name?: string;
     lang?: Lang;
@@ -55,9 +59,9 @@ export interface Here extends Household {
 }
 /** Thrown for anything the person should hear in their language (an unknown pet, no household). */
 export declare class UserError extends Error {
-    readonly key: string;
+    readonly key: ToolMessageKey;
     readonly vars: Record<string, string | number>;
-    constructor(key: string, vars?: Record<string, string | number>);
+    constructor(key: ToolMessageKey, vars?: Record<string, string | number>);
 }
 /**
  * One tool call's view of the world: who is asking (their FirestoreRest access, as them), their clock
@@ -72,6 +76,7 @@ export declare class Session {
     private householdsP;
     private profiles;
     constructor(props: SessionProps, db: FirestoreRest, siteUrl: string, realNow?: () => number, audit?: (household: string, entry: AuditEntry) => void);
+    /** Trimmed and lowercase, as the apps and the rules compare emails. */
     get email(): string;
     /** What every write by this session carries: `{ via: 'assistant' }` for the connector, else nothing. */
     get via(): {

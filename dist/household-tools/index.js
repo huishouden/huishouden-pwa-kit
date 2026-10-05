@@ -24,10 +24,7 @@ import { petLogDose, petLogFeeding, petToday } from './pet.js';
 import { homeAddEvent, homeUpkeepDue } from './home.js';
 import { addAppointment, contactsAdd, contactsSearch } from './people.js';
 import { healthAddMedicine, healthDoctorList, healthDue, healthHistory, healthLogDose, healthMedicines, healthPeople, healthUpdateMedicine } from './health.js';
-export { Session, UserError, isDenied, pickHousehold, toHousehold } from './context.js';
-export { common, defineTool, failureText, idempotency, render, withHealthNote } from './registry.js';
-export { t as toolText } from './i18n.js';
-export { GROCERY_CATEGORIES, writesOf } from './lists.js';
+export { Session, UserError } from './context.js';
 /** Every tool, in the order clients list them. */
 export const TOOLS = [
     households,
