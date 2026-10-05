@@ -92,6 +92,23 @@ describe('health_log_dose', () => {
     expect(docs.get(DOSE)).toMatchObject({ status: 'skipped', by: SAM });
   });
 
+  test("giving a dose someone else gave asks first, naming them", async () => {
+    const { db, commits } = household({ [DOSE]: { personId: 'p1', medId: 'm1', slot: SLOT, at: NOW - 600_000, status: 'given', by: ALEX, createdAt: NOW - 600_000 } });
+    const asked = await run(SAM, db, 'health_log_dose', { person: 'Nan', medicine: 'Examplamine', dose_time: '08:00' });
+    expect(asked.result.data).toMatchObject({ written: false, needs_confirmation: true });
+    expect(asked.result.text).toContain('was already given');
+    expect(commits).toEqual([]);
+  });
+
+  test("giving a dose someone else marked skipped is refused, not re-signed", async () => {
+    const theirs = { personId: 'p1', medId: 'm1', slot: SLOT, at: NOW - 600_000, status: 'skipped', by: ALEX, createdAt: NOW - 600_000 };
+    const { db, docs, commits } = household({ [DOSE]: theirs });
+    const call = await run(SAM, db, 'health_log_dose', { person: 'Nan', medicine: 'Examplamine', dose_time: '08:00' });
+    expect(call.result.text).toContain('Someone else already marked that dose');
+    expect(commits).toEqual([]);
+    expect(docs.get(DOSE)).toEqual(theirs);
+  });
+
   test("someone else's mark is theirs: nothing is overwritten, confirmed or not", async () => {
     const theirs = { personId: 'p1', medId: 'm1', slot: SLOT, at: NOW - 600_000, status: 'given', by: ALEX, createdAt: NOW - 600_000 };
     for (const args of [{ status: 'skipped' }, { status: 'skipped', confirm: true }, { confirm: true }]) {

@@ -3,6 +3,12 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## 0.95.1 (2026-10-05)
+
+### Bug Fixes
+
+* `health_log_dose`: giving a dose someone else already gave asks first with the double-dose guard, which names who gave it; every other write over their mark (a skip, a confirmed give, a give over their skip) is refused.
+
 ## 0.95.0 (2026-10-05)
 
 ### Features
