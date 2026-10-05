@@ -1,16 +1,18 @@
-import { arrayRemove as fsArrayRemove, arrayUnion as fsArrayUnion, deleteDoc as fsDeleteDoc, deleteField as fsDeleteField, doc, getDocFromCache, increment as fsIncrement, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, serverTimestamp as fsServerTimestamp, setDoc as fsSetDoc, updateDoc as fsUpdateDoc, writeBatch as fsWriteBatch, } from 'firebase/firestore';
-import { decode, encode, pendingEntries, remember, sameJson, TAG, Unencodable, } from './outbox-codec.js';
+import { arrayRemove as fsArrayRemove, arrayUnion as fsArrayUnion, deleteDoc as fsDeleteDoc, deleteField as fsDeleteField, doc, getDocFromCache, getDocFromServer, waitForPendingWrites, increment as fsIncrement, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, serverTimestamp as fsServerTimestamp, setDoc as fsSetDoc, updateDoc as fsUpdateDoc, writeBatch as fsWriteBatch, } from 'firebase/firestore';
+import { decode, encode, hasTag, shows, pendingEntries, remember, sameJson, TAG, Unencodable, } from './outbox-codec.js';
 /**
  * Firestore for a household app, and writes that survive the app closing at once.
  *
  * Firestore's persistent cache keeps a write that is waiting for the network, but only once the
- * write has reached IndexedDB, a few milliseconds after `setDoc` returns. A person who taps "Log"
- * and closes the app (or reloads) inside that gap loses the entry, with no error anywhere. So the
- * write functions here also note each write synchronously in localStorage, which is written before
- * the page can go away, and forget it as soon as Firestore has it locally. A note still there when
- * the app next opens, signed in as the same person, is written again, unless the local cache shows
- * the write already landed or was overtaken (see `stillNeeded`). Notes older than a week are
- * dropped unread.
+ * write has reached IndexedDB, a few milliseconds after `setDoc` returns, and only while IndexedDB
+ * works: when it can't be opened (storage full, a private window) Firestore quietly falls back to
+ * a memory cache, and every write not yet on the server dies with the page. A person who taps
+ * "Log" and closes the app (or reloads) inside either gap loses the entry, with no error anywhere.
+ * So the write functions here also note each write synchronously in localStorage, which is written
+ * before the page can go away, and forget it once the server has it (or has refused it). A note
+ * still there when the app next opens, signed in as the same person, is written again, unless the
+ * local cache shows the write already landed or was overtaken (see `stillNeeded`). Notes older
+ * than a week are dropped unread.
  *
  * Use `initFirestore` in place of `initializeFirestore`, and import `setDoc`, `updateDoc`,
  * `deleteDoc`, `addDoc`, `writeBatch` and the field sentinels from here instead of
@@ -30,7 +32,7 @@ const outboxes = new WeakMap();
  * writes made offline), plus the write notes described above. Notes left by a page that closed
  * too soon are written again once `auth` has a signed-in user.
  */
-export function initFirestore(app, { auth, storage, settings, locks, recheckMs = 5_000 }) {
+export function initFirestore(app, { auth, storage, settings, locks, recheckMs = 5_000, online = browserOnline }) {
     const db = initializeFirestore(app, {
         localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
         ...settings,
@@ -47,29 +49,41 @@ export function initFirestore(app, { auth, storage, settings, locks, recheckMs =
         prefix: `${PREFIX}${app.options.projectId ?? app.name}:`,
         tab: newTabId(),
         seq: 0,
+        closing: null,
+        signedInAt: 0,
     };
     outboxes.set(db, box);
     // Held until the page goes away, so other pages can tell this one is still open.
     void box.locks?.request(TAB_LOCK + box.tab, () => new Promise(() => { })).catch(() => { });
     auth.onAuthStateChanged((user) => {
-        if (user)
-            void replay(box, user.uid, true);
+        if (!user)
+            return;
+        box.closing = null;
+        box.signedInAt = Date.now();
+        void replay(box, user.uid, true);
+    });
+    // A note that had to wait for the server (an update to a document this device has never read)
+    // gets its next chance when the network comes back.
+    online?.(() => {
+        const uid = auth.currentUser?.uid;
+        if (uid)
+            void replay(box, uid, false);
     });
     return db;
 }
 export function setDoc(ref, data, options) {
     const p = options ? fsSetDoc(ref, data, options) : fsSetDoc(ref, data);
-    note(ref.firestore, () => [setOp(ref, data, options)]);
+    note(ref.firestore, p, () => [setOp(ref, data, options)]);
     return p;
 }
 export function updateDoc(ref, data) {
     const p = fsUpdateDoc(ref, data);
-    note(ref.firestore, () => [{ kind: 'update', path: plainRef(ref), data: encode(data) }]);
+    note(ref.firestore, p, () => [{ kind: 'update', path: plainRef(ref), data: encode(data) }]);
     return p;
 }
 export function deleteDoc(ref) {
     const p = fsDeleteDoc(ref);
-    note(ref.firestore, () => [{ kind: 'delete', path: ref.path }]);
+    note(ref.firestore, p, () => [{ kind: 'delete', path: ref.path }]);
     return p;
 }
 /** Like Firestore's `addDoc`: the id is made on the device, so the note can repeat the same write. */
@@ -103,7 +117,7 @@ export function writeBatch(db) {
         commit() {
             const p = batch.commit();
             if (ops.length)
-                note(db, () => ops.map((op) => op()));
+                note(db, p, () => ops.map((op) => op()));
             return p;
         },
     };
@@ -133,13 +147,17 @@ export const deleteField = () => remember(fsDeleteField(), () => ({ [TAG]: 'dele
 export const serverTimestamp = () => remember(fsServerTimestamp(), () => ({ [TAG]: 'serverTimestamp' }));
 export const arrayUnion = (...elements) => remember(fsArrayUnion(...elements), () => ({ [TAG]: 'arrayUnion', v: elements.map(encode) }));
 export const arrayRemove = (...elements) => remember(fsArrayRemove(...elements), () => ({ [TAG]: 'arrayRemove', v: elements.map(encode) }));
-/** An increment replayed after its first copy did land counts twice; only possible within milliseconds of a close. */
+/**
+ * An increment replayed after its first copy did land counts twice. With the persistent cache the
+ * replay leaves it to Firestore's own queue; with a memory cache it can happen when the page closes
+ * between the server taking the write and its answer arriving.
+ */
 export const increment = (n) => remember(fsIncrement(n), () => ({ [TAG]: 'increment', v: n }));
 // The note ------------------------------------------------------------------------------------------
-function note(db, build) {
+function note(db, written, build) {
     const box = outboxes.get(db);
     const uid = box?.auth.currentUser?.uid;
-    if (!box || !uid)
+    if (!box || !uid || box.closing === uid)
         return;
     let entry;
     try {
@@ -157,15 +175,16 @@ function note(db, build) {
     catch {
         return; // Storage full or blocked: the write still goes to Firestore, as before.
     }
-    forgetOnceCached(box, key, entry.ops[0].path);
+    forgetOnceSent(box, key, written);
 }
 /**
- * Firestore runs its work in order, so a cache read issued after a write finishes only once the
- * write is in the local cache. Either answer (found or not) means it is.
+ * A write's promise settles when the server has answered: taken (the note's work is done) or
+ * refused (repeating it would be refused again; the caller's toast says so). Being in the local
+ * cache is not enough, because that cache may be memory only.
  */
-function forgetOnceCached(box, key, path) {
+function forgetOnceSent(box, key, written) {
     const forget = () => box.storage.removeItem(key);
-    getDocFromCache(doc(box.db, path)).then(forget, forget);
+    written.then(forget, forget);
 }
 /** The notes stay for the next sign-in or open. */
 function replayFailed(e) {
@@ -180,10 +199,12 @@ async function replay(box, uid, recheck) {
     if (waiting && recheck)
         setTimeout(() => void replay(box, uid, false), box.recheckMs);
 }
-/** Writes again every note left for `uid` by a page that is no longer open. True if some page's notes had to wait. */
+/** Writes again every note left for `uid` by a page that is no longer open. True if some note had to wait (its page still open, or the server out of reach). */
 async function replayNow(box, uid) {
     const live = await liveTabs(box.locks);
     let waiting = false;
+    // Documents this replay has written: their pending writes are its own, not Firestore's queue's.
+    const replayed = new Set();
     for (const { key, entry } of pendingEntries(box.storage, box.prefix)) {
         if (entry.uid !== uid || entry.tab === box.tab)
             continue;
@@ -194,40 +215,64 @@ async function replayNow(box, uid) {
         let ops;
         let batch;
         try {
-            ops = await stillNeeded(box.db, entry);
+            ops = await stillNeeded(box.db, entry, replayed);
+            if (!ops) {
+                waiting = true;
+                continue;
+            }
             batch = fsWriteBatch(box.db);
             for (const op of ops)
                 applyOp(batch, box.db, op);
         }
         catch (e) {
+            // This Firestore has been shut down (the page is going): the note is for the next one.
+            if (e.code === 'failed-precondition')
+                return false;
             console.warn("Dropped a saved write that can't be repeated", e);
             box.storage.removeItem(key);
             continue;
         }
-        if (box.auth.currentUser?.uid !== uid)
+        if (box.auth.currentUser?.uid !== uid || box.closing === uid)
             return false;
         if (!ops.length) {
             box.storage.removeItem(key);
             continue;
         }
-        box.storage.setItem(key, JSON.stringify({ ...entry, tab: box.tab }));
-        batch.commit().catch((e) => console.warn("Couldn't repeat a write saved before the app closed", e));
-        forgetOnceCached(box, key, ops[0].path);
+        // This page's now, with only the writes still needed, until the server has them.
+        box.storage.setItem(key, JSON.stringify({ ...entry, tab: box.tab, ops }));
+        const written = batch.commit();
+        for (const op of ops)
+            replayed.add(op.path);
+        written.catch((e) => console.warn("Couldn't repeat a write saved before the app closed", e));
+        forgetOnceSent(box, key, written);
     }
     return waiting;
 }
 /**
- * The note's writes that the local cache doesn't show as done or overtaken. A set whose data is
+ * The note's writes that this device doesn't show as done, queued or overtaken. A set whose data is
  * already there landed before the page closed (only the forgetting was cut short). A document whose
  * `updatedAt` is at or after the note was changed since, by someone or something newer: repeating
- * a set, update or delete would undo that. A document the cache has never seen, or knows only as
- * missing (it may never have existed: the cache can't tell), gets a set or delete; an update to it
- * would fail, so it is left out.
+ * a set, update or delete would undo that. A document the cache knows only as missing (it may never
+ * have existed: the cache can't tell) gets a set or delete, and an update to it, which would fail,
+ * is left out. A document the cache has never seen (a memory cache, after a reload) gets a set or
+ * delete; for an update the server is asked whether it exists, and while it can't be reached the
+ * whole note waits (null).
  */
-async function stillNeeded(db, entry) {
+async function stillNeeded(db, entry, replayed = new Set()) {
     const out = [];
     for (const op of entry.ops) {
-        const snap = await getDocFromCache(doc(db, op.path)).catch(() => null);
+        const ref = doc(db, op.path);
+        let snap = await getDocFromCache(ref).catch(() => null);
+        if (!snap && op.kind === 'update') {
+            // Only the rules' refusal is final (a role lowered, someone removed: the update would be
+            // refused too); anything else may pass, and the note waits.
+            const asked = await getDocFromServer(ref).then((s) => s, (e) => (e.code === 'permission-denied' ? 'refused' : null));
+            if (!asked)
+                return null;
+            if (asked === 'refused')
+                continue;
+            snap = asked;
+        }
         if (!snap?.exists()) {
             if (op.kind !== 'update')
                 out.push(op);
@@ -236,6 +281,25 @@ async function stillNeeded(db, entry) {
         const data = snap.data();
         if (typeof data.updatedAt === 'number' && data.updatedAt >= entry.at)
             continue;
+        if (op.kind === 'update' || (op.kind === 'set' && (op.merge || op.mergeFields))) {
+            // An increment with a write to the document still in Firestore's own queue (the persistent
+            // cache, kept across the reload) is left to that queue: repeated, it would count twice.
+            if (snap.metadata.hasPendingWrites && !replayed.has(op.path) && hasTag(op.data, 'increment'))
+                continue;
+            // Every field already as the note sets it: landed or queued. Anything else is written again
+            // (a plain value, arrayUnion, arrayRemove or deleteField twice is harmless).
+            let cached;
+            try {
+                cached = encode(data);
+            }
+            catch {
+                cached = null;
+            }
+            if (cached !== null && shows(cached, op.data, op.kind === 'update'))
+                continue;
+            out.push(op);
+            continue;
+        }
         if (op.kind === 'set' && !op.merge && !op.mergeFields) {
             let cached;
             try {
@@ -281,9 +345,75 @@ function plainRef(ref) {
         throw new Unencodable('converter');
     return ref.path;
 }
+// Signing out --------------------------------------------------------------------------------------
+/**
+ * Signing someone out on a shared device: gives their unsent writes up to `timeoutMs` to reach the
+ * server, removes their write notes, then runs `signOut`, making no new notes for them in between.
+ * Only the kit's notes go: Firestore's own cache (with the persistent cache, the documents they
+ * read and their still-queued writes) stays. If they are still signed in afterwards (no `signOut`,
+ * or it failed), their writes are noted again. Returns how many notes were still unsent and are
+ * gone; 0 on a Firestore that didn't come from `initFirestore`, or signed out.
+ */
+export async function forgetOutbox(db, { timeoutMs = 3_000, signOut } = {}) {
+    const box = outboxes.get(db);
+    const uid = box?.auth.currentUser?.uid;
+    if (!box || !uid) {
+        await signOut?.();
+        return 0;
+    }
+    box.closing = uid;
+    const started = Date.now();
+    let left = 0;
+    try {
+        const deadline = Date.now() + timeoutMs;
+        const until = (ms) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
+        await Promise.race([waitForPendingWrites(db).catch(() => { }), until(timeoutMs)]);
+        let swept = false;
+        // While they are out, every note of theirs goes (also one another page made meanwhile). Once
+        // they are back, only notes from before that sign-in; if they never left, none.
+        const sweep = async () => {
+            let cutoff = Infinity;
+            if (box.closing !== uid) {
+                if (box.signedInAt <= started)
+                    return;
+                cutoff = box.signedInAt;
+            }
+            for (const { key, entry } of pendingEntries(box.storage, box.prefix)) {
+                if (entry.uid !== uid || entry.at >= cutoff)
+                    continue;
+                box.storage.removeItem(key);
+                if (!swept)
+                    left++;
+            }
+            swept = true;
+        };
+        // Also after a replay in flight in another page, which could write a note back: the sweep waits
+        // for its lock, but the sign-out waits for it no longer than the deadline.
+        const locked = box.locks?.request(REPLAY_LOCK + box.prefix, sweep).catch(sweep);
+        if (locked)
+            await Promise.race([locked, until(deadline - Date.now())]);
+        if (!swept)
+            await sweep();
+        if (left)
+            console.warn(`Signed out with ${left} write(s) not yet saved; they are discarded`);
+        await signOut?.();
+        // Notes another page made between the sweep and the sign-out.
+        if (box.closing === uid)
+            await sweep();
+    }
+    finally {
+        if (box.auth.currentUser?.uid === uid)
+            box.closing = null;
+    }
+    return left;
+}
 // Pages -------------------------------------------------------------------------------------------
 function newTabId() {
     return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+function browserOnline(retry) {
+    if (typeof addEventListener === 'function')
+        addEventListener('online', retry);
 }
 function browserLocks() {
     return typeof navigator === 'undefined' ? null : (navigator.locks ?? null);

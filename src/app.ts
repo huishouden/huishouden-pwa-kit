@@ -16,7 +16,7 @@ import { emulatorPort } from './emulator-port';
 export { emulatorPort } from './emulator-port';
 import { forgetSilentSignIn } from './auth.js';
 import { firebaseConfigFromEnv, type FirebaseWebConfig } from './firebase.js';
-import { initFirestore } from './firestore.js';
+import { forgetOutbox, initFirestore } from './firestore.js';
 import { configureGoogleTokens, forgetGoogleToken } from './google-token.js';
 import { startObservability } from './observability.js';
 
@@ -45,7 +45,7 @@ export interface AppHandles {
   googleClientId: string | undefined;
   /** Firebase sign-in with Google in a popup, always offering the account chooser. No API scopes. */
   signInWithGoogle(): Promise<void>;
-  /** Signs out here, stops silent sign-in from signing straight back in, and forgets this device's Google API tokens. */
+  /** Signs out here, stops silent sign-in from signing straight back in, forgets this device's Google API tokens and the kit's write notes for the person (after up to 3 s for them to send; Firestore's own cache stays). */
   signOutEverywhere(): Promise<void>;
 }
 
@@ -81,9 +81,14 @@ export function initApp({ app: name, env, fallback, preloadGoogle = true }: Init
       await signInWithPopup(auth, provider);
     },
     signOutEverywhere: async () => {
-      await forgetSilentSignIn();
-      forgetGoogleToken();
-      await signOut(auth);
+      const out = async () => {
+        await forgetSilentSignIn();
+        forgetGoogleToken();
+        await signOut(auth);
+      };
+      // A shared device: the person's unsent writes get a moment to send, then their notes go.
+      if (db) await forgetOutbox(db, { signOut: out });
+      else await out();
     },
   };
 }
