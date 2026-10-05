@@ -38,7 +38,7 @@ export interface AppHandles {
     googleClientId: string | undefined;
     /** Firebase sign-in with Google in a popup, always offering the account chooser. No API scopes. */
     signInWithGoogle(): Promise<void>;
-    /** Signs out here, stops silent sign-in from signing straight back in, and forgets this device's Google API tokens. */
+    /** Signs out here, stops silent sign-in from signing straight back in, forgets this device's Google API tokens and the kit's write notes for the person (after up to 3 s for them to send; Firestore's own cache stays). */
     signOutEverywhere(): Promise<void>;
 }
 export declare function initApp({ app: name, env, fallback, preloadGoogle }: InitAppOptions): AppHandles;

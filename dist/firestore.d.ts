@@ -27,13 +27,18 @@ export interface InitFirestoreOptions {
     locks?: LockManagerLike | null;
     /** How long a replay waits for a page that is just closing to let go. Default 5 s. */
     recheckMs?: number;
+    /**
+     * Calls `retry` when the network comes back, for notes that had to wait for the server. Defaults
+     * to the window's `online` event; `null` for none.
+     */
+    online?: ((retry: () => void) => void) | null;
 }
 /**
  * `initializeFirestore` with the persistent multi-tab cache every app uses (opens offline, keeps
  * writes made offline), plus the write notes described above. Notes left by a page that closed
  * too soon are written again once `auth` has a signed-in user.
  */
-export declare function initFirestore(app: FirebaseApp, { auth, storage, settings, locks, recheckMs }: InitFirestoreOptions): Firestore;
+export declare function initFirestore(app: FirebaseApp, { auth, storage, settings, locks, recheckMs, online }: InitFirestoreOptions): Firestore;
 export declare function setDoc<A, D extends DocumentData>(ref: DocumentReference<A, D>, data: WithFieldValue<A>): Promise<void>;
 export declare function setDoc<A, D extends DocumentData>(ref: DocumentReference<A, D>, data: PartialWithFieldValue<A>, options: SetOptions): Promise<void>;
 export declare function updateDoc<A, D extends DocumentData>(ref: DocumentReference<A, D>, data: UpdateData<D>): Promise<void>;
@@ -60,6 +65,22 @@ export declare const deleteField: () => FieldValue;
 export declare const serverTimestamp: () => FieldValue;
 export declare const arrayUnion: (...elements: unknown[]) => FieldValue;
 export declare const arrayRemove: (...elements: unknown[]) => FieldValue;
-/** An increment replayed after its first copy did land counts twice; only possible within milliseconds of a close. */
+/**
+ * An increment replayed after its first copy did land counts twice. With the persistent cache the
+ * replay leaves it to Firestore's own queue; with a memory cache it can happen when the page closes
+ * between the server taking the write and its answer arriving.
+ */
 export declare const increment: (n: number) => FieldValue;
+/**
+ * Signing someone out on a shared device: gives their unsent writes up to `timeoutMs` to reach the
+ * server, removes their write notes, then runs `signOut`, making no new notes for them in between.
+ * Only the kit's notes go: Firestore's own cache (with the persistent cache, the documents they
+ * read and their still-queued writes) stays. If they are still signed in afterwards (no `signOut`,
+ * or it failed), their writes are noted again. Returns how many notes were still unsent and are
+ * gone; 0 on a Firestore that didn't come from `initFirestore`, or signed out.
+ */
+export declare function forgetOutbox(db: Firestore, { timeoutMs, signOut }?: {
+    timeoutMs?: number;
+    signOut?: () => Promise<void>;
+}): Promise<number>;
 export {};

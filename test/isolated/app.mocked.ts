@@ -37,6 +37,11 @@ mock.module('../../src/firestore.js', () => ({
     calls.push('initFirestore');
     return { type: 'firestore' };
   },
+  forgetOutbox: async (_db: unknown, o?: { signOut?: () => Promise<void> }) => {
+    calls.push('forgetOutbox');
+    await o?.signOut?.();
+    return 0;
+  },
 }));
 mock.module('../../src/auth.js', () => ({ forgetSilentSignIn: () => (calls.push('forgetSilentSignIn'), Promise.resolve()) }));
 mock.module('../../src/google-token.js', () => ({
@@ -65,6 +70,14 @@ describe('initApp', () => {
     await handles.signInWithGoogle();
     await handles.signOutEverywhere();
     expect(calls).toEqual(['popup select_account', 'forgetSilentSignIn', 'forgetGoogleToken', 'signOut']);
+  });
+
+  test("sign-out after Firestore was opened lets the person's write notes send, then forgets them", async () => {
+    const handles = initApp({ app: 'pet', env });
+    void handles.db;
+    calls.length = 0;
+    await handles.signOutEverywhere();
+    expect(calls).toEqual(['forgetOutbox', 'forgetSilentSignIn', 'forgetGoogleToken', 'signOut']);
   });
 
   test('built for the emulators (the kit’s app-tests job): Auth and Firestore go to them, no Google preload', () => {

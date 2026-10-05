@@ -3,6 +3,17 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## 0.98.0 (2026-10-05)
+
+### Bug Fixes
+
+* `firestore`: the write outbox keeps a note until the server has taken or refused the write, not just until it is in Firestore's local cache. When IndexedDB can't be opened (storage full, a private window) Firestore falls back to a memory cache, and a write logged offline or just before a reload was forgotten while it lived only in the page. A replay keeps only the still-needed writes, under the page that replayed them; an update to a document the device has never read asks the server and waits while it is out of reach (tried again when the network comes back) instead of being dropped; a shut-down Firestore no longer drops notes.
+* `firestore`: a replay skips an update or merge whose fields the cached document already shows, and leaves an `increment` to Firestore's own queue when that queue still holds a write to the document (the persistent cache kept it across the reload), so it counts once; with a memory cache an `increment` can still count twice when the page closes between the server taking it and its answer arriving (no app uses `increment`). An update whose read the rules refuse (`permission-denied`) is left out rather than holding its note; any other failure waits. `initFirestore` takes `online` (when to retry waiting notes; the window's `online` event by default).
+
+### Features
+
+* `firestore`: `forgetOutbox(db, { timeoutMs, signOut })` gives the signed-in person's unsent writes up to 3 s, removes their outbox notes, then runs `signOut`, noting nothing for them in between (still signed in afterwards, their writes are noted again); `signOutEverywhere` calls it. Firestore's own cache is not cleared.
+
 ## 0.97.0 (2026-10-05)
 
 ### Features
