@@ -99,7 +99,7 @@ export declare function withMembers(people: FoodPerson[], members: {
  * undefined when nobody has set one.
  */
 export declare function householdMaxHeat(food: Pick<FoodPreferences, 'people'>): number | undefined;
-/** "Amanda: keep meals mild, heat 0 of 3; …", one line per person who set a tolerance. */
+/** "Pat: keep meals mild, heat 0 of 3; …", one line per person who set a tolerance. */
 export declare function householdSpiceLines(food: Pick<FoodPreferences, 'people'>): string[];
 /** Every diet anyone in the household has, in the fixed order: for filtering recipes. */
 export declare function householdDiets(food: Pick<FoodPreferences, 'people'>): Diet[];
@@ -125,5 +125,37 @@ export declare function householdDietRules(food: Pick<FoodPreferences, 'people'>
  * { strictOnly: true })`: most meals should lean this way, not every one.
  */
 export declare function householdDietPreferences(food: Pick<FoodPreferences, 'people'>): string[];
+/** What `pseudonymousFood` returns: the people under stand-in names, and the way back. */
+export interface PseudonymousFood {
+    /**
+     * Only the people, each as "Person A", "Person B", … (in list order) with their diets, avoid list,
+     * spice and note, no name, id or email, and names and emails taken out of the note. Nothing else
+     * from the input is carried (not `by`, the saving member's email).
+     */
+    food: Pick<FoodPreferences, 'people'>;
+    /** Puts the real names back in text that came back from a model: "Person B" becomes the second person's name. */
+    restore: (text: string) => string;
+}
+/**
+ * The household's food preferences with nobody named, for a prompt sent to a model outside the
+ * household (Gemini): each person becomes "Person A", "Person B", … by their place in the list, so
+ * the stand-ins are stable while the list is, and diets, allergies and notes stay but are not tied
+ * to anyone's name or email. In a note, every listed person's name, each word of it (split at spaces,
+ * hyphens and apostrophes; single letters such as an initial stay, since "a" or "I" would go too),
+ * their email and its first part are replaced by their stand-in, ignoring case and accents (the note goes without accents); a word two people share becomes "Person A or
+ * Person B"; any other email becomes "someone". Pass every household member (email and full profile
+ * name) as `others`, listed or not: `withMembers` lists members by first name only, so their
+ * surnames, and members not in the list, are replaced by "someone". A note is free text: anything
+ * else in it (a stranger's name, a phone number, an address) goes to the model as written, so a
+ * food note should hold food, not contact details. Avoid lists
+ * are ingredients and stay as written: a first name can be a food ("Olive"), and "olive oil" must
+ * reach the model intact. Build the prompt's rules from `food` (householdDietRules,
+ * householdDietPreferences, householdSpiceLines); show the household anything the model wrote about
+ * a person through `restore`.
+ */
+export declare function pseudonymousFood(food: Pick<FoodPreferences, 'people'>, others?: {
+    email?: string;
+    name?: string;
+}[]): PseudonymousFood;
 /** "Assume the kitchen already has salt, black pepper and cooking oil." or '' when the list is empty. */
 export declare function pantryText(food: Pick<FoodPreferences, 'pantryAssumed'>): string;

@@ -3,6 +3,18 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## [0.104.0](https://github.com/huishouden/pwa-kit/compare/v0.103.0...v0.104.0) (2026-10-05)
+
+### Features
+
+* **food:** `pseudonymousFood(food, others?)`: the household's food preferences for a prompt to a model outside the household. Only the people are returned, each as "Person A", "Person B", … by list position, keeping diets, allergies, spice and note but no name, id or email; in notes, names, each word of them of two or more letters (split at spaces, hyphens, apostrophes; single initials stay) and emails are replaced ignoring case and accents; a word two people share becomes "Person A or Person B"; an unknown email, or a household member passed in `others` (all of them, with full names), becomes "someone". Other free text in a note is sent as written. Avoid lists stay as written (a first name can be a food). `restore(text)` puts the real names back in what the model wrote. STANDARD.md "Nobody named to a model".
+
+* **cdn:** only the portal uploads to the asset CDN (#138). `pwa-site assemble --cdn-held`, for a deploy without the Cloudflare token, keeps the CDN for each app whose every asset is already on it and serves the rest from the site (`offCdn` in `hh-site.json`), so no page names a file the CDN lacks; `pwa-site stale` counts `offCdn` as stale for the portal's next run. pwa.yml uses held mode when the token is absent; the secrets stay optional in `workflow_call`. docs/one-site.md "Asset CDN".
+
+### Bug Fixes
+
+* **contact-core:** `CONTACT_FIELDS` names every field the rules allow on a contact: `lat`, `lng` and `geoTried` (the map position the kit writes) and `via` were missing.
+
 ## [0.103.0](https://github.com/huishouden/pwa-kit/compare/v0.102.0...v0.103.0) (2026-10-05)
 
 ### Features
