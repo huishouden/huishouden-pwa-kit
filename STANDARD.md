@@ -390,7 +390,7 @@ The portal's household panel edits one document, `households/{id}/settings/food`
 - **Nobody named to a model**: a prompt for a model outside the household (Gemini's free tier may
   keep and review what it is sent) is built from `pseudonymousFood(food).food`: each person is
   "Person A", "Person B", … by their place in the list, with their diets, allergies and note but no
-  name, id or email, and names and emails in notes replaced (pass every household member, with
+  name, id or email, and names and emails in notes replaced (single-letter initials stay; pass every household member, with
   their full profile name, as `others`: the list holds first names only). A note is free text: anything else in it reaches the model as written, so
   ask for food notes, not contact details. Checks and reasons shown run on the real list; text the
   model wrote goes through `restore` before anyone reads it.

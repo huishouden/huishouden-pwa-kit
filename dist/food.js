@@ -298,8 +298,8 @@ const label = (i) => `Person ${String.fromCharCode(65 + (i % 26))}${i >= 26 ? Ma
  * household (Gemini): each person becomes "Person A", "Person B", … by their place in the list, so
  * the stand-ins are stable while the list is, and diets, allergies and notes stay but are not tied
  * to anyone's name or email. In a note, every listed person's name, each word of it (split at spaces,
- * hyphens and apostrophes; single letters such as an initial stay, since "a" or "I" would go too), their email and its first part are replaced by their stand-in, ignoring
- * case and accents (the note goes without accents); a word two people share becomes "Person A or
+ * hyphens and apostrophes; single letters such as an initial stay, since "a" or "I" would go too),
+ * their email and its first part are replaced by their stand-in, ignoring case and accents (the note goes without accents); a word two people share becomes "Person A or
  * Person B"; any other email becomes "someone". Pass every household member (email and full profile
  * name) as `others`, listed or not: `withMembers` lists members by first name only, so their
  * surnames, and members not in the list, are replaced by "someone". A note is free text: anything

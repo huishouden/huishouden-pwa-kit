@@ -7,7 +7,7 @@ ones are described in their PR titles and tags.
 
 ### Features
 
-* **food:** `pseudonymousFood(food, others?)`: the household's food preferences for a prompt to a model outside the household. Only the people are returned, each as "Person A", "Person B", … by list position, keeping diets, allergies, spice and note but no name, id or email; in notes, names, each word of them (spaces, hyphens, apostrophes) and emails are replaced ignoring case and accents; a word two people share becomes "Person A or Person B"; an unknown email, or a household member passed in `others` (all of them, with full names), becomes "someone". Other free text in a note is sent as written. Avoid lists stay as written (a first name can be a food). `restore(text)` puts the real names back in what the model wrote. STANDARD.md "Nobody named to a model".
+* **food:** `pseudonymousFood(food, others?)`: the household's food preferences for a prompt to a model outside the household. Only the people are returned, each as "Person A", "Person B", … by list position, keeping diets, allergies, spice and note but no name, id or email; in notes, names, each word of them of two or more letters (split at spaces, hyphens, apostrophes; single initials stay) and emails are replaced ignoring case and accents; a word two people share becomes "Person A or Person B"; an unknown email, or a household member passed in `others` (all of them, with full names), becomes "someone". Other free text in a note is sent as written. Avoid lists stay as written (a first name can be a food). `restore(text)` puts the real names back in what the model wrote. STANDARD.md "Nobody named to a model".
 
 ### Bug Fixes
 
