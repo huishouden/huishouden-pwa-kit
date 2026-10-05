@@ -13,8 +13,8 @@ import { UserError } from './context.js';
 import { common, defineTool, render, type ToolContext } from './registry.js';
 import { clip, pick } from './shared.js';
 import { create } from './home.js';
-import { loadConditions, loadPeople, type Person } from './health-data.js';
-import { specialtyLabel } from '../condition.js';
+import { keeps, loadConditions, loadPeople, readsConditions, type Person } from './health-data.js';
+import { specialtyLabel, type Specialty } from '../condition.js';
 
 /**
  * Health's visits (`../visit`), as this person may read and write them: every
@@ -23,10 +23,7 @@ import { specialtyLabel } from '../condition.js';
  * would, so it is on the calendars and reminds before anyone opens Health.
  */
 
-/** Admins, and members who are among the person's readers (the rules' healthKeeper). */
-export function keeps(ctx: ToolContext, p: Person): boolean {
-  return ctx.here.role === 'admin' || (ctx.here.role === 'member' && p.readers.includes(ctx.session.email));
-}
+export { keeps };
 
 const audienceOf = (ctx: ToolContext, p: Person) => personAudience(p, ctx.here);
 const recipientsOf = (ctx: ToolContext, p: Person) => visitRecipients(p, ctx.here);
@@ -68,6 +65,10 @@ export interface HealthVisitArgs {
   medList?: boolean;
   remindBefore?: number[];
   followUp?: { every: number; unit: (typeof FOLLOW_UP_UNITS)[number] };
+  /** The medical area it is with. */
+  specialty?: Specialty;
+  /** The person's condition it is about, by name or id (only for those who may read conditions). */
+  condition?: string;
 }
 
 /**
@@ -83,6 +84,16 @@ export async function addHealthVisit(ctx: ToolContext, id: string, args: HealthV
   if (!person) throw new UserError('health.unknownPerson', { name: args.person, people: people.map((p) => p.name).join(', ') || '-' });
   if (args.notes && !keeps(ctx, person)) throw new UserError('visits.notesKeepersOnly');
   if (args.videoLink && !/^https:\/\/\S+$/i.test(args.videoLink)) throw new UserError('error.badLink');
+  let conditionId: string | undefined;
+  let specialty = args.specialty;
+  if (args.condition) {
+    if (!readsConditions(ctx, person)) throw new UserError('conditions.keepersOnly');
+    const conditions = await loadConditions(ctx, person);
+    const { found } = pick(conditions, args.condition, (c) => c.id, (c) => c.name);
+    if (!found) throw new UserError('conditions.unknown', { name: args.condition, conditions: conditions.map((c) => c.name).join(', ') || '-' });
+    conditionId = found.id;
+    specialty ??= found.specialty;
+  }
   const contacts = await healthContacts(ctx);
   let contactId: string | undefined;
   if (args.doctor) {
@@ -104,6 +115,8 @@ export async function addHealthVisit(ctx: ToolContext, id: string, args: HealthV
       link: args.videoLink,
       prep: args.prep,
       medList: args.medList,
+      conditionId,
+      specialty,
       remindBefore: args.remindBefore ?? DEFAULT_REMIND_BEFORE,
       followUp: args.followUp,
     },

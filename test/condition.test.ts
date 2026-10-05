@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { loadLang, withLang } from '../src/i18n';
 import {
-  ICD10_SPECIALTIES, SPECIALTIES, clearConditionSearchCache, cleanIcd10, conditionDoc, defaultSpecialty, groupBySpecialty, guessSpecialty, isPartialDate, partialDateWords,
+  ICD10_SPECIALTIES, SPECIALTIES, clearConditionSearchCache, cleanIcd10, conditionConflicts, conditionDoc, defaultSpecialty, groupBySpecialty, guessSpecialty, isPartialDate, partialDateWords,
   searchConditions, specialtyForIcd10, specialtyLabel, toCondition, ConditionSearchUnavailable, type Condition,
 } from '../src/condition';
-import { toVisit, visitDoc } from '../src/visit';
+import { toVisit, visitAgendaItem, visitDoc, visitReminders } from '../src/visit';
 
 const NOW = new Date(2031, 4, 13, 12).getTime();
 
@@ -79,6 +79,11 @@ describe('ICD-10-CM to medical area', () => {
     expect(guessSpecialty('Hernia de disco cervical')).toBe('neurology');
     expect(guessSpecialty('Hoge bloeddruk')).toBe('cardiology');
     expect(guessSpecialty('Type 2 diabetes')).toBe('endocrinology');
+    expect(guessSpecialty('Heartburn')).toBe('gastroenterology');
+    expect(guessSpecialty('Hepatitis C')).toBe('infectious');
+    expect(guessSpecialty('Heart failure')).toBe('cardiology');
+    expect(guessSpecialty('Archive')).toBeNull();
+    expect(guessSpecialty('Tornado')).toBeNull();
     expect(guessSpecialty('Something rare')).toBeNull();
     expect(defaultSpecialty({ name: 'Something rare' })).toBe('primary');
     // The code wins over the words.
@@ -89,12 +94,21 @@ describe('ICD-10-CM to medical area', () => {
 describe('condition documents', () => {
   test('conditionDoc keeps what the rules accept; the area defaults from the code and stays overridable', () => {
     const d = conditionDoc(
-      { personId: 'p1', name: '  Cervical   radiculopathy ', icd10: 'm54.12', diagnosed: '2029-03', resolved: '2030', doctorId: 'c1', clinicId: 'c2', place: 'ignored with a clinic', medIds: ['m1', 'm1', ''], notes: ' Left arm ' },
+      { personId: 'p1', name: '  Type 2   diabetes ', icd10: 'e119', diagnosed: '2029-03', doctorId: 'c1', clinicId: 'c2', place: 'ignored with a clinic', medIds: ['m1', 'm1', ''], notes: ' Example note ' },
       { createdAt: NOW, by: 'sam@example.com' },
     );
-    expect(d).toEqual({ personId: 'p1', name: 'Cervical radiculopathy', icd10: 'M54.12', specialty: 'neurology', status: 'active', diagnosed: '2029-03', doctorId: 'c1', clinicId: 'c2', medIds: ['m1'], notes: 'Left arm', createdAt: NOW, by: 'sam@example.com' });
-    const chosen = conditionDoc({ personId: 'p1', name: 'Cervical radiculopathy', icd10: 'M54.12', specialty: 'orthopedics', status: 'resolved', resolved: '2030-06-02', place: 'Example Clinic' }, { createdAt: NOW, by: 'sam@example.com', updatedAt: NOW + 1 }, 'assistant');
-    expect(chosen).toMatchObject({ specialty: 'orthopedics', status: 'resolved', resolved: '2030-06-02', place: 'Example Clinic', updatedAt: NOW + 1, via: 'assistant' });
+    expect(d).toEqual({ personId: 'p1', name: 'Type 2 diabetes', icd10: 'E11.9', specialty: 'endocrinology', status: 'active', diagnosed: '2029-03', doctorId: 'c1', clinicId: 'c2', medIds: ['m1'], notes: 'Example note', createdAt: NOW, by: 'sam@example.com' });
+    const chosen = conditionDoc({ personId: 'p1', name: 'Asthma', icd10: 'J45.909', specialty: 'allergy', status: 'resolved', resolved: '2030-06-02', place: 'Example Clinic' }, { createdAt: NOW, by: 'sam@example.com', updatedAt: NOW + 1 }, 'assistant');
+    expect(chosen).toMatchObject({ specialty: 'allergy', status: 'resolved', resolved: '2030-06-02', place: 'Example Clinic', updatedAt: NOW + 1, via: 'assistant' });
+  });
+
+  test('a resolved date with no status is resolved; with a current status it is dropped, and conditionConflicts says so', () => {
+    const stamp = { createdAt: NOW, by: 'sam@example.com' };
+    expect(conditionDoc({ personId: 'p1', name: 'Wrist fracture', resolved: '2029' }, stamp)).toMatchObject({ status: 'resolved', resolved: '2029', specialty: 'orthopedics' });
+    expect(conditionDoc({ personId: 'p1', name: 'Wrist fracture', status: 'active', resolved: '2029' }, stamp)).not.toHaveProperty('resolved');
+    expect(conditionConflicts({ status: 'active', resolved: '2029' })).toEqual(['resolved']);
+    expect(conditionConflicts({ resolved: '2029' })).toEqual([]);
+    expect(conditionConflicts({ clinicId: 'c1', place: 'Example Hospital' })).toEqual(['place']);
   });
 
   test('partial dates: a year, a month or a real day', () => {
@@ -105,6 +119,15 @@ describe('condition documents', () => {
   test('toCondition reads defensively', () => {
     const c = toCondition('k1', { personId: 'x', name: 'Asthma', specialty: 'nope', status: 'gone', diagnosed: 'soon', medIds: ['m1', 5], createdAt: NOW, by: 'a@example.com' }, 'p1');
     expect(c).toEqual({ id: 'k1', personId: 'p1', name: 'Asthma', specialty: 'primary', status: 'active', medIds: ['m1'], createdAt: NOW, by: 'a@example.com' });
+  });
+
+  test('a visit about a condition publishes neither the condition nor the area', () => {
+    const v = { id: 'v1', ...visitDoc({ personId: 'p1', kind: 'specialist', at: NOW + 86_400_000, conditionId: 'k1', specialty: 'mentalHealth' }, { createdAt: NOW, by: 'a@example.com' }) };
+    const options = { person: { id: 'p1', name: 'Ana' }, audience: ['a@example.com'], household: { members: ['a@example.com'] }, url: 'https://example.com/health/' };
+    const published = JSON.stringify([visitAgendaItem(v, options), visitReminders(v, { ...options, recipients: ['a@example.com'], now: NOW })]);
+    expect(published).not.toContain('k1');
+    expect(published).not.toContain('Mental health');
+    expect(published).not.toContain('mentalHealth');
   });
 
   test('visits carry the condition they are about and their area', () => {
@@ -157,12 +180,12 @@ describe('searchConditions', () => {
     const asked: { url: string; init?: RequestInit }[] = [];
     const f = (async (url: string, init?: RequestInit) => {
       asked.push({ url, init });
-      if (url.includes('/conditions/')) return answer([1, ['18023'], { icd10cm_codes: ['M54.12'] }, [['C6 radiculopathy']]]);
+      if (url.includes('/conditions/')) return answer([1, ['10040'], { icd10cm_codes: ['M54.12'] }, [['Radiculopathy']]]);
       return answer([2, ['M54.12', 'M50.10'], null, [['M54.12', 'Radiculopathy, cervical region'], ['M50.10', 'Cervical disc disorder with radiculopathy, unspecified cervical region']]]);
     }) as unknown as typeof fetch;
     const found = await searchConditions('  cervical  radiculopathy ', { fetch: f });
     expect(found).toEqual([
-      { name: 'C6 radiculopathy', icd10: 'M54.12', specialty: 'neurology' },
+      { name: 'Radiculopathy', icd10: 'M54.12', specialty: 'neurology' },
       { name: 'Radiculopathy, cervical region', icd10: 'M54.12', specialty: 'neurology' },
       { name: 'Cervical disc disorder with radiculopathy, unspecified cervical region', icd10: 'M50.10', specialty: 'neurology' },
     ]);
@@ -186,6 +209,22 @@ describe('searchConditions', () => {
     const found = await searchConditions('asthma', { fetch: f, limit: 5 });
     expect(found.map((m) => m.specialty)).toEqual(['pulmonology', 'pulmonology', 'pulmonology', 'pulmonology', 'pulmonology']);
     expect(calls).toBe(1);
+  });
+
+  test('when the second ask fails, the names found are the answer but not kept; with none found, it is unavailable', async () => {
+    let calls = 0;
+    let icdUp = false;
+    const f = (async (url: string) => {
+      calls++;
+      if (url.includes('/conditions/')) return answer([1, ['1'], { icd10cm_codes: ['J45.909'] }, [['Asthma']]]);
+      return icdUp ? answer([1, ['J45.20'], null, [['J45.20', 'Mild intermittent asthma, uncomplicated']]]) : answer({}, false);
+    }) as unknown as typeof fetch;
+    expect((await searchConditions('asthma', { fetch: f })).map((m) => m.name)).toEqual(['Asthma']);
+    icdUp = true;
+    expect((await searchConditions('asthma', { fetch: f })).map((m) => m.name)).toEqual(['Asthma', 'Mild intermittent asthma, uncomplicated']);
+    expect(calls).toBe(4);
+    const none = (async (url: string) => (url.includes('/conditions/') ? answer([0, [], {}, []]) : answer({}, false))) as unknown as typeof fetch;
+    await expect(searchConditions('zzz', { fetch: none })).rejects.toBeInstanceOf(ConditionSearchUnavailable);
   });
 
   test('offline or busy: ConditionSearchUnavailable, and nothing is kept', async () => {

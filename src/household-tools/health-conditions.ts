@@ -1,15 +1,15 @@
 import { z } from 'zod';
 import type { Contact } from '../contact-core.js';
 import {
-  CONDITION_LIMITS, CONDITION_SEVERITIES, CONDITION_STATUSES, CONDITIONS, SPECIALTIES, conditionDoc, conditionStatusLabel, defaultSpecialty, groupBySpecialty, isPartialDate,
-  partialDateWords, severityLabel, specialtyLabel, toCondition, type Condition, type Specialty,
+  CONDITION_LIMITS, CONDITION_SEVERITIES, CONDITION_STATUSES, CONDITIONS, SPECIALTIES, conditionConflicts, conditionDoc, conditionStatusLabel, groupBySpecialty, isPartialDate,
+  partialDateWords, severityLabel, specialtyLabel, toCondition, type Condition,
 } from '../condition.js';
 import { t } from './i18n.js';
 import { isDenied, UserError } from './context.js';
 import { common, defineTool, idempotency, render, type ToolContext } from './registry.js';
-import { alreadyThere, clip, pick, recordId } from './shared.js';
+import { alreadyThere, pick, recordId } from './shared.js';
 import { choosePerson, contactsById } from './health.js';
-import { conditionUrl, loadConditions, loadMeds, loadPeople, medLabel, readsConditions, type Med, type Person } from './health-data.js';
+import { conditionUrl, keeps, loadConditions, loadMeds, loadPeople, medLabel, readsConditions, type Med, type Person } from './health-data.js';
 
 /**
  * Health's conditions (`../condition`), grouped by medical area, for the people this person may
@@ -157,24 +157,26 @@ export const healthAddCondition = defineTool({
   },
   async run(ctx, args) {
     const person: Person = await choosePerson(ctx, args.person);
-    const keeps = ctx.here.role === 'admin' || (ctx.here.role === 'member' && person.readers.includes(ctx.session.email));
-    if (!keeps) throw new UserError('conditions.keepersOnly');
+    if (!keeps(ctx, person)) throw new UserError('conditions.keepersOnly');
+    // Said back rather than dropped: a place beside a clinic, a resolved date on a current condition.
+    const conflicts = conditionConflicts({ clinicId: args.clinic, place: args.place, status: args.status, resolved: args.resolved });
+    if (conflicts.includes('place')) throw new UserError('conditions.placeOrClinic');
+    if (conflicts.includes('resolved')) throw new UserError('conditions.resolvedNeedsStatus');
     const [contacts, meds] = await Promise.all([contactsById(ctx), loadMeds(ctx, person)]);
     const now = ctx.clock.now();
-    const specialty: Specialty = args.specialty ?? defaultSpecialty({ name: args.name, icd10: args.icd10 });
     const doc = conditionDoc(
       {
         personId: person.id,
         name: args.name,
         icd10: args.icd10,
-        specialty,
-        status: args.status ?? (args.resolved ? 'resolved' : 'active'),
+        specialty: args.specialty,
+        status: args.status,
         diagnosed: args.diagnosed,
         resolved: args.resolved,
         severity: args.severity,
         doctorId: contactId(contacts, args.doctor),
         clinicId: contactId(contacts, args.clinic),
-        place: clip(args.place, CONDITION_LIMITS.place) || undefined,
+        place: args.place,
         medIds: medIds(meds, args.medicines),
         notes: args.notes,
       },

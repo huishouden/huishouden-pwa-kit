@@ -4,7 +4,7 @@ import { formatYmd, monthYear, ymdParts } from './time.js';
 /**
  * Health conditions (huishouden/health): what a person has been diagnosed with, under
  * `households/{id}/healthPeople/{personId}/conditions/{conditionId}`, organised by medical area
- * (`SPECIALTIES`): a cervical radiculopathy sits under Neurology, asthma under Pulmonology.
+ * (`SPECIALTIES`): asthma sits under Pulmonology, type 2 diabetes under Endocrinology.
  * Server-safe: Health and the household tools (the assistant connector, `hh data`) read and write
  * conditions with the same code.
  *
@@ -61,9 +61,9 @@ export type PartialDate = string;
 export interface ConditionData {
   /** The path's person, repeated (the rules check it). */
   personId: string;
-  /** "Cervical radiculopathy", as the household calls it. */
+  /** "Asthma", "Type 2 diabetes". */
   name: string;
-  /** The ICD-10-CM code the lookup found ("M54.12"); none for free text. */
+  /** The ICD-10-CM code the lookup found ("E11.9"); none for free text. */
   icd10?: string;
   /** The medical area it is filed under; the code's by default (`specialtyForIcd10`), changeable. */
   specialty: Specialty;
@@ -163,20 +163,22 @@ export function toCondition(id: string, d: Record<string, unknown>, personId?: s
 export type ConditionInput = Omit<ConditionData, 'createdAt' | 'updatedAt' | 'by' | 'via' | 'specialty' | 'status'> & {
   /** Left out: the code's area (`specialtyForIcd10`), else the name's (`guessSpecialty`). */
   specialty?: Specialty;
-  /** Default active. */
+  /** Default resolved with a `resolved` date, else active. */
   status?: ConditionStatus;
 };
 
 /**
  * The stored document, exactly as the rules accept it: trimmed, clipped, no undefined fields. A
- * resolved date is kept only on a resolved condition; a place in words only without a clinic.
+ * resolved date is kept only on a resolved condition (one with no status is resolved); a place in
+ * words only without a clinic (`conditionConflicts` says what would be dropped).
  * `stamp` is `createdAt`, `by` and, on a change, `updatedAt` (`./store` `stampFor`); `via` the
  * assistant's mark.
  */
 export function conditionDoc(input: ConditionInput, stamp: { createdAt: number; by: string; updatedAt?: number }, via?: 'assistant'): ConditionData {
   const name = clip(input.name, CONDITION_LIMITS.name);
   const icd10 = cleanIcd10(input.icd10);
-  const status = isConditionStatus(input.status) ? input.status : 'active';
+  // A resolved date with no status says it is over.
+  const status = isConditionStatus(input.status) ? input.status : isPartialDate(input.resolved) ? 'resolved' : 'active';
   const specialty = isSpecialty(input.specialty) ? input.specialty : defaultSpecialty({ name, icd10 });
   const id = (s: string | undefined) => clip(s, CONDITION_LIMITS.id) || undefined;
   const clinicId = id(input.clinicId);
@@ -202,6 +204,14 @@ export function conditionDoc(input: ConditionInput, stamp: { createdAt: number; 
     by: stamp.by,
     ...(via ? { via } : {}),
   };
+}
+
+/** What `conditionDoc` would drop from `input`: a place in words beside a clinic, a resolved date on a condition that isn't resolved. */
+export function conditionConflicts(input: Pick<ConditionInput, 'clinicId' | 'place' | 'status' | 'resolved'>): ('place' | 'resolved')[] {
+  const out: ('place' | 'resolved')[] = [];
+  if (input.clinicId?.trim() && input.place?.trim()) out.push('place');
+  if (input.resolved && input.status && input.status !== 'resolved') out.push('resolved');
+  return out;
 }
 
 // ---- Medical areas from ICD-10-CM ----
@@ -298,23 +308,24 @@ export function specialtyForIcd10(code: string | undefined): Specialty | null {
 
 /** Words in a condition's name that say its area, for names without a code (typed, or from the assistant). English, Spanish and Dutch. */
 const NAME_WORDS: readonly [RegExp, Specialty][] = [
+  // Before the heart and liver words they contain.
+  [/heartburn|acidez|brandend maagzuur|reflux|\bgerd\b|crohn|colitis|\bibs\b|celiac|celíac|coeliak|fatty liver|cirrhos|cirrosis|ulcer|úlcera|maagzweer/i, 'gastroenterology'],
+  [/hepatitis|\bhiv\b|\bvih\b|lyme|tubercul|covid|shingles|herpes/i, 'infectious'],
   [/radicul|sciatic|neuropath|migrain|epilep|seizure|parkinson|multiple sclerosis|dementia|alzheimer|stroke|neuralg|ciátic|ciatic|neuropat|epileps|beroerte|hernia (de )?disco|hernia nucle/i, 'neurology'],
-  [/arrhythm|atrial fib|heart|cardi|hypertens|blood pressure|angina|corazón|hipertens|hart|hoge bloeddruk/i, 'cardiology'],
+  [/arrhythm|atrial fib|\bheart\b|\bcardi|hypertens|blood pressure|angina|corazón|hipertens|\bhart\b|hoge bloeddruk/i, 'cardiology'],
   [/diabet|thyroid|tiroid|schildklier|hypothyr|hyperthyr|cholesterol|osteopor/i, 'endocrinology'],
-  [/asthma|asma|astma|copd|epoc|emphysem|bronch|apnea|apnoe/i, 'pulmonology'],
-  [/depress|anxiety|ansiedad|angst|bipolar|adhd|tdah|ptsd|tept|schizo|autis|ocd|toc\b/i, 'mentalHealth'],
-  [/arthritis|artritis|artrose|lupus|gout|gota|jicht|fibromyalg|fibromialg/i, 'rheumatology'],
-  [/eczema|eccema|psoria|acne|dermat|rosacea/i, 'dermatology'],
+  [/asthma|asma|astma|\bcopd\b|\bepoc\b|emphysem|bronch|apnea|apnoe/i, 'pulmonology'],
+  [/depress|anxiety|ansiedad|angst|bipolar|\badhd\b|\btdah\b|\bptsd\b|\btept\b|schizo|autis|\bocd\b|\btoc\b/i, 'mentalHealth'],
+  [/arthritis|artritis|artrose|lupus|\bgout\b|\bgota\b|jicht|fibromyalg|fibromialg/i, 'rheumatology'],
+  [/eczema|eccema|psoria|\bacne\b|dermat|rosacea/i, 'dermatology'],
   [/allerg|alerg|hay fever|hooikoorts|hives|urticaria|netelroos|anaphyla/i, 'allergy'],
-  [/glaucom|cataract|catarata|staar|macular|retin/i, 'ophthalmology'],
-  [/reflux|gerd|crohn|colitis|ibs\b|celiac|celíac|coeliak|hepat|ulcer|úlcera|maagzweer/i, 'gastroenterology'],
-  [/kidney|renal|riñón|nier/i, 'nephrology'],
-  [/prostat|bladder|vejiga|blaas|incontinen/i, 'urology'],
-  [/pregnan|embaraz|zwanger|endometrio|pcos|ovari|menopaus/i, 'obgyn'],
+  [/glaucom|cataract|catarata|\bstaar\b|macular|retin/i, 'ophthalmology'],
+  [/kidney|renal|riñón|\bnier/i, 'nephrology'],
+  [/prostat|bladder|vejiga|\bblaas|incontinen/i, 'urology'],
+  [/pregnan|embaraz|zwanger|endometrio|\bpcos\b|ovari|menopaus/i, 'obgyn'],
   [/cancer|cáncer|kanker|leukem|leucem|lymphom|linfoma|anemi|anaemi|bloedarmoede/i, 'hemOnc'],
-  [/sinus|tinnitus|hearing loss|vertig|otitis|tonsil|amígdal/i, 'ent'],
-  [/fractur|fractura|breuk|tendin|sprain|esguince|verstuik|torn|scoliosis|escoliosis/i, 'orthopedics'],
-  [/hiv|vih|lyme|tubercul|hepatitis c|covid|shingles|herpes/i, 'infectious'],
+  [/sinusitis|tinnitus|hearing loss|vertig|otitis|tonsil|amígdal/i, 'ent'],
+  [/fractur|fractura|\bbreuk|tendin|sprain|esguince|verstuik|\btorn\b|scoliosis|escoliosis/i, 'orthopedics'],
 ];
 
 /** The area a condition's name suggests, or null. */
@@ -460,14 +471,21 @@ export async function searchConditions(term: string, { limit = 8, signal, fetch:
     const names = (consumer[3] ?? []) as unknown[];
     names.forEach((row, i) => add(String((Array.isArray(row) ? row[0] : row) ?? ''), typeof codes[i] === 'string' ? (codes[i] as string) : undefined));
   } else throw new ConditionSearchUnavailable('shape');
+  // Few consumer names: ICD-10-CM descriptions too. If that second ask fails, the consumer names
+  // found are still an answer, but not one to keep (the next search asks again); none at all is
+  // the service being unavailable.
+  let complete = true;
   if (out.length < Math.min(limit, 4)) {
     const icd = await get(`${ICD10_SEARCH_URL}?${params({ sf: 'code,name', df: 'code,name' })}`).catch((e) => {
-      if (signal?.aborted) throw e;
+      if (signal?.aborted || !out.length) throw e;
+      complete = false;
       return null;
     });
     if (Array.isArray(icd)) for (const row of (icd[3] ?? []) as unknown[]) if (Array.isArray(row)) add(String(row[1] ?? ''), String(row[0] ?? ''));
   }
-  if (searchCache.size >= CACHE_MAX) searchCache.delete(searchCache.keys().next().value!);
-  searchCache.set(key, out);
+  if (complete) {
+    if (searchCache.size >= CACHE_MAX) searchCache.delete(searchCache.keys().next().value!);
+    searchCache.set(key, out);
+  }
   return out;
 }

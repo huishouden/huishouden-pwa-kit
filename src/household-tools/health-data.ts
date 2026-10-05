@@ -137,15 +137,18 @@ export async function loadDoses(ctx: ToolContext, person: Person, since: number)
   return (await ctx.session.db.query(personPath(ctx, person.id), 'doses', { where: [{ field: 'at', op: 'GREATER_THAN_OR_EQUAL', value: since }] })).map((d) => toDose(d.id, d.data));
 }
 
+/** Admins, and members who are among the person's readers (the rules' healthKeeper). */
+export function keeps(ctx: ToolContext, p: Pick<Person, 'readers'>): boolean {
+  return ctx.here.role === 'admin' || (ctx.here.role === 'member' && p.readers.includes(ctx.session.email));
+}
+
 /**
  * Whether this person may read someone's conditions (huishouden/rules `conditionReader`): admins,
  * the person's member carers, and the person themself. Helper carers and kids never.
  */
 export function readsConditions(ctx: ToolContext, p: Pick<Person, 'readers' | 'email'>): boolean {
-  const role = ctx.here.role;
-  if (role === 'admin') return true;
-  if (role === 'member' && p.readers.includes(ctx.session.email)) return true;
-  return role !== 'kid' && !!p.email && p.email === ctx.session.email;
+  if (keeps(ctx, p)) return true;
+  return ctx.here.role !== 'kid' && !!p.email && p.email === ctx.session.email;
 }
 
 /** The person's conditions, or none when this person may not read them (never asked, so never refused). */

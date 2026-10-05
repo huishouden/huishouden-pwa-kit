@@ -77,7 +77,11 @@ export interface VisitData {
    * never conditions, so they see no more than that it is about one.
    */
   conditionId?: string;
-  /** The medical area it is with ("Neurology"), for the carers taking someone along. Never published. */
+  /**
+   * The medical area it is with ("Neurology"). Like the title and the doctor, every reader of the
+   * visit sees it, helper carers included (they take the person there); it is never published to the
+   * agenda, reminders or calendars, which name only the kind.
+   */
   specialty?: Specialty;
   /** Reminders this many minutes before (0 at the time), soonest last. */
   remindBefore: number[];

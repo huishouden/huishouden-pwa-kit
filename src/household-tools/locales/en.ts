@@ -269,4 +269,7 @@ export default {
   'conditions.resolvedOn': 'resolved {date}',
   'conditions.treatedWith': 'treated with {meds}',
   'conditions.added': 'Added {condition} for {name}, under {area}. [Health]({url})',
+  'conditions.placeOrClinic': 'Give either `clinic` (a household contact) or `place` (in words), not both.',
+  'conditions.resolvedNeedsStatus': 'A `resolved` date goes with `status: "resolved"`; leave `status` out or set it to resolved.',
+  'conditions.unknown': '"{name}" isn\'t one of their conditions. Conditions: {conditions}.',
 } as const;

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CONTACT_PAY_COLLECTION, CONTACT_PAY_KINDS, cleanContact, cleanContactPay, contactInput, toContact, withContactPay, type Contact, type ContactPay } from '../contact-core.js';
 import { FOLLOW_UP_UNITS, REMIND_CHOICES, VISIT_KINDS } from '../visit.js';
+import { SPECIALTIES } from '../condition.js';
 import { formatDateLong, formatTime } from '../time.js';
 import { t } from './i18n.js';
 import { UserError } from './context.js';
@@ -39,6 +40,8 @@ export const addAppointment = defineTool({
     bring_medicine_list: z.boolean().optional().describe("Health: bring the person's printable medicine list."),
     remind_before_minutes: z.array(z.number().int().min(0).max(20160)).max(4).optional().describe(`Health: reminders this many minutes before, to the carers. Default [1440, 120]. Health offers ${REMIND_CHOICES.join(', ')}.`),
     follow_up: z.object({ every: z.number().int().min(1).max(24), unit: z.enum(FOLLOW_UP_UNITS) }).optional().describe('Health: a follow-up due this long after; once the visit is over, "Book a follow-up" goes on the to-do list.'),
+    specialty: z.enum(SPECIALTIES).optional().describe("Health: the medical area it is with (neurology, cardiology...). Default: the condition's, if one is named."),
+    condition: z.string().max(120).optional().describe("Health: the person's condition it is about, by name or id from `health_conditions` (admins, member carers and the person only)."),
     private: z.boolean().optional().describe('Pet, baby, car: only admins and members see it. Default false.'),
   },
   async run(ctx, args) {
@@ -108,6 +111,8 @@ export const addAppointment = defineTool({
       medList: args.bring_medicine_list,
       remindBefore: args.remind_before_minutes,
       followUp: args.follow_up,
+      specialty: args.specialty,
+      condition: args.condition,
     });
     return render(ctx.lang, () => ({
       text: t('appointment.added', { title, when: day(), who: added.person.name, url: added.url }),
