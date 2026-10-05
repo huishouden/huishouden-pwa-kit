@@ -1,6 +1,7 @@
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { addDoc, deleteDoc, deleteField, setDoc, updateDoc, writeBatch } from './firestore.js';
-import { CONTACT_PAY_COLLECTION, cleanContact, cleanContactPay, contactPayDoc, tidyContactPay, toContact, withContactPay, } from './contact-core.js';
+import { CONTACT_PAY_COLLECTION, backfillPositions, cleanContact, cleanContactPay, contactPayDoc, tidyContactPay, toContact, withContactPay, } from './contact-core.js';
+import { geocodeAddress, getHome, onHomeChange } from './home.js';
 /**
  * The household's contacts over the Firebase SDK. The data contract and the screen helpers are in
  * `./contact-core` (re-exported here), which servers import without Firebase.
@@ -15,7 +16,7 @@ const payOf = (db, householdId) => collection(db, 'households', householdId, CON
  * first list waits for both, and once both have come from the server any pay details still on a
  * contact's own document are moved to `contactPay` and those of deleted contacts removed.
  */
-export function watchContacts(db, householdId, onChange, { app, restricted, by, onError } = {}) {
+export function watchContacts(db, householdId, onChange, { app, restricted, by, backfillPositions: backfill, onError } = {}) {
     const all = contactsOf(db, householdId);
     let raw = null;
     let payDocs = restricted ? [] : null;
@@ -40,7 +41,24 @@ export function watchContacts(db, householdId, onChange, { app, restricted, by, 
             .filter((c) => !app || c.apps.includes(app))
             .sort((a, b) => a.name.localeCompare(b.name)));
     };
+    const stopBackfill = new AbortController();
+    let backfillStarted = false;
+    const startBackfill = () => {
+        if (!backfill || restricted || backfillStarted || !raw || !fromServer.contacts || !getHome() || stopBackfill.signal.aborted)
+            return;
+        backfillStarted = true;
+        backfillPositions(raw, {
+            geocode: async (address) => (await geocodeAddress(address))[0] ?? null,
+            write: (id, update) => updateDoc(doc(all, id), 'geoTried' in update ? update : { ...update, geoTried: deleteField() }),
+            current: (id) => raw?.find((d) => d.id === id)?.data,
+            whenVisible: () => whenVisible(stopBackfill.signal),
+            limit: typeof backfill === 'object' ? backfill.limit : undefined,
+            signal: stopBackfill.signal,
+        }).catch((e) => console.warn('Looking up contact positions failed', e));
+    };
     const unsubs = [
+        onHomeChange(startBackfill),
+        () => stopBackfill.abort(),
         onSnapshot(restricted ? query(all, where('private', '==', false)) : all, { includeMetadataChanges: !restricted }, (snap) => {
             const first = raw === null;
             raw = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
@@ -50,6 +68,7 @@ export function watchContacts(db, householdId, onChange, { app, restricted, by, 
             if (first || snap.docChanges().length)
                 emit();
             tidy();
+            startBackfill();
         }, (error) => onError?.(error)),
     ];
     if (!restricted) {
@@ -70,6 +89,24 @@ export function watchContacts(db, householdId, onChange, { app, restricted, by, 
         }));
     }
     return () => unsubs.forEach((u) => u());
+}
+/** Resolves true once the page is showing (at once when it is, or outside a browser); false when stopped first. */
+function whenVisible(signal) {
+    if (signal.aborted)
+        return Promise.resolve(false);
+    if (typeof document === 'undefined' || document.visibilityState === 'visible')
+        return Promise.resolve(true);
+    return new Promise((resolve) => {
+        const done = (showing) => {
+            document.removeEventListener('visibilitychange', onChange);
+            signal.removeEventListener('abort', onAbort);
+            resolve(showing);
+        };
+        const onChange = () => document.visibilityState === 'visible' && done(true);
+        const onAbort = () => done(false);
+        document.addEventListener('visibilitychange', onChange);
+        signal.addEventListener('abort', onAbort);
+    });
 }
 async function tidyPay(db, householdId, contacts, pay, by) {
     const now = Date.now();
@@ -124,7 +161,7 @@ export async function updateContact(db, householdId, id, input, by) {
     const now = Date.now();
     const cleaned = cleanContact(input);
     const update = { ...cleaned, updatedAt: now, by };
-    for (const k of ['role', 'phone', 'email', 'website', 'address', 'lat', 'lng', 'mapsUrl', 'notes'])
+    for (const k of ['role', 'phone', 'email', 'website', 'address', 'lat', 'lng', 'geoTried', 'mapsUrl', 'notes'])
         if (!(k in cleaned))
             update[k] = deleteField();
     if (!('pay' in input))

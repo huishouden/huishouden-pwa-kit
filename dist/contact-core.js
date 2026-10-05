@@ -172,3 +172,64 @@ export function contactInput(fields, apps, app) {
         private: fields.private === true,
     };
 }
+// ---- Positions for contacts saved before they had one ----
+/** How long an address the map couldn't find waits before it is looked up again: 30 days. */
+export const POSITION_RETRY_MS = 30 * 86_400_000;
+/** How many contacts one load looks up at most. */
+export const POSITION_BACKFILL_LIMIT = 10;
+/**
+ * Whether a contact document has an address but no position, and the map wasn't asked about it in
+ * the last `POSITION_RETRY_MS` (`geoTried`, the ms of a lookup that found nothing).
+ */
+export function needsPosition(data, now) {
+    if (!data || typeof data.address !== 'string' || !data.address.trim() || coordinates(data))
+        return false;
+    const tried = data.geoTried;
+    return !(typeof tried === 'number' && Number.isFinite(tried) && now - tried < POSITION_RETRY_MS);
+}
+/**
+ * Looks up, one at a time, up to `limit` contacts that `needsPosition`, and writes each one's
+ * position, or `geoTried` when the map has no match. Stops at the first lookup or write that fails
+ * (the service is busy, offline, the rules refused), leaving the rest for the next load.
+ */
+export async function backfillPositions(docs, { geocode, write, current, whenVisible, limit = POSITION_BACKFILL_LIMIT, now = Date.now, signal }) {
+    const result = { located: [], missed: [] };
+    const queue = docs.filter((d) => needsPosition(d.data, now())).slice(0, Math.max(0, limit));
+    for (const d of queue) {
+        if (signal?.aborted || (whenVisible && !(await whenVisible())) || signal?.aborted)
+            break;
+        const address = String(d.data.address);
+        const unchanged = () => {
+            const latest = current ? current(d.id) : d.data;
+            return !!latest && latest.address === address && needsPosition(latest, now());
+        };
+        if (!unchanged())
+            continue;
+        let found;
+        try {
+            found = await geocode(address.trim());
+        }
+        catch {
+            break;
+        }
+        if (signal?.aborted)
+            break;
+        if (!unchanged())
+            continue;
+        const at = found && coordinates(found);
+        try {
+            if (at) {
+                await write(d.id, { lat: Math.round(at.lat * 1e6) / 1e6, lng: Math.round(at.lng * 1e6) / 1e6 });
+                result.located.push(d.id);
+            }
+            else {
+                await write(d.id, { geoTried: Math.round(now()) });
+                result.missed.push(d.id);
+            }
+        }
+        catch {
+            break;
+        }
+    }
+    return result;
+}
