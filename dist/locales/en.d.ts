@@ -254,6 +254,9 @@ declare const _default: {
     readonly 'feedback.windowFailed': "Google’s window stopped before finishing. Try again.";
     readonly 'feedback.windowWaiting': "Waiting for Google’s window. Can’t see it? It may be behind this window.";
     readonly 'feedback.windowShow': "Show Google’s window";
+    readonly 'feedback.windowBlockedHere': "Your browser blocked Google’s window. Allow pop-ups for this site, or use Continue in this tab.";
+    readonly 'feedback.windowContinueHere': "Continue in this tab";
+    readonly 'feedback.windowWaitingHere': "Waiting for Google’s window. Can’t see it? It may be behind this window, or continue in this tab instead.";
     readonly 'dose.amount': "{unit, select, tablet {{count, plural, one {{n} tablet} other {{n} tablets}}} chew {{count, plural, one {{n} chew} other {{n} chews}}} capsule {{count, plural, one {{n} capsule} other {{n} capsules}}} pill {{count, plural, one {{n} pill} other {{n} pills}}} drop {{count, plural, one {{n} drop} other {{n} drops}}} puff {{count, plural, one {{n} puff} other {{n} puffs}}} spray {{count, plural, one {{n} spray} other {{n} sprays}}} unit {{count, plural, one {{n} unit} other {{n} units}}} teaspoon {{count, plural, one {{n} teaspoon} other {{n} teaspoons}}} tablespoon {{count, plural, one {{n} tablespoon} other {{n} tablespoons}}} scoop {{count, plural, one {{n} scoop} other {{n} scoops}}} packet {{count, plural, one {{n} packet} other {{n} packets}}} patch {{count, plural, one {{n} patch} other {{n} patches}}} other {{n} {unit}}}";
     readonly 'dose.timeOfDay': "{time, select, morning {morning} midday {midday} evening {evening} bedtime {bedtime} other {{time}}}";
     readonly 'dose.assumeMonths': "\"{text}\" read as {days} days";

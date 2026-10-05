@@ -679,4 +679,18 @@ describe('GoogleWindowWait', () => {
     act(() => root.render(<GoogleWindowWait waiting={false} onShow={onShow} delayMs={20} />));
     expect(document.querySelector('[role="status"]')).toBeNull();
   });
+
+  test('with Continue in this tab: offered while waiting, and alone once the window was blocked', async () => {
+    const onShow = mock(() => {});
+    const here = mock(() => {});
+    const { root } = render(<GoogleWindowWait waiting onShow={onShow} onContinueHere={here} delayMs={10} />);
+    await act(() => new Promise((r) => setTimeout(r, 30)));
+    expect(document.querySelector('[role="status"]')?.textContent).toContain('or continue in this tab instead');
+    click(byText('Continue in this tab'));
+    expect(here).toHaveBeenCalledTimes(1);
+    act(() => root.render(<GoogleWindowWait waiting={false} blocked onShow={onShow} onContinueHere={here} />));
+    expect(byText('Show Google’s window')).toBeNull();
+    click(byText('Continue in this tab'));
+    expect(here).toHaveBeenCalledTimes(2);
+  });
 });

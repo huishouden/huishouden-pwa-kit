@@ -58,13 +58,14 @@ export function googleAccessMessage(e, service = 'Google') {
 }
 /**
  * Words for a failed `googleAuthCode` (connecting Google Calendar, an alert inbox) or any wait on
- * Google's window, so no failure is silent: blocked, closed before finishing, refused, or stopped
+ * Google's window, so no failure is silent (`continueHere`: the page offers "Continue in this tab",
+ * `GoogleWindowWait`, and the blocked message points to it): blocked, closed before finishing, refused, or stopped
  * for another reason (reported, `./observability`). Null only when the error is not about
  * Google's window or permission, so the caller words it (a server's answer, being offline).
  */
-export function googleWindowMessage(e, service = 'Google') {
+export function googleWindowMessage(e, service = 'Google', { continueHere = false } = {}) {
     if (popupBlocked(e))
-        return kt('feedback.windowBlocked');
+        return kt(continueHere ? 'feedback.windowBlockedHere' : 'feedback.windowBlocked');
     if (popupCancelled(e))
         return kt('feedback.windowClosed');
     const known = googleAccessMessage(e, service);

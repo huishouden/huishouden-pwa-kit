@@ -194,10 +194,15 @@ export declare const GOOGLE_WINDOW_HINT_MS = 4000;
 /**
  * Under a button that opens Google's window (`googleAuthCode`): when the wait lasts a few seconds,
  * says the window may be behind this one (desktop browsers, installed apps) and offers to bring it
- * to the front; `onShow` calls `googleAuthCode` again, which reuses the open window.
+ * to the front; `onShow` calls `googleAuthCode` again, which reuses the open window. With
+ * `onContinueHere` (`googleAuthCodeRedirect`) it also offers "Continue in this tab", and shows that
+ * button alone while `blocked` (the browser refused the window; the page says so with
+ * `googleWindowMessage(e, service, { continueHere: true })`).
  */
-export declare function GoogleWindowWait({ waiting, onShow, delayMs }: {
+export declare function GoogleWindowWait({ waiting, onShow, blocked, onContinueHere, delayMs, }: {
     waiting: boolean;
     onShow: () => void;
+    blocked?: boolean;
+    onContinueHere?: () => void;
     delayMs?: number;
 }): import("react").JSX.Element | null;
