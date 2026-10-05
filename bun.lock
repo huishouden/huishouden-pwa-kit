@@ -35,6 +35,7 @@
         "react-dom": ">=19",
         "sharp": ">=0.33",
         "vite-plugin-pwa": ">=1.0",
+        "zod": ">=4",
       },
       "optionalPeers": [
         "@playwright/test",
@@ -43,6 +44,7 @@
         "react",
         "react-dom",
         "sharp",
+        "zod",
       ],
     },
   },
