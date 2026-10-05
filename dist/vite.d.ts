@@ -63,6 +63,14 @@ export interface PwaAppOptions {
         contacts?: boolean;
         images?: boolean;
     };
+    /**
+     * Where the build's hashed files (`<base>assets/*`) are served from (docs/one-site.md "Asset
+     * CDN"): `https://huishouden-assets.huishouden-app.workers.dev`. index.html and the service
+     * worker's precache name them there; the chunks reach each other by relative URL, so the same
+     * build also runs from the site's own copy. Default: the `HH_ASSET_ORIGIN` environment variable,
+     * which the reusable workflow sets per flavor; unset (a local build), the site's own `assets/`.
+     */
+    assetOrigin?: string;
     /** Overrides merged last, for anything app-specific. */
     overrides?: Partial<VitePWAOptions>;
 }
@@ -74,6 +82,23 @@ export declare function pwaApp(options: PwaAppOptions): ({
     name: string;
     config: () => {
         base: string;
+    };
+} | {
+    name: string;
+    apply: "build";
+    config: () => {
+        experimental: {
+            renderBuiltUrl(filename: string, { hostType, type }: {
+                hostType: "js" | "css" | "html";
+                type: "asset" | "public";
+            }): string | {
+                relative: boolean;
+            } | undefined;
+        };
+    };
+    transformIndexHtml: {
+        order: "post";
+        handler(html: string): string;
     };
 } | {
     name: string;
@@ -144,6 +169,45 @@ export declare function pwaApp(options: PwaAppOptions): ({
         }): string;
     }): void;
 } | import("vite").Plugin<any>)[];
+/** `assetOrigin`, else `HH_ASSET_ORIGIN`; an https origin without a trailing slash, or '' for none. */
+export declare function assetOriginOf(options: Pick<PwaAppOptions, 'assetOrigin'>): string;
+/**
+ * The build's hashed files from the asset CDN (docs/one-site.md "Asset CDN"): index.html names
+ * them at `origin` (Vite's `renderBuiltUrl`), while JS and CSS reach each other and their images
+ * and fonts by relative URL, so a build loaded from the site's own copy stays there. index.html
+ * gets the one-time fallback script and the connection hints (`preconnect`, `dns-prefetch`) first in <head>.
+ */
+export declare function assetCdn(base: string, origin: string): {
+    name: string;
+    apply: "build";
+    config: () => {
+        experimental: {
+            renderBuiltUrl(filename: string, { hostType, type }: {
+                hostType: "js" | "css" | "html";
+                type: "asset" | "public";
+            }): string | {
+                relative: boolean;
+            } | undefined;
+        };
+    };
+    transformIndexHtml: {
+        order: "post";
+        handler(html: string): string;
+    };
+};
+/** Workbox `manifestTransforms` entry: the precache fetches `assets/*` from `origin` (with CORS), the rest from the site. */
+export declare function cdnPrecache(base: string, origin: string): (entries: {
+    url: string;
+    revision: string | null;
+    size: number;
+}[]) => Promise<{
+    manifest: {
+        url: string;
+        revision: string | null;
+        size: number;
+    }[];
+    warnings: string[];
+}>;
 /** `pet`, `/pet` or `/pet/` as `/pet/`; empty or missing as `/`. */
 export declare function normalizeBase(base?: string): string;
 /** Sets Vite's `base` from `pwaApp({ base })`, so the app states its path once. */
@@ -159,11 +223,23 @@ export declare function sitePath(base: string): {
  */
 export declare function navigationDenylist(options: Pick<PwaAppOptions, 'base' | 'otherApps'>): RegExp[];
 /**
- * The Workbox options `pwaApp` passes. The kit's entries in `importScripts`, `runtimeCaching` and
- * `globIgnores` are kept and an app's `overrides.workbox` entries are added after them; other
+ * The Workbox options `pwaApp` passes. The kit's entries in `importScripts`, `runtimeCaching`,
+ * `globIgnores` and `manifestTransforms` are kept and an app's `overrides.workbox` entries are added after them; other
  * keys in `overrides.workbox` replace the kit's.
  */
 export declare function pwaWorkbox(options: PwaAppOptions): {
+    manifestTransforms?: (import("workbox-build").ManifestTransform | ((entries: {
+        url: string;
+        revision: string | null;
+        size: number;
+    }[]) => Promise<{
+        manifest: {
+            url: string;
+            revision: string | null;
+            size: number;
+        }[];
+        warnings: string[];
+    }>))[] | undefined;
     importScripts: string[];
     runtimeCaching: (import("workbox-build").RuntimeCaching | {
         urlPattern: RegExp;
@@ -182,7 +258,6 @@ export declare function pwaWorkbox(options: PwaAppOptions): {
     globIgnores: string[];
     additionalManifestEntries?: Array<string | import("workbox-build").ManifestEntry> | undefined;
     dontCacheBustURLsMatching?: RegExp | undefined;
-    manifestTransforms?: Array<import("workbox-build").ManifestTransform> | undefined;
     maximumFileSizeToCacheInBytes?: number | undefined;
     modifyURLPrefix?: {
         [key: string]: string;
@@ -280,6 +355,11 @@ export declare function langBoot(): {
     name: string;
     transformIndexHtml(html: string): string;
 };
+/**
+ * The link-preview image (`og.png`, 1200x630) is for messengers' crawlers, never shown in the app:
+ * left out of the precache, which saves every install about 25 KB of Hosting transfer.
+ */
+export declare const OG_IMAGE: string[];
 /** File-name prefix of the New Relic agent's chunks (`./observability`). */
 export declare const TELEMETRY_PREFIX = "hh-telemetry-";
 /** Those chunks, left out of the precache (`globIgnores`), whatever the assets directory. */
@@ -432,6 +512,8 @@ export declare const OCR_CACHE: {
  * cached app turns "Sign in with Google" into a popup showing the app itself.
  */
 export declare const FIREBASE_RESERVED_PATHS: RegExp[];
+/** The site's own copy of the page (./asset-cdn `SITE_PAGE`), the CDN fallback: always from the network. */
+export declare const SITE_PAGE_PATH: RegExp;
 /**
  * Stamps the build with `import.meta.env.VITE_APP_VERSION` (package.json version, set by the release
  * process) and `VITE_BUILD_SHA` (short commit, from CI's GITHUB_SHA), so a running app can say exactly

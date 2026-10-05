@@ -10,7 +10,36 @@
  */
 export const APP_PATHS_REGEX = '^/(?:[^_].*|_[^_].*|_)?$';
 export const permissionsPolicy = ({ camera = false, geolocation = false } = {}) => `camera=${camera ? '(self)' : '()'}, microphone=(), geolocation=${geolocation ? '(self)' : '()'}`;
+import { ASSET_ORIGINS } from './asset-cdn.js';
+/**
+ * No fetch directives (script-src, style-src...), so the asset CDN (./asset-cdn) needs no entry. A
+ * site that adds one must allow the CDN in it: `cspBlocksAssets` says where it doesn't.
+ */
 export const CONTENT_SECURITY_POLICY = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'";
+/** The CSP directives that decide whether the page may load the CDN's scripts, styles, fonts, images and the service worker's precache fetches. */
+export const ASSET_DIRECTIVES = ['script-src', 'style-src', 'font-src', 'img-src', 'connect-src'];
+/**
+ * The directives of `csp` that would block the asset CDN at `origin`: each of `ASSET_DIRECTIVES`
+ * (or `default-src` standing in for it) that is set without the origin, `*` or `https:`.
+ */
+export function cspBlocksAssets(csp, origin = ASSET_ORIGINS.production) {
+    const directives = new Map();
+    for (const part of csp.split(';')) {
+        const [name, ...sources] = part.trim().split(/\s+/);
+        if (name)
+            directives.set(name.toLowerCase(), sources);
+    }
+    const blocked = [];
+    for (const d of ASSET_DIRECTIVES) {
+        const name = directives.has(d) ? d : directives.has('default-src') ? 'default-src' : null;
+        if (!name)
+            continue;
+        const sources = directives.get(name);
+        if (!sources.some((s) => s === origin || s === `${origin}/` || s === '*' || s === 'https:'))
+            blocked.push(name === d ? d : `${d} (from default-src)`);
+    }
+    return blocked;
+}
 /** The headers, in firebase.json's `{ key, value }` form. */
 export function securityHeaders(features = {}) {
     return [
@@ -133,6 +162,8 @@ export function checkSecurityHeaders(firebaseJson) {
                     for (const part of CONTENT_SECURITY_POLICY.split('; '))
                         if (!actual.includes(part))
                             problems.push(`${name}${path}: Content-Security-Policy lacks ${part}`);
+                    for (const d of cspBlocksAssets(actual))
+                        problems.push(`${name}${path}: Content-Security-Policy ${d} must allow the asset CDN ${ASSET_ORIGINS.production} (docs/one-site.md "Asset CDN")`);
                 }
                 else if (actual !== value)
                     problems.push(`${name}${path}: ${key} is "${actual}", want "${value}"`);

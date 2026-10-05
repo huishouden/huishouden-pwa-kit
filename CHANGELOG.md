@@ -3,6 +3,17 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## 0.100.0 (2026-10-05)
+
+### Features
+
+* Asset CDN (docs/one-site.md "Asset CDN"): the suite's hashed files (`<base>assets/*`) are served from Cloudflare Workers static assets (`huishouden-assets`, staging `huishouden-assets-staging`, on `huishouden-app.workers.dev`), free and without a request limit, instead of Firebase Hosting's 10 GB a month. HTML, `sw.js`, the manifest and icons stay on Firebase, so addresses and installs don't change.
+* `pwaApp`: with `assetOrigin` or `HH_ASSET_ORIGIN` (set by `pwa.yml`), index.html names the assets at the CDN (`renderBuiltUrl`) with `preconnect` and `dns-prefetch` hints, chunks reach each other by relative URL, the service worker precaches the assets from the CDN with CORS, and an inline script replaces the page once with `index.site.html` (the same page with the site's own assets, written by the assembler) when a CDN script or stylesheet fails to load or parse. `og.png` is no longer precached.
+* `pwa-site`: `asset-origin`, `cdn` (the CDN's upload: the assembled site's assets, every earlier file seen within 30 days from `hh-assets.json`, `_headers`, `wrangler.toml`), `cdn-check` (reads the CDN's `hh-assets.json` back after an upload; the deploy uploads again, up to three times, when another repo's upload replaced it, and checks again after the pages are live), and `--assets-origin <url|none>` on `assemble` and `stale` (none removes the CDN from every page: the rollback).
+* `pwa.yml`: deploys the assets to the CDN before the pages to Firebase; staging builds in a job with no credentials and uploads in one that runs nothing from the ref; the smoke checks the CDN asset's CORS, caching and compression and the site's copy. Callers pass `secrets: inherit`; `HH_ASSET_CDN=off` turns it off. Wrangler is pinned once (`WRANGLER_VERSION`, 4.147.0) and only its command gets the token.
+* The production CDN's CORS origin is `SUITE_ORIGIN`; `SUITE_SITE`, `SUITE_HOST` and `SUITE_ORIGIN` move to `src/suite.ts` (still exported from `./site`).
+* `pwa-headers-check` fails a Content-Security-Policy whose fetch directives would block the CDN (the kit's has none).
+
 ## 0.99.0 (2026-10-05)
 
 ### Features

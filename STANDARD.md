@@ -438,12 +438,14 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 | `leak-scan` | push to `main` | gitleaks on the added commits (`actions/leak-scan`) |
 | `build` | push to `main` | the version check (see Versions), `bun install --frozen-lockfile`, `pwa-bandwidth-check`, lint (`tsc --noEmit`), `pwa-design-check`, `pwa-write-check`, `pwa-headers-check`, unit tests, build |
 | `publish` | push to `main`, with `base` | The build (and a staging build) as `site.tar.gz` / `site-staging.tar.gz` on the repo's `hosting` pre-release |
-| `deploy` | push to `main`; a manual run with `reconcile` | Keyless via Workload Identity Federation; with `base`, `pwa-site assemble` (every app's latest asset under its path, the combined `firebase.json`) and `firebase deploy`, rechecked for builds published meanwhile; without, `firebase deploy --only hosting:<target>`. Then tags `v<version>` and publishes its CHANGELOG.md section as the GitHub release, once per version |
-| `smoke` | after `deploy` | One HTTP check of the live app path (index.html, a hashed asset, the manifest, `sw.js`, their caching and compression); no browser (docs/one-site.md "Bandwidth") |
-| `staging` | manual runs with `staging-ref` | Build against the staging project, deploy to the app's staging site, `e2e` and `e2e:signed-in` there in households of the run's own, then remove them (see Staging) |
+| `deploy` | push to `main`; a manual run with `reconcile` | Keyless via Workload Identity Federation for Firebase, the Cloudflare token secret for the CDN; with `base`, `pwa-site assemble` (every app's latest asset under its path, the combined `firebase.json`), the assets to the asset CDN (`pwa-site cdn`, `wrangler deploy`, then `pwa-site cdn-check`, which uploads again, up to three times, if another repo's upload replaced them; docs/one-site.md "Asset CDN") and then `firebase deploy`, `cdn-check` once more after the pages are live, rechecked for builds published meanwhile; without, `firebase deploy --only hosting:<target>`. Then tags `v<version>` and publishes its CHANGELOG.md section as the GitHub release, once per version |
+| `smoke` | after `deploy` | One HTTP check of the live app path (index.html, a hashed asset on the CDN with its CORS and caching headers and the site's own copy, the manifest, `sw.js`, their caching and compression); no browser (docs/one-site.md "Bandwidth") |
+| `staging-build`, `staging-site`, `staging` | manual runs with `staging-ref` | Build against the staging project (no credentials); assemble the suite and upload its assets to the staging asset CDN (the Cloudflare token, nothing from the ref runs); deploy to the app's staging site, `e2e` and `e2e:signed-in` there in households of the run's own, then remove them (see Staging) |
 
 - Repo variables (not secrets; the Firebase web config is public by design): `GCP_WIF_PROVIDER`,
-  `GCP_DEPLOY_SA`, `VITE_FIREBASE_*` (the bootstrap sets them). Apps on the suite's site need no
+  `GCP_DEPLOY_SA`, `VITE_FIREBASE_*` (the bootstrap sets them). Repo secrets `CLOUDFLARE_API_TOKEN`
+  (Workers Scripts edit) and `CLOUDFLARE_ACCOUNT_ID` for the asset CDN, passed with `secrets: inherit`;
+  the variable `HH_ASSET_CDN=off` (repo or organization) turns the CDN off. Apps on the suite's site need no
   `VITE_NEWRELIC_*`: the deploy serves their New Relic settings (see Observability).
 - Deploy waits on `leak-scan` and `build`. `concurrency: cancel-in-progress` on every workflow.
 - No schedules: nothing hosted runs on a timer for the process (no reconcile, no sweep, no digest,
@@ -508,7 +510,9 @@ nothing deployed or tested there can read or write real household data.
   which deploys that ref to staging instead of production. Pull requests trigger no deploy. Main
   deploys to production only.
 - **What runs there**: one read to check the day's quota is not used up, the build with the
-  `STAGING_VITE_FIREBASE_*` variables, the deploy, then `e2e` and `e2e:signed-in` against the app's
+  `STAGING_VITE_FIREBASE_*` variables (`staging-build`, no credentials), the suite assembled and
+  its assets uploaded to the staging asset CDN (`staging-site`, the Cloudflare token, nothing from
+  the ref runs; docs/one-site.md "Asset CDN"), the deploy, then `e2e` and `e2e:signed-in` against the app's
   path on the staging site, then the removal of the run's test data (`pwa-staging cleanup`). One
   staging run per app at a time (it tests the build on the app's one site).
 - **Quota**: staging is on Firebase's free plan: 50,000 document reads, 20,000 writes and 20,000
