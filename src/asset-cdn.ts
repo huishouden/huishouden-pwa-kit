@@ -11,7 +11,7 @@
  * and the reusable workflow deploys it with wrangler, before Firebase deploys the HTML.
  */
 
-import { SUITE_ORIGIN } from './suite.js';
+import { SUITE_ORIGIN, appOf } from './suite.js';
 
 export type Flavor = 'production' | 'staging';
 
@@ -176,10 +176,13 @@ export function cdnHints(origin: string): string {
  * checks every page and worker names at most that origin and writes `index.site.html` (the
  * fallback, `stripCdn`) beside each index.html that names it; off, strips the CDN from every file
  * that names it. `files` are the site's files that `namesCdn` picks, by path from the site's root.
+ * `offCdn` (with an origin): files whose app's assets the CDN does not hold yet (`appsOffCdn`),
+ * stripped as if the CDN were off for that app alone.
  */
 export function planAssetOrigin(
   files: { path: string; text: string }[],
   origin: string | null,
+  offCdn: (path: string) => boolean = () => false,
 ): { writes: { path: string; text: string }[]; naming: number; error?: string } {
   const writes: { path: string; text: string }[] = [];
   let naming = 0;
@@ -188,10 +191,35 @@ export function planAssetOrigin(
     if (!named) continue;
     naming++;
     if (origin && named !== origin) return { writes: [], naming, error: `${path} loads its assets from ${named}, not this deploy's ${origin} (a build of the other flavor?)` };
-    if (!origin) writes.push({ path, text: stripCdn(text) });
+    if (!origin || offCdn(path)) writes.push({ path, text: stripCdn(text) });
     else if (path.endsWith('/index.html')) writes.push({ path: path.replace(/index\.html$/, SITE_PAGE), text: stripCdn(text) });
   }
   return { writes, naming };
+}
+
+/** `planAssetOrigin`'s `offCdn` for the apps `offApps` (of `appPaths`): whether a file is in one of their folders. */
+export function offCdnPredicate(offApps: string[], appPaths: string[]): (path: string) => boolean {
+  const off = new Set(offApps);
+  return (path) => {
+    const app = appOf(path, appPaths);
+    return app !== undefined && off.has(app);
+  };
+}
+
+/**
+ * The apps (of `appPaths`) with an asset the live CDN (`live`, its manifest; null: none yet) does
+ * not hold. A deploy without the Cloudflare token can't upload them, so their pages load the
+ * site's own copy until a deploy with the token (the portal's) puts them on the CDN; every other
+ * app keeps the CDN, so no page ever names a file the CDN lacks.
+ */
+export function appsOffCdn(assets: string[], appPaths: string[], live: AssetManifest | null): string[] {
+  const off = new Set<string>();
+  for (const path of assets) {
+    if (!isCdnAsset(path) || live?.files[path]) continue;
+    const app = appOf(path, appPaths);
+    if (app !== undefined) off.add(app);
+  }
+  return [...off].sort();
 }
 
 /** The asset origin a built file names, if any. */

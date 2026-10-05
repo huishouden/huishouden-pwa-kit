@@ -147,8 +147,21 @@ export interface SiteManifest {
     observability?: number | null;
     /** Where this deploy's pages load their hashed assets from (./asset-cdn); null: the site itself. */
     assetOrigin?: string | null;
+    /**
+     * Apps whose pages load the site's own assets although `assetOrigin` is set: their build was
+     * new to the CDN and this deploy, without the Cloudflare token, could not upload it. The next
+     * deploy with the token (the portal's) puts them on the CDN.
+     */
+    offCdn?: string[];
 }
 /** Paths whose published build differs from what `manifest` holds (a newer one, or one it lacks). */
 export declare function staleApps(manifest: SiteManifest | null, latest: Record<string, number | null>): string[];
+/**
+ * Why the live site's asset CDN is not as this run would deploy it, or null: a different origin
+ * (on, off, the other flavor), or, for a run that can upload (`canUpload`, the portal's, with the
+ * Cloudflare token), apps whose build the CDN does not hold yet (`offCdn`). A run without the token
+ * (`--cdn-held`) leaves those to the portal, so for it they are not stale.
+ */
+export declare function staleCdn(manifest: SiteManifest | null, wantOrigin: string | null, canUpload: boolean): string | null;
 /** Whether the published observability settings (`latest`, an asset id) differ from what `manifest` holds. */
 export declare function staleObservability(manifest: SiteManifest | null, latest: number | null): boolean;

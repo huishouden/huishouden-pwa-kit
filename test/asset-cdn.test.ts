@@ -3,6 +3,8 @@ import {
   ASSET_FILE_LIMIT,
   ASSET_ORIGINS,
   ASSET_WORKERS,
+  appsOffCdn,
+  offCdnPredicate,
   cdnFallbackScript,
   cdnHints,
   cdnHeaders,
@@ -21,6 +23,7 @@ import {
 import { cspBlocksAssets, checkSecurityHeaders, APP_PATHS_REGEX, securityHeaders } from '../src/security-headers';
 import { assetCdn, assetOriginOf, cdnPrecache, navigationDenylist, pwaWorkbox } from '../src/vite';
 import { FRESH_FILES, SUITE_ORIGIN } from '../src/site';
+import { appOf } from '../src/suite';
 
 const now = new Date('2026-10-05T12:00:00Z');
 const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000).toISOString();
@@ -253,6 +256,40 @@ describe('planAssetOrigin', () => {
   });
   test('a build of the other flavor is refused', () => {
     expect(planAssetOrigin(files, ASSET_ORIGINS.staging).error).toContain('/pet/index.html loads its assets from');
+  });
+  test('an app off the CDN: its files stripped as if the CDN were off, no fallback page; the rest untouched', () => {
+    const portal = { path: '/index.html', text: `<script src="${P}/assets/p.js"></script>` };
+    const plan = planAssetOrigin([...files, portal], P, (path) => path.startsWith('/pet/'));
+    expect(plan.error).toBeUndefined();
+    expect(plan.writes.map((w) => w.path)).toEqual(['/pet/index.html', '/pet/sw.js', '/index.site.html']);
+    expect(plan.writes.every((w) => cdnOriginIn(w.text) === null)).toBe(true);
+  });
+});
+
+describe('apps off the CDN (a deploy without the Cloudflare token)', () => {
+  const apps = ['/', '/pet/', '/spending/'];
+  const live: AssetManifest = { flavor: 'production', deployedAt: daysAgo(0), files: { '/assets/p.js': { last: daysAgo(0) }, '/pet/assets/a.js': { last: daysAgo(0) } } };
+  test('appOf: the longest app path a file is under', () => {
+    expect(appOf('/pet/assets/a.js', apps)).toBe('/pet/');
+    expect(appOf('/assets/p.js', apps)).toBe('/');
+    expect(appOf('/spending/sw.js', apps)).toBe('/spending/');
+    expect(appOf('/x', ['/pet/'])).toBeUndefined();
+  });
+  test('an app with any asset the CDN lacks is off; one it holds entirely stays on', () => {
+    expect(appsOffCdn(['/assets/p.js', '/pet/assets/a.js', '/spending/assets/new.js'], apps, live)).toEqual(['/spending/']);
+    expect(appsOffCdn(['/assets/p.js', '/pet/assets/a.js', '/pet/assets/b.js'], apps, live)).toEqual(['/pet/']);
+    expect(appsOffCdn(['/assets/p.js', '/pet/assets/a.js', '/pet/index.html'], apps, live)).toEqual([]);
+  });
+  test('offCdnPredicate: files in an off app\'s folder, not the portal\'s around it', () => {
+    const off = offCdnPredicate(['/pet/'], apps);
+    expect(off('/pet/index.html')).toBe(true);
+    expect(off('/pet/sw.js')).toBe(true);
+    expect(off('/index.html')).toBe(false);
+    expect(off('/spending/index.html')).toBe(false);
+    expect(offCdnPredicate(['/'], apps)('/pet/index.html')).toBe(false);
+  });
+  test('before the CDN has a manifest every app with assets is off', () => {
+    expect(appsOffCdn(['/assets/p.js', '/pet/assets/a.js'], apps, null)).toEqual(['/', '/pet/']);
   });
 });
 

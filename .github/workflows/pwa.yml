@@ -29,11 +29,13 @@
 # the whole suite (docs/one-site.md "Bandwidth"), so nothing here loads it in a browser.
 #
 # Asset CDN (docs/one-site.md "Asset CDN"): builds name their hashed files at the
-# Cloudflare Worker huishouden-assets (staging: huishouden-assets-staging), and every deploy uploads
-# the assembled site's assets/ there before Firebase gets the HTML. Needs the caller to pass
-# the two secrets by name (`secrets: { CLOUDFLARE_API_TOKEN: ..., CLOUDFLARE_ACCOUNT_ID: ... }`). Without the token, or with the
-# repository or organization variable HH_ASSET_CDN=off (the rollback switch), the deploy removes the
-# CDN from the pages and the site serves its own copy, as before.
+# Cloudflare Worker huishouden-assets (staging: huishouden-assets-staging). Only the portal holds
+# the Cloudflare token (secrets of its `production` environment, main only): its deploy uploads the
+# assembled site's assets/ there before Firebase gets the HTML. An app's deploy has no token: its
+# pages keep the CDN for every build the CDN already holds and load the site's own copy for the
+# rest (its own new build), until the portal's next deploy (a push, or a run with `reconcile`)
+# uploads them; so no page ever names a file the CDN lacks. With the repository or organization
+# variable HH_ASSET_CDN=off (the rollback switch), the deploy removes the CDN from every page.
 #
 # Staging by hand: with STAGING_GCP_WIF_PROVIDER, STAGING_GCP_DEPLOY_SA, STAGING_SITE and
 # STAGING_VITE_FIREBASE_* set (infra/bootstrap.sh --staging), a manual run given `staging-ref` builds
@@ -71,10 +73,10 @@ on:
         default: false
     secrets:
       CLOUDFLARE_API_TOKEN:
-        description: Deploys the asset CDN's Worker (Workers Scripts edit). Missing, the site serves its own assets
+        description: The portal only, and only from a `production` environment secret (main); kept so older callers that still pass it don't fail. Deploys the asset CDN's Worker (Workers Scripts edit)
         required: false
       CLOUDFLARE_ACCOUNT_ID:
-        description: The Cloudflare account of the asset CDN
+        description: The portal only, as CLOUDFLARE_API_TOKEN. The Cloudflare account of the asset CDN
         required: false
 
 permissions:
@@ -307,17 +309,15 @@ jobs:
           retention-days: 1
 
   staging-site:
-    # The whole suite with this build, for the app's own staging site (docs/one-site.md "Staging"),
-    # and its assets on the staging asset CDN. Holds the Cloudflare token, so it runs nothing from
-    # the ref: the ref is checked out into ref/ and read as data (the kit pin, apps.json and
-    # firebase.json); bun and wrangler run from the workspace root, so no bunfig.toml or .env of the
-    # ref applies; the assembler is the kit at the version the ref pins, wrangler an exact version.
+    # The whole suite with this build, for the app's own staging site (docs/one-site.md "Staging").
+    # Never holds the Cloudflare token (the portal's production environment alone does): staging
+    # builds any ref, so its pages load the site's own assets and nothing goes to the staging CDN.
+    # The ref is checked out into ref/ and read as data (the kit pin, apps.json and firebase.json);
+    # bun runs from the workspace root, so no bunfig.toml or .env of the ref applies; the assembler
+    # is the kit at the version the ref pins.
     needs: [staging-build]
     if: inputs.base != ''
     runs-on: ubuntu-latest
-    concurrency:
-      group: staging-cdn-${{ github.repository }}
-      cancel-in-progress: false
     permissions:
       contents: read
     steps:
@@ -338,22 +338,12 @@ jobs:
           if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a tag (github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
           git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
           echo "SITE_TOOL=$RUNNER_TEMP/pwa-kit/scripts/site.ts" >> "$GITHUB_ENV"
-      - name: Asset CDN on?
+      - name: Asset CDN off for staging
         id: cdn
-        env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          SWITCH: ${{ vars.HH_ASSET_CDN }}
         run: |
           if ! grep -q "'asset-origin'" "$SITE_TOOL"; then echo "args=" >> "$GITHUB_OUTPUT"; echo "the pinned kit has no asset CDN"; exit 0; fi
-          origin=$(bun "$SITE_TOOL" asset-origin --flavor staging | sed -n 's/^origin=//p')
-          if [ -z "$origin" ]; then echo "::error::pwa-site asset-origin gave no origin"; exit 1; fi
-          if [ -z "$TOKEN" ] || [ "$SWITCH" = off ]; then
-            echo "::warning::Asset CDN off for staging ($([ -z "$TOKEN" ] && echo 'no CLOUDFLARE_API_TOKEN; the caller passes it under secrets:' || echo 'HH_ASSET_CDN=off')): the site serves its own assets"
-            echo "args=--assets-origin none" >> "$GITHUB_OUTPUT"
-          else
-            echo "on=true" >> "$GITHUB_OUTPUT"
-            echo "args=--assets-origin $origin" >> "$GITHUB_OUTPUT"
-          fi
+          echo "Staging serves the site's own assets: no job that builds a ref holds the Cloudflare token"
+          echo "args=--assets-origin none" >> "$GITHUB_OUTPUT"
       - name: Assemble the suite with this build
         env:
           BASE: ${{ inputs.base }}
@@ -365,23 +355,6 @@ jobs:
           set -- $ARGS
           if [ -f ref/apps.json ]; then set -- "$@" --registry ref/apps.json; fi
           bun "$SITE_TOOL" assemble --flavor staging --site "$SITE" --own "$BASE=dist" --out site-out --firebase ref/firebase.json "$@"
-      # Assets first: the pages deployed after this name them. Another repo's staging upload can
-      # replace this one moments later; then upload again (its files are in the manifest by then).
-      - name: Assets to the staging asset CDN
-        if: steps.cdn.outputs.on == 'true'
-        # The token is written into the wrangler command only, not the step's environment: the
-        # kit's cdn and cdn-check run without it.
-        run: |
-          for round in 1 2 3; do
-            bun "$SITE_TOOL" cdn --flavor staging --site-dir site-out/public --out cdn-out
-            (cd cdn-out && CLOUDFLARE_API_TOKEN="${{ secrets.CLOUDFLARE_API_TOKEN }}" CLOUDFLARE_ACCOUNT_ID="${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" npx --yes "wrangler@$WRANGLER_VERSION" deploy)
-            sleep 5
-            bun "$SITE_TOOL" cdn-check --flavor staging --site-dir site-out/public > "$RUNNER_TEMP/check.txt"
-            cat "$RUNNER_TEMP/check.txt"
-            grep -q '^ok=true' "$RUNNER_TEMP/check.txt" && exit 0
-            echo "::notice::round $round: another upload replaced this one; uploading again"
-          done
-          echo "::error::the staging asset CDN still lacks this site's assets after three uploads"; exit 1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: staging-site
@@ -590,9 +563,10 @@ jobs:
           if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a tag (github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
           git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
           echo "SITE_TOOL=$RUNNER_TEMP/pwa-kit/scripts/site.ts" >> "$GITHUB_ENV"
-      # The asset CDN (docs/one-site.md "Asset CDN"): on with the Cloudflare token unless
-      # HH_ASSET_CDN=off (repository or organization variable), the rollback switch. Off, the
-      # assembler removes the CDN from every page and the site serves its own assets.
+      # The asset CDN (docs/one-site.md "Asset CDN"): with the Cloudflare token (the portal), on and
+      # uploaded; without it (every app), on for the builds the CDN already holds (--cdn-held), the
+      # rest from the site until the portal's next deploy. HH_ASSET_CDN=off (repository or
+      # organization variable), the rollback switch: the assembler removes the CDN from every page.
       - name: Asset CDN on?
         id: cdn
         if: inputs.base != ''
@@ -603,12 +577,18 @@ jobs:
           if ! grep -q "'asset-origin'" "$SITE_TOOL"; then echo "args=" >> "$GITHUB_OUTPUT"; echo "the pinned kit has no asset CDN"; exit 0; fi
           origin=$(bun "$SITE_TOOL" asset-origin --flavor production | sed -n 's/^origin=//p')
           if [ -z "$origin" ]; then echo "::error::pwa-site asset-origin gave no origin"; exit 1; fi
-          if [ -z "$TOKEN" ] || [ "$SWITCH" = off ]; then
-            echo "::warning::Asset CDN off ($([ -z "$TOKEN" ] && echo 'no CLOUDFLARE_API_TOKEN; the caller passes it under secrets:' || echo 'HH_ASSET_CDN=off')): the site serves its own assets"
+          if [ "$SWITCH" = off ]; then
+            echo "::warning::Asset CDN off (HH_ASSET_CDN=off): the site serves its own assets"
             echo "args=--assets-origin none" >> "$GITHUB_OUTPUT"
-          else
+          elif [ -n "$TOKEN" ]; then
             echo "on=true" >> "$GITHUB_OUTPUT"
             echo "args=--assets-origin $origin" >> "$GITHUB_OUTPUT"
+          elif grep -q "'cdn-held'" "$SITE_TOOL"; then
+            echo "No Cloudflare token (only the portal's deploy uploads): the CDN for the builds it already holds"
+            echo "args=--assets-origin $origin --cdn-held" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Asset CDN off: no Cloudflare token and the pinned kit has no --cdn-held (0.104+); the site serves its own assets"
+            echo "args=--assets-origin none" >> "$GITHUB_OUTPUT"
           fi
       - name: Is the live site behind? Do the old sites redirect?
         id: live
@@ -633,8 +613,11 @@ jobs:
           REDIRECTS: ${{ steps.live.outputs.wrong }}
           ARGS: ${{ steps.cdn.outputs.args }}
         run: |
-          if [ "$REDIRECTS" = true ]; then bun "$SITE_TOOL" assemble --flavor production --out site-out --redirects $ARGS
-          else bun "$SITE_TOOL" assemble --flavor production --out site-out $ARGS; fi
+          if [ "$REDIRECTS" = true ]; then set -- --redirects; else set --; fi
+          bun "$SITE_TOOL" assemble --flavor production --out site-out "$@" $ARGS > "$RUNNER_TEMP/assemble.txt" || { cat "$RUNNER_TEMP/assemble.txt"; exit 1; }
+          cat "$RUNNER_TEMP/assemble.txt"
+          off=$(sed -n 's/^off-cdn=//p' "$RUNNER_TEMP/assemble.txt")
+          [ -z "$off" ] || echo "::notice title=Not on the asset CDN yet::$off load the site's own assets until the portal's next deploy (a push to its main, or its ci run with reconcile) uploads them"
       - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         if: inputs.base == '' || steps.site.outcome == 'success'
         with:

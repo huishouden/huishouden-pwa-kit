@@ -32,8 +32,5 @@ jobs:
       base: /APP_PATH/ # the app's path on the suite's one site (docs/one-site.md)
       site-url: https://FAMILY_SITE.web.app/APP_PATH/
       staging-ref: ${{ inputs.staging-ref }}
-    # The asset CDN's upload (pwa-kit docs/one-site.md "Asset CDN"); only these two secrets.
-    secrets:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    # No secrets: the asset CDN's upload is the portal's alone (pwa-kit docs/one-site.md "Asset CDN").
 
