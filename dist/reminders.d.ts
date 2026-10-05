@@ -1,6 +1,8 @@
 import { type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { type MedCourse } from './dose.js';
 import { type Lang } from './i18n.js';
+import { type ReminderSource } from './reminder-source.js';
+export type { ReminderSource, SourceCheck, SourceCondition, SourceValue } from './reminder-source.js';
 /**
  * Reminders any app writes and the shared sender (huishouden/notify) delivers as push
  * notifications: one collection, `households/{id}/reminders`. The sender checks every five
@@ -48,12 +50,17 @@ export interface Reminder {
      * about one person's care; `recipients` are some of them. Absent on shared reminders.
      */
     audience?: string[];
+    /**
+     * What it is about, so the sender deletes it unsent once that is done anywhere: a bill paid from
+     * the portal, a task ticked in Google Tasks (`./reminder-source`). Without one it is always sent.
+     */
+    source?: ReminderSource;
     sent: boolean;
     sentAt?: number;
     createdAt: number;
     by: string;
 }
-export declare const REMINDER_FIELDS: readonly ["app", "title", "body", "texts", "at", "url", "recipients", "ref", "private", "sent", "sentAt", "createdAt", "by"];
+export declare const REMINDER_FIELDS: readonly ["app", "title", "body", "texts", "at", "url", "recipients", "ref", "private", "source", "sent", "sentAt", "createdAt", "by"];
 /** Limits of a stored title and body, also inside `texts` (the rules check the same). */
 export declare const REMINDER_LIMITS: {
     readonly title: 120;
@@ -62,8 +69,8 @@ export declare const REMINDER_LIMITS: {
 /** The collection of reminders for named members only (`./audience`); the sender reads it too. */
 export declare const PERSONAL_REMINDERS = "personalReminders";
 /** Fields of a `personalReminders` document: a reminder's plus `audience`. */
-export declare const PERSONAL_REMINDER_FIELDS: readonly ["app", "title", "body", "texts", "at", "url", "recipients", "ref", "private", "sent", "sentAt", "createdAt", "by", "audience"];
-export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Partial<Pick<Reminder, 'id' | 'body' | 'texts' | 'recipients' | 'ref' | 'private'>>;
+export declare const PERSONAL_REMINDER_FIELDS: readonly ["app", "title", "body", "texts", "at", "url", "recipients", "ref", "private", "source", "sent", "sentAt", "createdAt", "by", "audience"];
+export type ReminderInput = Pick<Reminder, 'app' | 'title' | 'at' | 'url'> & Partial<Pick<Reminder, 'id' | 'body' | 'texts' | 'recipients' | 'ref' | 'private' | 'source'>>;
 /** `texts` as stored: known languages only, each title and body trimmed and clipped; undefined when none is left. */
 export declare function cleanTexts(texts: ReminderTexts | undefined | null): ReminderTexts | undefined;
 /**
