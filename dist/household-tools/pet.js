@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { addDays, atTime, daysBetween, dueText, formatTime, toYmd } from '../time.js';
 import { formatList } from '../i18n.js';
-import { outingId, outingSlots } from '../pet-outings.js';
+import { OUTING_LIMITS, outingId, outingSlots } from '../pet-outings.js';
 import { addInterval } from '../schedule.js';
 import { t } from './i18n.js';
 import { UserError } from './context.js';
@@ -126,7 +126,7 @@ async function loadOutings(ctx, today) {
             every: num(d.data.every),
             from: str(d.data.from),
             to: str(d.data.to),
-            poopMin: Math.max(0, num(d.data.poopMin) ?? 0),
+            poopMin: Math.min(OUTING_LIMITS.poopMin, Math.max(0, num(d.data.poopMin) ?? 0)),
             walkGoal: Math.max(0, num(d.data.walkGoal) ?? 0),
         })),
         outings,
@@ -168,7 +168,7 @@ function underDays(ctx, plan, outings, today) {
 /** How an outing went, as one of `pet.outingSlot*`'s shapes. */
 const howOf = (o) => (o.data.poop === true ? 'pooped' : o.data.pee === true ? 'pee' : 'out');
 /** A pet's outings today: each slot's state, the poops against the minimum, the walk, and days under it. */
-export function outingSummary(ctx, plan, meals, outings, today, localNow) {
+function outingSummary(ctx, plan, meals, outings, today, localNow) {
     const slots = slotStates(ctx, plan, meals, outings, today, localNow);
     const todays = outingsOn(ctx, outings, plan.petId, today);
     return { slots, extra: todays.filter((o) => typeof o.data.slot !== 'string').length, poops: poopsIn(todays), walked: walkIn(todays), under: underDays(ctx, plan, outings, today) };
@@ -408,8 +408,8 @@ export const petLogOuting = defineTool({
         pee: z.boolean().optional().describe('Whether it peed. Default true when `pooped` is given.'),
         slot: z.string().max(40).optional().describe('Scheduled outing name or key from `pet_today` ("Breakfast", "7:00 AM").'),
         at: z.string().max(40).optional().describe('When, local "YYYY-MM-DDTHH:MM". Default now.'),
-        walk_minutes: z.number().int().min(1).max(600).optional().describe('Walk length, minutes.'),
-        note: z.string().max(200).optional(),
+        walk_minutes: z.number().int().min(1).max(OUTING_LIMITS.walkMin).optional().describe('Walk length, minutes.'),
+        note: z.string().max(OUTING_LIMITS.note).optional(),
     },
     async run(ctx, args) {
         if (args.pooped === undefined && args.walk_minutes === undefined)
@@ -429,7 +429,7 @@ export const petLogOuting = defineTool({
         // The request's own id: an extra outing's document id, and on a slot's outing its `req`, so a
         // retry with the same key finds what the first call wrote, wherever it went.
         const req = await recordId(ctx.session.props.connectionId, 'pet_log_outing', args.idempotency_key);
-        const earlier = args.idempotency_key ? outs.outings.find((o) => o.id === req || o.data.req === req) : undefined;
+        const earlier = args.idempotency_key ? outs.outings.find((o) => o.data.petId === pet.id && (o.id === req || o.data.req === req)) : undefined;
         if (earlier) {
             ctx.touched('pet', `petOutings/${earlier.id}`);
             return render(ctx.lang, () => ({
@@ -452,7 +452,7 @@ export const petLogOuting = defineTool({
             slot = slots.filter((s) => s.state !== 'done' && s.at <= local + 90 * 60_000).sort((a, b) => Math.abs(a.at - local) - Math.abs(b.at - local))[0];
         const now = ctx.clock.now();
         const id = slot ? outingId(pet.id, day, slot.slot.key) : req;
-        const note = clip(args.note, 200);
+        const note = clip(args.note, OUTING_LIMITS.note);
         const doc = {
             petId: pet.id,
             ...(slot ? { slot: slot.slot.key, ...(args.idempotency_key ? { req } : {}) } : {}),

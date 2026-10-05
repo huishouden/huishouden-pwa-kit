@@ -1,4 +1,4 @@
-import { isHhmm, type Ymd } from './time.js';
+import { hhmmMinutes, isHhmm, type Ymd } from './time.js';
 
 /**
  * Huishouden Pet's outings (bathroom breaks), the part every writer must agree on: which scheduled
@@ -45,15 +45,14 @@ export const OUTING_DEFAULTS = { from: '07:00', to: '21:00', every: 4, flagDays:
 /** The sizes the rules accept for a plan. */
 export const OUTING_LIMITS = { times: 8, every: 12, slots: 24, poopMin: 10, flagDays: 14, walkMin: 600, note: 200, slotKey: 40 } as const;
 
-const minutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 /** Every `every` hours (whole, 1 to 12) from `from`, while not after `to` and before midnight. */
 export function everyTimes(every: number = OUTING_DEFAULTS.every, from: string = OUTING_DEFAULTS.from, to: string = OUTING_DEFAULTS.to): string[] {
   const step = Math.min(OUTING_LIMITS.every, Math.max(1, Math.round(Number.isFinite(every) ? every : OUTING_DEFAULTS.every))) * 60;
-  const end = minutes(isHhmm(to) ? to : OUTING_DEFAULTS.to);
+  const end = hhmmMinutes(isHhmm(to) ? to : OUTING_DEFAULTS.to);
   const out: string[] = [];
-  for (let m = minutes(isHhmm(from) ? from : OUTING_DEFAULTS.from); m <= end && m < 24 * 60 && out.length < OUTING_LIMITS.slots; m += step) out.push(hhmm(m));
+  for (let m = hhmmMinutes(isHhmm(from) ? from : OUTING_DEFAULTS.from); m <= end && m < 24 * 60 && out.length < OUTING_LIMITS.slots; m += step) out.push(hhmm(m));
   return out;
 }
 
