@@ -41,7 +41,7 @@ export const addAppointment = defineTool({
     remind_before_minutes: z.array(z.number().int().min(0).max(20160)).max(4).optional().describe(`Health: reminders this many minutes before, to the carers. Default [1440, 120]. Health offers ${REMIND_CHOICES.join(', ')}.`),
     follow_up: z.object({ every: z.number().int().min(1).max(24), unit: z.enum(FOLLOW_UP_UNITS) }).optional().describe('Health: a follow-up due this long after; once the visit is over, "Book a follow-up" goes on the to-do list.'),
     specialty: z.enum(SPECIALTIES).optional().describe('Health: the medical area it is with (neurology, cardiology...). Every reader of the visit sees it, helper carers included.'),
-    condition: z.string().max(120).optional().describe("Health: the person's condition it is about, by name or id from `health_conditions` (admins, member carers and the person only). Only its id is on the visit; its area is not copied (give `specialty` for that)."),
+    condition: z.string().max(120).optional().describe("Health: the person's condition it is about, by name or id from `health_conditions` (admins and member carers only, the person too when a member). Only its id is on the visit; its area is not copied (give `specialty` for that)."),
     private: z.boolean().optional().describe('Pet, baby, car: only admins and members see it. Default false.'),
   },
   async run(ctx, args) {

@@ -9,9 +9,10 @@ import { formatYmd, monthYear, ymdParts } from './time.js';
  * conditions with the same code.
  *
  * Who may read them is narrower than for medicines and visits (huishouden/rules,
- * `conditionReader`): the household's admins, the person's member carers and the person themself.
- * Helper carers, who give doses and take someone to a visit, never read a condition, not even its
- * name; a visit tagged with one carries only its id. Nothing about a condition is published to the
+ * `conditionReader`): the household's admins and the members among the person's readers (their
+ * member carers, and the person themself when a member). Helper carers, who give doses and take
+ * someone to a visit, never read a condition, not even its name; a visit tagged with one carries
+ * only its id. Nothing about a condition is published to the
  * portal, the calendars, reminders or to-dos.
  *
  * Finding one: `searchConditions` asks the U.S. National Library of Medicine's free Clinical Tables

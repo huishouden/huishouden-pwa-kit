@@ -13,7 +13,7 @@ import { conditionUrl, keeps, loadConditions, loadMeds, loadPeople, medLabel, re
 
 /**
  * Health's conditions (`../condition`), grouped by medical area, for the people this person may
- * read them for: admins, the person's member carers and the person themself. Helper carers get
+ * read them for: admins and the members among the person's readers. Helper carers get
  * none (the rules refuse them), and nothing here says that a condition exists.
  */
 
@@ -64,7 +64,7 @@ export const healthConditions = defineTool({
   name: 'health_conditions',
   title: "A person's conditions",
   description:
-    "The health conditions (diagnoses) of the people this person may see them for in Huishouden Health, grouped by medical area (neurology, cardiology, endocrinology...): name, ICD-10-CM code, status (active, managed, resolved), when diagnosed, by which doctor and where, severity, the medicines that treat it, notes. Only admins, the person's member carers and the person themself see conditions; helper carers see none. Leave out `person` for everyone; `specialty` narrows it to one area (\"Amanda's neurology conditions\").",
+    "The health conditions (diagnoses) of the people this person may see them for in Huishouden Health, grouped by medical area (neurology, cardiology, endocrinology...): name, ICD-10-CM code, status (active, managed, resolved), when diagnosed, by which doctor and where, severity, the medicines that treat it, notes. Only admins and members who care for the person (or are the person) see conditions; helper carers and kids see none. Leave out `person` for everyone; `specialty` narrows it to one area (\"Amanda's neurology conditions\").",
   kind: 'read',
   health: true,
   input: {

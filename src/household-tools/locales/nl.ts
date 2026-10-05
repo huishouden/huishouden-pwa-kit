@@ -260,8 +260,8 @@ const nl: Record<keyof typeof en, string> = {
   'conditions.titleIn': 'Aandoeningen: {area}',
   'conditions.none': 'Geen aandoeningen vastgelegd.',
   'conditions.noneIn': 'Geen aandoeningen onder {area}.',
-  'conditions.nobody': 'Je ziet van niemand de aandoeningen in Gezondheid: alleen beheerders, leden die voor iemand zorgen en de persoon zelf zien ze.',
-  'conditions.notShared': 'De aandoeningen van {name} zijn alleen voor beheerders, leden die voor {name} zorgen en {name} zelf.',
+  'conditions.nobody': 'Je ziet van niemand de aandoeningen in Gezondheid: alleen beheerders en leden die voor iemand zorgen (of die persoon zelf zijn) zien ze.',
+  'conditions.notShared': 'De aandoeningen van {name} zijn alleen voor beheerders en leden die voor {name} zorgen (of {name} zelf, als lid).',
   'conditions.keepersOnly': 'Alleen beheerders en leden die voor deze persoon zorgen kunnen aandoeningen toevoegen.',
   'conditions.diagnosed': 'vastgesteld {date}',
   'conditions.by': 'door {name}',
@@ -270,7 +270,7 @@ const nl: Record<keyof typeof en, string> = {
   'conditions.treatedWith': 'behandeld met {meds}',
   'conditions.added': '{condition} toegevoegd voor {name}, onder {area}. [Gezondheid]({url})',
   'conditions.placeOrClinic': 'Geef `clinic` (een contact van het huishouden) of `place` (in woorden), niet allebei.',
-  'conditions.resolvedNeedsStatus': 'Een `resolved`-datum hoort bij `status: "resolved"`; laat `status` weg of zet hem op resolved.',
+  'conditions.resolvedNeedsStatus': 'Een `resolved`-datum hoort bij `status: "resolved"`; laat `status` weg of zet hem op „Genezen”.',
   'conditions.unknown': '„{name}” is geen van hun aandoeningen. Aandoeningen: {conditions}.',
 
 };

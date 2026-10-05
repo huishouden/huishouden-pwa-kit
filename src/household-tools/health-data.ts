@@ -143,13 +143,11 @@ export function keeps(ctx: ToolContext, p: Pick<Person, 'readers'>): boolean {
 }
 
 /**
- * Whether this person may read someone's conditions (huishouden/rules `conditionReader`): admins,
- * the person's member carers, and the person themself. Helper carers and kids never.
+ * Whether this person may read someone's conditions (huishouden/rules `conditionReader`): admins and
+ * the members among the person's readers (their member carers, and the person themself when a
+ * member). Helper carers and kids never, also when they are the person.
  */
-export function readsConditions(ctx: ToolContext, p: Pick<Person, 'readers' | 'email'>): boolean {
-  if (keeps(ctx, p)) return true;
-  return ctx.here.role !== 'kid' && !!p.email && p.email === ctx.session.email;
-}
+export const readsConditions = (ctx: ToolContext, p: Pick<Person, 'readers'>): boolean => keeps(ctx, p);
 
 /** The person's conditions, or none when this person may not read them (never asked, so never refused). */
 export async function loadConditions(ctx: ToolContext, person: Person): Promise<Condition[]> {

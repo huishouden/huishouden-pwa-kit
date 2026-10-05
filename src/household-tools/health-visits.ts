@@ -155,7 +155,7 @@ export const healthAppointments = defineTool({
   name: 'health_appointments',
   title: "A person's visits in Health",
   description:
-    "The doctor's, dentist's, eye, lab, vaccine and therapy appointments (visits) of the people this person looks after in Huishouden Health: coming up, and past ones with whether they went (attended or missed). Each has its kind, time, doctor or clinic, place or video link, what to do or bring, reminders and follow-up; its medical area (every reader, helper carers included); the condition it is about only for admins, member carers and the person, and the notes only for admins and member carers (helper carers never get either). Leave out `person` for everyone.",
+    "The doctor's, dentist's, eye, lab, vaccine and therapy appointments (visits) of the people this person looks after in Huishouden Health: coming up, and past ones with whether they went (attended or missed). Each has its kind, time, doctor or clinic, place or video link, what to do or bring, reminders and follow-up; its medical area (every reader, helper carers included); the condition it is about only for admins and member carers (the person too, when a member), and the notes only for admins and member carers (helper carers never get either). Leave out `person` for everyone.",
   kind: 'read',
   health: true,
   input: {

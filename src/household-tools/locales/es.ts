@@ -260,8 +260,8 @@ const es: Record<keyof typeof en, string> = {
   'conditions.titleIn': 'Afecciones: {area}',
   'conditions.none': 'No hay afecciones registradas.',
   'conditions.noneIn': 'No hay afecciones en {area}.',
-  'conditions.nobody': 'No ves las afecciones de nadie en Salud: solo las ven los administradores, los miembros que cuidan a la persona y la propia persona.',
-  'conditions.notShared': 'Las afecciones de {name} son solo para los administradores, los miembros que cuidan a esa persona y la propia persona.',
+  'conditions.nobody': 'No ves las afecciones de nadie en Salud: solo las ven los administradores y los miembros que cuidan a la persona (o que son la persona).',
+  'conditions.notShared': 'Las afecciones de {name} son solo para los administradores y los miembros que cuidan a esa persona (o la propia persona, si es miembro).',
   'conditions.keepersOnly': 'Solo los administradores y los miembros que cuidan a esta persona pueden añadir sus afecciones.',
   'conditions.diagnosed': 'diagnosticada {date}',
   'conditions.by': 'por {name}',
@@ -270,7 +270,7 @@ const es: Record<keyof typeof en, string> = {
   'conditions.treatedWith': 'tratada con {meds}',
   'conditions.added': 'Añadí {condition} para {name}, en {area}. [Salud]({url})',
   'conditions.placeOrClinic': 'Indica `clinic` (un contacto del hogar) o `place` (en palabras), no los dos.',
-  'conditions.resolvedNeedsStatus': 'Una fecha `resolved` va con `status: "resolved"`; deja `status` fuera o ponlo en resolved.',
+  'conditions.resolvedNeedsStatus': 'Una fecha `resolved` va con `status: "resolved"`; deja `status` fuera o ponlo en «Resuelta».',
   'conditions.unknown': '«{name}» no es una de sus afecciones. Afecciones: {conditions}.',
 
 };
