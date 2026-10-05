@@ -166,6 +166,40 @@ describe('syncReminders', () => {
   });
 });
 
+describe('a source', () => {
+  const H = 'households/h1/reminders';
+  const source = { checks: [{ doc: 'items/a', due: [{ field: 'completed', notIn: [true] }, { field: 'dueAt', in: [at(15, 10)] }] }] };
+  const input = (src: unknown = source) => ({ app: 'tasks', title: 'Drop off dry cleaning', at: at(15, 9), url: 'https://tasks.example.com/?item=a', ref: 'tasks:item:a', source: src as typeof source });
+
+  test('is written with the reminder and read back', () => {
+    const d = reminderDoc(input(), 'alex@example.com', NOW);
+    expect(d.source).toEqual(source);
+    expect(toReminder('r', d as unknown as Record<string, unknown>).source).toEqual(source);
+    expect(REMINDER_FIELDS).toContain('source');
+    expect('source' in reminderDoc({ ...input(), source: undefined }, 'alex@example.com', NOW)).toBe(false);
+  });
+
+  test("one the sender would refuse is left off, so the reminder still goes out", () => {
+    expect(reminderDoc(input({ checks: [{ doc: 'bills/b1' }] }), 'alex@example.com', NOW).source).toBeUndefined();
+    expect(reminderDoc(input({ checks: [{ doc: 'items/a', due: [{ field: 'name', in: ['x'] }] }] }), 'alex@example.com', NOW).source).toBeUndefined();
+  });
+
+  test("a Health source stays only on a personal reminder, which only its audience reads", () => {
+    const dose = { checks: [{ doc: 'healthPeople/p1/doses/d1', absent: true as const }] };
+    const r = { app: 'health', title: 'Medicine', at: at(15, 9), url: 'https://health.example.com/', recipients: ['alex@example.com'], source: dose };
+    expect(reminderDoc(r, 'alex@example.com', NOW).source).toBeUndefined();
+    expect(personalReminderDoc({ ...r, audience: ['alex@example.com'] }, 'alex@example.com', NOW).source).toEqual(dose);
+  });
+
+  test('syncReminders rewrites a reminder whose source changed, and only then', async () => {
+    store.clear();
+    expect(await syncReminders(db, 'h1', 'tasks', [input(undefined as never)].map(({ source: _s, ...r }) => r), 'alex@example.com', NOW)).toEqual({ written: 1, deleted: 0, unchanged: 0 });
+    expect(await syncReminders(db, 'h1', 'tasks', [input()], 'alex@example.com', NOW)).toEqual({ written: 1, deleted: 0, unchanged: 0 });
+    expect(store.get(`${H}/${reminderId('tasks:item:a', at(15, 9))}`)?.source).toEqual(source);
+    expect(await syncReminders(db, 'h1', 'tasks', [input()], 'sam@example.com', NOW)).toEqual({ written: 0, deleted: 0, unchanged: 1 });
+  });
+});
+
 describe('private reminders', () => {
   const path = (id: string) => `households/h1/reminders/${id}`;
   const input = (title: string, at: number, extra: Record<string, unknown> = {}) => ({ app: 'pet', title, at, url: 'https://pet.example.com/', ref: title, ...extra });
