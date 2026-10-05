@@ -170,6 +170,26 @@ describe('pseudonymous food for a model', () => {
     expect(pseudonymousFood(toFood({ people: [{ id: 'a', name: 'Sam', diets: [], avoid: [], note: 'Ed visits; Ng too' }] }), [{ name: 'Ed Ng' }]).food.people[0].note).toBe('someone visits; someone too');
   });
 
+  test('a name two people share names neither; hyphenated and apostrophe names by each part', () => {
+    const { food: anon, restore } = pseudonymousFood(toFood({
+      people: [
+        { id: 'a', name: 'Sam Smith', diets: [], avoid: [] },
+        { id: 'b', name: 'Sam Jones', diets: [], avoid: [], note: 'Sam is allergic to egg' },
+        { id: 'c', name: "Mary-Jane O'Brien", diets: [], avoid: [], note: 'Jane cooks; Brien and Mary too' },
+      ],
+    }));
+    expect(anon.people.map((p) => p.note)).toEqual([undefined, 'Person A or Person B is allergic to egg', 'Person C cooks; Person C and Person C too']);
+    expect(restore('Person A or Person B')).toBe('Sam Smith or Sam Jones');
+  });
+
+  test("a member listed by first name keeps their surname out, from `others`", () => {
+    const members = [{ email: 'pat@example.com', name: 'Pat Example' }, { email: 'bob@example.com', name: 'Bob' }];
+    const listed = withMembers([], members);
+    const people = listed.map((p, i) => (i === 1 ? { ...p, note: 'Cooks the Example family recipes for Pat' } : p));
+    const { food: anon } = pseudonymousFood({ people }, members);
+    expect(anon.people[1].note).toBe('Cooks the someone family recipes for Person A');
+  });
+
   test('is stable for the same list and puts real names back', () => {
     const a = pseudonymousFood(food);
     expect(pseudonymousFood(food).food).toEqual(a.food);

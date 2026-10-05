@@ -140,12 +140,14 @@ export interface PseudonymousFood {
  * The household's food preferences with nobody named, for a prompt sent to a model outside the
  * household (Gemini): each person becomes "Person A", "Person B", … by their place in the list, so
  * the stand-ins are stable while the list is, and diets, allergies and notes stay but are not tied
- * to anyone's name or email. In a note, every listed person's name, each word of it, their email
- * and its first part are replaced by their stand-in, ignoring case and accents (the note goes without
- * accents), and any other email
- * by "someone"; `others` names more people to replace by "someone" (household members not in the
- * list). A note is free text: anything else in it (a stranger's name, a phone number, an address)
- * goes to the model as written, so the portal asks for food notes, not contact details. Avoid lists
+ * to anyone's name or email. In a note, every listed person's name, each word of it (split at spaces,
+ * hyphens and apostrophes), their email and its first part are replaced by their stand-in, ignoring
+ * case and accents (the note goes without accents); a word two people share becomes "Person A or
+ * Person B"; any other email becomes "someone". Pass every household member (email and full profile
+ * name) as `others`, listed or not: `withMembers` lists members by first name only, so their
+ * surnames, and members not in the list, are replaced by "someone". A note is free text: anything
+ * else in it (a stranger's name, a phone number, an address) goes to the model as written, so a
+ * food note should hold food, not contact details. Avoid lists
  * are ingredients and stay as written: a first name can be a food ("Olive"), and "olive oil" must
  * reach the model intact. Build the prompt's rules from `food` (householdDietRules,
  * householdDietPreferences, householdSpiceLines); show the household anything the model wrote about
