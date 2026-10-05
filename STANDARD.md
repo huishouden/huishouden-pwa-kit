@@ -431,7 +431,6 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 | `deploy` | push to `main`; a manual run with `reconcile` | Keyless via Workload Identity Federation; with `base`, `pwa-site assemble` (every app's latest asset under its path, the combined `firebase.json`) and `firebase deploy`, rechecked for builds published meanwhile; without, `firebase deploy --only hosting:<target>`. Then tags `v<version>` and publishes its CHANGELOG.md section as the GitHub release, once per version |
 | `smoke` | after `deploy` | One HTTP check of the live app path (index.html, a hashed asset, the manifest, `sw.js`, their caching and compression); no browser (docs/one-site.md "Bandwidth") |
 | `staging` | manual runs with `staging-ref` | Build against the staging project, deploy to the app's staging site, `e2e` and `e2e:signed-in` there in households of the run's own, then remove them (see Staging) |
-| `staging-sweep` | manual runs with `staging-sweep` | Remove staging test households and users over a day old (`hh ops staging-cleanup` does the same from a laptop) |
 
 - Repo variables (not secrets; the Firebase web config is public by design): `GCP_WIF_PROVIDER`,
   `GCP_DEPLOY_SA`, `VITE_FIREBASE_*` (the bootstrap sets them). Apps on the suite's site need no
@@ -514,8 +513,9 @@ nothing deployed or tested there can read or write real household data.
   admin, a member, a helper and a kid (`hh.users.helper.email`, `<household>-helper@example.com`,
   emails verified, invented), seeded in the file's `beforeAll` with any app data it needs (`docs`, one
   commit), and removed after the run with every household its people belong to. A Health carer is
-  set in Health by the spec (the helper, say), like any app data. A nightly run of the portal
-  (`staging-sweep`) removes what a cancelled run left once it is a day old. Nothing outlives its run,
+  set in Health by the spec (the helper, say), like any app data. `hh ops staging-cleanup`
+  (also run after each `hh dev evidence --staging`) removes what a cancelled run left once it is a
+  day old. Nothing outlives its run,
   so a test may count on an empty household.
 - **From your own machine**: `bunx pwa-staging run -- bun run e2e:signed-in` (with `BASE_URL` set to
   the staging site under test) runs the same specs against staging outside CI: a run id of its own

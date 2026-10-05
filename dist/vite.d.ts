@@ -101,6 +101,32 @@ export declare function pwaApp(options: PwaAppOptions): ({
     };
 } | {
     name: string;
+    apply: "build";
+    config(user?: {
+        build?: {
+            rollupOptions?: {
+                output?: unknown;
+            };
+        };
+    }): {
+        build?: undefined;
+    } | {
+        build: {
+            rollupOptions: {
+                output: {
+                    codeSplitting: {
+                        groups: {
+                            name: string;
+                            test: RegExp;
+                            priority: number;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+} | {
+    name: string;
     transformIndexHtml(html: string): string;
 } | {
     name: string;
@@ -281,6 +307,52 @@ export declare function telemetryChunks(): {
             rollupOptions: {
                 output: {
                     chunkFileNames: (chunk: ChunkInfo) => string;
+                };
+            };
+        };
+    };
+};
+/**
+ * Libraries every page loads at start and that change only when the lockfile does: React and the
+ * Firebase SDK's app, Auth and Firestore. Named one by one: a group also captures modules reached
+ * only by dynamic import, so anything an app or the kit loads lazily (Storage, the kit's own
+ * lazy modules, locales) must not match, or it would load with the first page.
+ */
+export declare const STABLE_CHUNK_GROUPS: {
+    name: string;
+    test: RegExp;
+    priority: number;
+}[];
+/**
+ * Splits React and Firebase (`vendor-*.js`) out of the app's own code, so a deploy that changes
+ * only the app keeps that file's hash: an installed copy downloads the app's chunk on update, not
+ * the whole bundle again (about 300 KB compressed per app before). Hosting transfer is the suite's
+ * scarcest free resource (docs/one-site.md "Bandwidth"). Needs Vite 8 (Rolldown's
+ * `output.codeSplitting`); Rollup ignores it. An app that sets its own codeSplitting or several
+ * outputs is left alone.
+ */
+export declare function stableChunks(): {
+    name: string;
+    apply: "build";
+    config(user?: {
+        build?: {
+            rollupOptions?: {
+                output?: unknown;
+            };
+        };
+    }): {
+        build?: undefined;
+    } | {
+        build: {
+            rollupOptions: {
+                output: {
+                    codeSplitting: {
+                        groups: {
+                            name: string;
+                            test: RegExp;
+                            priority: number;
+                        }[];
+                    };
                 };
             };
         };

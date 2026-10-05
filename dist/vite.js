@@ -12,7 +12,7 @@ import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource
 export function pwaApp(options) {
     const { overrides = {} } = options;
     const base = normalizeBase(options.base);
-    return [sitePath(base), buildStamp(), telemetryChunks(), linkPreview(options), themeBoot(), langBoot(), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
+    return [sitePath(base), buildStamp(), telemetryChunks(), stableChunks(), linkPreview(options), themeBoot(), langBoot(), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
             registerType: 'autoUpdate',
             includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
             base,
@@ -180,6 +180,39 @@ export function telemetryChunks() {
                     },
                 },
             };
+        },
+    };
+}
+/**
+ * Libraries every page loads at start and that change only when the lockfile does: React and the
+ * Firebase SDK's app, Auth and Firestore. Named one by one: a group also captures modules reached
+ * only by dynamic import, so anything an app or the kit loads lazily (Storage, the kit's own
+ * lazy modules, locales) must not match, or it would load with the first page.
+ */
+export const STABLE_CHUNK_GROUPS = [
+    {
+        name: 'vendor',
+        test: /node_modules[\\/](react|react-dom|scheduler|firebase[\\/](app|auth|firestore)|@firebase[\\/](app|auth|firestore|util|component|logger|webchannel-wrapper))[\\/]/,
+        priority: 3,
+    },
+];
+/**
+ * Splits React and Firebase (`vendor-*.js`) out of the app's own code, so a deploy that changes
+ * only the app keeps that file's hash: an installed copy downloads the app's chunk on update, not
+ * the whole bundle again (about 300 KB compressed per app before). Hosting transfer is the suite's
+ * scarcest free resource (docs/one-site.md "Bandwidth"). Needs Vite 8 (Rolldown's
+ * `output.codeSplitting`); Rollup ignores it. An app that sets its own codeSplitting or several
+ * outputs is left alone.
+ */
+export function stableChunks() {
+    return {
+        name: 'huishouden-stable-chunks',
+        apply: 'build',
+        config(user = {}) {
+            const output = user.build?.rollupOptions?.output;
+            if (Array.isArray(output) || output?.codeSplitting !== undefined)
+                return {};
+            return { build: { rollupOptions: { output: { codeSplitting: { groups: STABLE_CHUNK_GROUPS } } } } };
         },
     };
 }
