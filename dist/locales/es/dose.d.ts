@@ -18,7 +18,7 @@ declare const _default: {
     'dose.scanIntro': string;
     'dose.labelPhoto': string;
     'dose.reading': string;
-    'dose.scanAgain': string;
+    'dose.readingMany': string;
     'dose.scan': string;
     'dose.readError': string;
     'dose.nothingFilled': string;

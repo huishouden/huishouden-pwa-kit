@@ -4,7 +4,7 @@ import { PUSH_SW_FILE, pushServiceWorkerSource } from './push-sw.js';
 import { LANG_BOOT_SCRIPT } from './i18n.js';
 import { THEME_BOOT_SCRIPT } from './theme.js';
 import { SUITE_ORIGIN } from './site.js';
-import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource } from './share-sw.js';
+import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_IMAGE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource } from './share-sw.js';
 /**
  * Vite PWA plugin with the conventions every app here shares: auto-updating service worker,
  * standalone manifest with 192/512/maskable icons from public/, and Firebase-safe navigation.
@@ -12,7 +12,7 @@ import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource
 export function pwaApp(options) {
     const { overrides = {} } = options;
     const base = normalizeBase(options.base);
-    return [sitePath(base), buildStamp(), telemetryChunks(), stableChunks(), linkPreview(options), themeBoot(), langBoot(), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
+    return [sitePath(base), buildStamp(), telemetryChunks(), stableChunks(), linkPreview(options), themeBoot(), langBoot(), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesFiles(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
             registerType: 'autoUpdate',
             includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
             base,
@@ -55,7 +55,7 @@ export function pwaWorkbox(options) {
         navigateFallback: `${normalizeBase(options.base)}index.html`,
         navigateFallbackDenylist: navigationDenylist(options),
         ...workboxOverrides,
-        importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...(sharesContacts(options) ? [SHARE_SW_FILE] : []), ...importScripts],
+        importScripts: [...(options.push ? [PUSH_SW_FILE] : []), ...(sharesFiles(options) ? [SHARE_SW_FILE] : []), ...importScripts],
         runtimeCaching: [...(options.ocr ? [OCR_CACHE] : []), ...runtimeCaching],
         globIgnores: [TELEMETRY_CHUNKS, ...globIgnores],
     };
@@ -74,7 +74,7 @@ export function webManifest(options) {
         orientation: 'any',
         start_url: base,
         scope: base,
-        ...(options.shareTarget ? { share_target: sharesContacts(options) ? SHARE_TARGET_FILES : { ...SHARE_TARGET, action: base } } : {}),
+        ...(options.shareTarget ? { share_target: sharesFiles(options) ? shareTargetFiles(options) : { ...SHARE_TARGET, action: base } } : {}),
         icons: options.icons ?? [
             { src: `${base}pwa-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
             { src: `${base}pwa-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -227,6 +227,17 @@ function shareServiceWorkerFile() {
     };
 }
 const sharesContacts = (options) => typeof options.shareTarget === 'object' && options.shareTarget.contacts === true;
+const sharesImages = (options) => typeof options.shareTarget === 'object' && options.shareTarget.images === true;
+/** Either kind of file needs the POST target and its service worker. */
+const sharesFiles = (options) => sharesContacts(options) || sharesImages(options);
+/** `SHARE_TARGET_FILES` narrowed to the kinds of file the app asked for. */
+export function shareTargetFiles(options) {
+    const files = [
+        ...(sharesContacts(options) ? SHARE_TARGET_FILES.params.files : []),
+        ...(sharesImages(options) ? [{ name: SHARE_IMAGE_FIELD, accept: ['image/*'] }] : []),
+    ];
+    return { ...SHARE_TARGET_FILES, params: { ...SHARE_TARGET_FILES.params, files } };
+}
 /** Emits the push handlers next to the service worker (see push-sw.ts). */
 function pushServiceWorkerFile() {
     return {
