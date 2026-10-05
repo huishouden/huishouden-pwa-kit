@@ -3,7 +3,8 @@
  * inputs and cards, and the dialog, chip, field, toast-with-Undo, error notice, status pill,
  * checkbox, section tabs (a bottom bar on phones), member badge, "Sample data" banner every app shows, and
  * the suggestion chip (tap to add, long press to stop suggesting) with its `useLongPress`, a copy button,
- * and the note offering to bring back Google's window when it may have opened out of sight.
+ * the note offering to bring back Google's window when it may have opened out of sight, and the
+ * completion pattern (`CompleteButton`, `CompletionRow`, `CompletionList`: DESIGN.md "Completion").
  *
  * Styled with Tailwind v4 on the kit's palette: import `@huishouden/pwa-kit/tailwind.css` after
  * `tailwindcss` in the app's stylesheet. It maps the theme (forest, cream, terracotta) and adds
@@ -12,9 +13,11 @@
  */
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Copy, Ellipsis, EyeOff, Plus, X, type LucideIcon } from 'lucide-react';
+import { Check, ChevronDown, Copy, Ellipsis, EyeOff, Plus, SkipForward, X, type LucideIcon } from 'lucide-react';
 import { personColour, personInitial, personName } from '../people';
+import { clockWords, toHhmm } from '../time';
 import { useKitT } from './i18n';
+import { kt } from '../i18n';
 
 export const inputClass =
   'w-full min-h-11 rounded-xl border border-line bg-white px-3 py-2.5 text-base text-ink outline-none focus:border-forest-500 focus:ring-2 focus:ring-forest-200 dark:bg-forest-900 dark:focus:ring-forest-700';
@@ -654,5 +657,234 @@ export function GoogleWindowWait({
       </button>
       {here}
     </p>
+  );
+}
+
+/** How long something done keeps its Undo (DESIGN.md "Completion"): six hours, or less when the next one comes sooner. */
+export const UNDO_DONE_MS = 6 * 3_600_000;
+
+/**
+ * Whether something done at `at` still offers Undo at `now`: within `windowMs` (six hours) and
+ * before `until` (the next occurrence, when there is one). Undone later, it goes through the
+ * item's own editor or history.
+ */
+export function canUndoDone(at: number | undefined, now: number, { windowMs = UNDO_DONE_MS, until }: { windowMs?: number; until?: number } = {}): boolean {
+  if (at === undefined || !Number.isFinite(at)) return false;
+  if (until !== undefined && now >= until) return false;
+  return now - at < windowMs;
+}
+
+/** Open items first, done ones after, each group keeping its order. */
+export function openFirst<T>(items: readonly T[], isDone: (item: T) => boolean): T[] {
+  return [...items.filter((x) => !isDone(x)), ...items.filter(isDone)];
+}
+
+/** The outlined "Mark done" button (DESIGN.md "Completion"): forest outline, never a fill. */
+export const completeButton =
+  'inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-primary bg-surface px-4 py-2 font-semibold text-link transition-colors duration-150 hover:bg-tint disabled:opacity-50';
+
+const completeButtonLg = 'min-h-14 px-5 text-lg';
+
+/** The quiet Undo beside something done: small text, no border, a 44px target. */
+export const undoDoneButton =
+  'inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl px-3 text-sm font-medium text-muted underline-offset-4 transition-colors duration-150 hover:bg-stone-100 hover:underline dark:hover:bg-forest-700';
+
+/** The filled forest check (or, skipped, a quiet skip mark) that says a row is done. Decorative: the row's words say it too. */
+export function DoneBadge({ skipped, size = 'md' }: { skipped?: boolean; size?: 'md' | 'lg' }) {
+  const box = size === 'lg' ? 'h-12 w-12' : 'h-9 w-9';
+  const icon = size === 'lg' ? 26 : 20;
+  return (
+    <span
+      aria-hidden="true"
+      data-done-badge={skipped ? 'skipped' : 'done'}
+      className={`inline-flex ${box} shrink-0 items-center justify-center rounded-full ${
+        skipped ? 'border border-line bg-sunken text-muted' : 'bg-primary text-on-primary'
+      }`}
+    >
+      {skipped ? <SkipForward size={icon - 4} strokeWidth={2.2} /> : <Check size={icon} strokeWidth={3} />}
+    </span>
+  );
+}
+
+export interface CompleteButtonProps {
+  done: boolean;
+  /** What is being done, for the buttons' names: "Take the garbage out". */
+  name: string;
+  onDone: () => void;
+  /** Offered while done; leave it out once Undo has run out (`canUndoDone`). */
+  onUndo?: () => void;
+  /** The open button's visible word: the domain verb ("Give", "Feed", "Mark paid"); "Mark done" by default. */
+  verb?: string;
+  /** The open button's name; "Mark {name} done" by default. Give one with a domain verb: "Give Heartgard to Biscuit". */
+  label?: string;
+  /** Undo's name; "Undo done for {name}" by default ("Undo skip for {name}" when skipped). */
+  undoLabel?: string;
+  skipped?: boolean;
+  size?: 'md' | 'lg';
+  /** Under 640px only the check shows (the name still says it all): for tight rows. */
+  compact?: boolean;
+  disabled?: boolean;
+  className?: string;
+}
+
+/**
+ * Not done: an outlined forest button with a verb ("Mark done", "Give", "Mark paid"). Done: no
+ * button that looks like an action, only a small "Undo" while `onUndo` is given (or nothing). The
+ * two states carry different names ("Mark Take the garbage out done" / "Undo done for Take the
+ * garbage out"), never `aria-pressed`. Pair with `DoneBadge` and a "Done by You · 8:10 PM" line, or
+ * use `CompletionRow`, which does.
+ */
+export function CompleteButton({ done, name, onDone, onUndo, verb, label, undoLabel, skipped, size = 'md', compact, disabled, className = '' }: CompleteButtonProps) {
+  const kt = useKitT();
+  if (done) {
+    if (!onUndo) return null;
+    return (
+      <button
+        type="button"
+        data-complete="undo"
+        className={`${undoDoneButton} ${className}`}
+        onClick={onUndo}
+        disabled={disabled}
+        aria-label={undoLabel ?? kt(skipped ? 'ui.undoSkipName' : 'ui.undoDoneName', { name })}
+      >
+        {kt('ui.undo')}
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      data-complete="open"
+      className={`${completeButton} ${size === 'lg' ? completeButtonLg : ''} ${className}`}
+      onClick={onDone}
+      disabled={disabled}
+      aria-label={label ?? kt('ui.markNameDone', { name })}
+    >
+      <Check size={size === 'lg' ? 22 : 18} strokeWidth={2.4} aria-hidden="true" />
+      <span className={compact ? 'hidden sm:inline' : undefined}>{verb ?? kt('ui.markDone')}</span>
+    </button>
+  );
+}
+
+/** "Done by You · 8:10 PM" (or "Skipped by …"); `at` is a moment or words already said. */
+export function doneLine({ by, at, skipped }: { by?: string; at?: number | string; skipped?: boolean }): string {
+  const time = typeof at === 'number' ? clockWords(toHhmm(at)) : at;
+  if (skipped) {
+    if (by && time) return kt('ui.skippedByAt', { name: by, at: time });
+    if (by) return kt('ui.skippedBy', { name: by });
+    if (time) return kt('ui.skippedAt', { at: time });
+    return kt('ui.skipped');
+  }
+  if (by && time) return kt('ui.doneByAt', { name: by, at: time });
+  if (by) return kt('ui.doneBy', { name: by });
+  if (time) return kt('ui.doneAt', { at: time });
+  return kt('ui.done');
+}
+
+export interface CompletionRowProps extends Omit<CompleteButtonProps, 'className'> {
+  /** The thing to do, as a person reads it. `name` (the buttons' names) defaults to it when it is a string. */
+  title: ReactNode;
+  name: string;
+  /** The line under the title while open: "Tonight by 7 PM", "Overdue by 5 days". */
+  meta?: ReactNode;
+  /** Late or due now: the open row's meta in the attention colour. The button stays the same. */
+  attention?: boolean;
+  /** Who did it, as shown ("You", "Sam"), and when (a moment, or words). */
+  by?: string;
+  at?: number | string;
+  /** The done line in other words ("Given late 11:02 AM by Jo"); `doneLine({ by, at })` by default. */
+  status?: ReactNode;
+  /** Shown before the title while open (a category or event tile); the done badge takes its place once done. */
+  leading?: ReactNode;
+  /** Tapping the title (to edit or open it). */
+  onOpen?: () => void;
+  openLabel?: string;
+  /** More actions while open, before the button: a quiet Skip. */
+  actions?: ReactNode;
+  /** Under the meta line, either state: notes, who to call. */
+  children?: ReactNode;
+}
+
+/**
+ * A completable item (DESIGN.md "Completion"). Open: the leading tile, the title, its meta (in
+ * terracotta when `attention`), any extra actions and the outlined "Mark done". Done: the filled
+ * check badge, the title muted (never struck through), "Done by You · 8:10 PM" and a small Undo.
+ * Renders an `<li>`; put it in a `<ul>`, or a `CompletionList` that sorts done after open.
+ */
+export function CompletionRow({ title, meta, attention, by, at, status, leading, onOpen, openLabel, actions, children, ...button }: CompletionRowProps) {
+  useKitT();
+  const { done, skipped, size = 'md' } = button;
+  const lg = size === 'lg';
+  const heading = `${lg ? 'text-2xl sm:text-3xl tracking-tight' : 'text-lg'} leading-snug font-semibold [overflow-wrap:anywhere] ${done ? 'text-muted' : attention && lg ? 'text-attention' : 'text-ink'}`;
+  const line = done ? (status ?? doneLine({ by, at, skipped })) : meta;
+  const lineClass = `${lg ? 'text-lg' : 'text-base'} ${!done && attention ? 'font-semibold text-attention' : 'text-muted'}`;
+  const text = (
+    <>
+      <span className={`block ${heading}`}>{title}</span>
+      {line ? <span className={`block ${lineClass}`}>{line}</span> : null}
+    </>
+  );
+  return (
+    <li data-completion={done ? (skipped ? 'skipped' : 'done') : 'open'} className={`flex items-center gap-3 py-2.5 sm:gap-4 ${lg ? 'flex-wrap' : ''}`}>
+      {done ? <DoneBadge skipped={skipped} size={size} /> : leading}
+      <div className="min-w-0 flex-1">
+        {onOpen ? (
+          <button type="button" className="-mx-2 flex min-h-11 w-[calc(100%+1rem)] flex-col justify-center rounded-xl px-2 text-left hover:bg-sunken" onClick={onOpen} aria-label={openLabel}>
+            {text}
+          </button>
+        ) : (
+          text
+        )}
+        {children}
+      </div>
+      <div className={`flex shrink-0 items-center gap-1 ${lg ? 'w-full sm:w-auto' : ''}`}>
+        {!done && actions}
+        <CompleteButton {...button} />
+      </div>
+    </li>
+  );
+}
+
+export interface CompletionListProps<T> {
+  items: readonly T[];
+  isDone: (item: T) => boolean;
+  /** One `CompletionRow` (an `<li>`) per item. */
+  children: (item: T) => ReactNode;
+  /** The list's name. */
+  label: string;
+  /** The one line when everything is done: "All done for tonight"; "All done" by default. */
+  allDone?: string;
+  className?: string;
+}
+
+/**
+ * Completable rows with the done ones after the open ones. Once every item is done the list folds
+ * to one line, the check badge and "All done for tonight", which opens the rows again (to undo).
+ */
+export function CompletionList<T>({ items, isDone, children, label, allDone, className = '' }: CompletionListProps<T>) {
+  const kt = useKitT();
+  const [open, setOpen] = useState(false);
+  const every = items.length > 0 && items.every(isDone);
+  const rows = (
+    <ul aria-label={label} className={`divide-y divide-line ${every ? '' : className}`}>
+      {openFirst(items, isDone).map(children)}
+    </ul>
+  );
+  if (!every) return rows;
+  return (
+    <div data-all-done="" className={className}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="-mx-2 flex min-h-12 w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-1.5 text-left hover:bg-sunken sm:gap-4"
+      >
+        <DoneBadge />
+        <span className="min-w-0 flex-1 text-lg font-semibold text-ink">{allDone ?? kt('ui.allDone')}</span>
+        <span className="text-sm text-muted">{open ? kt('ui.hideDone') : kt('ui.showDone', { count: items.length })}</span>
+        <ChevronDown size={18} aria-hidden="true" className={`shrink-0 text-muted transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && rows}
+    </div>
   );
 }

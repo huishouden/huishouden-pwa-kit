@@ -694,3 +694,87 @@ describe('GoogleWindowWait', () => {
     expect(here).toHaveBeenCalledTimes(2);
   });
 });
+
+const ui = await import('../src/react/ui');
+describe('Completion', () => {
+  const names = () => Array.from(document.querySelectorAll('button')).map((b) => b.getAttribute('aria-label') ?? b.textContent?.trim());
+
+  test('open and done carry different buttons and names, never aria-pressed', () => {
+    const onDone = mock(() => {});
+    const onUndo = mock(() => {});
+    const Row = ({ done }: { done: boolean }) => (
+      <ul>
+        <ui.CompletionRow name="Take the garbage out" title="Take the garbage out" meta="Tonight by 7 PM" done={done} by="You" at="8:10 PM" onDone={onDone} onUndo={onUndo} />
+      </ul>
+    );
+    const { root } = render(<Row done={false} />);
+    expect(names()).toEqual(['Mark Take the garbage out done']);
+    const open = document.querySelector('[data-complete=open]')!;
+    expect(open.textContent).toBe('Mark done');
+    expect(open.className).toContain('border-primary');
+    expect(open.className).not.toContain('bg-primary');
+    expect(document.querySelector('[aria-pressed]')).toBeNull();
+    expect(document.querySelector('[data-done-badge]')).toBeNull();
+    click(open);
+    expect(onDone).toHaveBeenCalledTimes(1);
+
+    act(() => root.render(<Row done />));
+    expect(names()).toEqual(['Undo done for Take the garbage out']);
+    expect(document.querySelector('[data-complete=open]')).toBeNull();
+    expect(document.querySelector('[data-done-badge=done]')).not.toBeNull();
+    expect(document.querySelector('li')!.getAttribute('data-completion')).toBe('done');
+    expect(document.querySelector('li')!.textContent).toContain('Done by You · 8:10 PM');
+    expect(document.querySelector('li')!.textContent).not.toContain('Tonight by 7 PM');
+    expect(document.querySelector('[aria-pressed]')).toBeNull();
+    click(document.querySelector('[data-complete=undo]'));
+    expect(onUndo).toHaveBeenCalledTimes(1);
+  });
+
+  test('a domain verb and name; no Undo once it has run out; skipped says so', () => {
+    const { root } = render(<ui.CompleteButton done={false} name="Heartgard" verb="Give" label="Give Heartgard to Biscuit" onDone={() => {}} />);
+    expect(names()).toEqual(['Give Heartgard to Biscuit']);
+    expect(document.querySelector('button')!.textContent).toBe('Give');
+    act(() => root.render(<ui.CompleteButton done name="Heartgard" onDone={() => {}} />));
+    expect(document.querySelectorAll('button').length).toBe(0);
+    act(() =>
+      root.render(
+        <ul>
+          <ui.CompletionRow name="Recycling" title="Recycling" done skipped by="Sam" onDone={() => {}} onUndo={() => {}} />
+        </ul>,
+      ),
+    );
+    expect(names()).toEqual(['Undo skip for Recycling']);
+    expect(document.querySelector('[data-done-badge=skipped]')).not.toBeNull();
+    expect(document.querySelector('li')!.textContent).toContain('Skipped by Sam');
+  });
+
+  test('done sorts after open; all done folds to one line that opens again', () => {
+    type Item = { id: string; done: boolean };
+    const List = ({ items }: { items: Item[] }) => (
+      <ui.CompletionList items={items} isDone={(x) => x.done} label="Tonight" allDone="All done for tonight">
+        {(x) => <ui.CompletionRow key={x.id} name={x.id} title={x.id} done={x.done} onDone={() => {}} onUndo={() => {}} />}
+      </ui.CompletionList>
+    );
+    const { root } = render(<List items={[{ id: 'a', done: true }, { id: 'b', done: false }, { id: 'c', done: true }, { id: 'd', done: false }]} />);
+    expect(Array.from(document.querySelectorAll('li')).map((li) => li.textContent!.charAt(0))).toEqual(['b', 'd', 'a', 'c']);
+    act(() => root.render(<List items={[{ id: 'a', done: true }, { id: 'b', done: true }]} />));
+    expect(document.querySelectorAll('li').length).toBe(0);
+    const summary = document.querySelector('[aria-expanded]')!;
+    expect(summary.textContent).toContain('All done for tonight');
+    expect(summary.getAttribute('aria-expanded')).toBe('false');
+    click(summary);
+    expect(document.querySelectorAll('li').length).toBe(2);
+    expect(summary.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  test('canUndoDone: six hours, and never past the next one', () => {
+    const at = 1_000_000_000_000;
+    expect(ui.canUndoDone(at, at + 5 * 3_600_000)).toBe(true);
+    expect(ui.canUndoDone(at, at + 6 * 3_600_000)).toBe(false);
+    expect(ui.canUndoDone(at, at + 3_600_000, { until: at + 1_800_000 })).toBe(false);
+    expect(ui.canUndoDone(undefined, at)).toBe(false);
+    expect(ui.openFirst([1, 2, 3, 4], (n) => n % 2 === 1)).toEqual([2, 4, 1, 3]);
+    expect(ui.doneLine({ by: 'You', at: 'at 8 PM' })).toBe('Done by You · at 8 PM');
+    expect(ui.doneLine({})).toBe('Done');
+  });
+});
