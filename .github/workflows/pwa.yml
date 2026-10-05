@@ -68,7 +68,7 @@ permissions:
 
 jobs:
   leak-scan:
-    if: ${{ github.event_name != 'pull_request' && !inputs.reconcile && !inputs.staging-sweep }}
+    if: ${{ github.event_name != 'pull_request' && !inputs.reconcile }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -79,7 +79,7 @@ jobs:
       - uses: huishouden/pwa-kit/actions/license-check@v0 # PolyForm Shield 1.0.0 (STANDARD.md "License")
 
   build:
-    if: ${{ github.event_name != 'pull_request' && !inputs.reconcile && !inputs.staging-sweep }}
+    if: ${{ github.event_name != 'pull_request' && !inputs.reconcile }}
     runs-on: ubuntu-latest
     env:
       VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}

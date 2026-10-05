@@ -152,9 +152,8 @@ costs as much as a new household member. CI therefore never opens production in 
 - the New Relic uptime monitors are pings (one GET of index.html, about 3 KB) every 30 minutes
   from two locations: about 0.1 GB a month for the suite.
 
-Builds split React and Firebase (`vendor-*.js`) and the kit (`kit-*.js`) from the app's own code
-(`stableChunks` in the preset), so a deploy that changes only the app changes one chunk of about
-30 KB compressed, and an installed copy downloads that on update instead of the whole 300 KB bundle.
+Builds split React and Firebase (`vendor-*.js`) from the app's own code (`stableChunks` in the
+preset, Vite 8), so a deploy that changes only the app changes one chunk of about 60 KB compressed, and an installed copy downloads that on update instead of the whole 300 KB bundle.
 
 Hashed files under `/assets/` are `public, max-age=31536000, immutable`; HTML, `sw.js` and
 manifests are `no-cache` (revalidated with the ETag, a 304 costs headers only). Hosting compresses

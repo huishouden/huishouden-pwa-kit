@@ -252,18 +252,27 @@ export function telemetryChunks() {
   };
 }
 
-/** Libraries that change only when the lockfile does: React and Firebase, then the kit. */
+/**
+ * Libraries every page loads at start and that change only when the lockfile does: React and the
+ * Firebase SDK's app, Auth and Firestore. Named one by one: a group also captures modules reached
+ * only by dynamic import, so anything an app or the kit loads lazily (Storage, the kit's own
+ * lazy modules, locales) must not match, or it would load with the first page.
+ */
 export const STABLE_CHUNK_GROUPS = [
-  { name: 'vendor', test: /node_modules[\\/](react|react-dom|scheduler|firebase|@firebase|idb|tslib)[\\/]/, priority: 3 },
-  { name: 'kit', test: /node_modules[\\/]@huishouden[\\/]pwa-kit[\\/]/, priority: 2 },
+  {
+    name: 'vendor',
+    test: /node_modules[\\/](react|react-dom|scheduler|firebase[\\/](app|auth|firestore)|@firebase[\\/](app|auth|firestore|util|component|logger|webchannel-wrapper))[\\/]/,
+    priority: 3,
+  },
 ];
 
 /**
- * Splits React and Firebase (`vendor-*.js`) and the kit (`kit-*.js`) out of the app's own code, so
- * a deploy that changes only the app keeps those files' hashes: an installed copy downloads the
- * app's chunk on update, not the whole bundle again (about 300 KB compressed per app before). Hosting
- * transfer is the suite's scarcest free resource (docs/one-site.md "Bandwidth"). An app that sets
- * its own codeSplitting or several outputs is left alone.
+ * Splits React and Firebase (`vendor-*.js`) out of the app's own code, so a deploy that changes
+ * only the app keeps that file's hash: an installed copy downloads the app's chunk on update, not
+ * the whole bundle again (about 300 KB compressed per app before). Hosting transfer is the suite's
+ * scarcest free resource (docs/one-site.md "Bandwidth"). Needs Vite 8 (Rolldown's
+ * `output.codeSplitting`); Rollup ignores it. An app that sets its own codeSplitting or several
+ * outputs is left alone.
  */
 export function stableChunks() {
   return {

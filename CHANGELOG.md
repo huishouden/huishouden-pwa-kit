@@ -7,7 +7,7 @@ ones are described in their PR titles and tags.
 
 ### Features
 
-* `pwaApp` splits React and Firebase (`vendor-*.js`) and the kit (`kit-*.js`) from the app's code (`stableChunks`), so an app-only deploy changes one chunk of about 30 KB compressed instead of the 270 to 320 KB bundle, and installed copies download only that on update (Hosting bandwidth, docs/one-site.md).
+* `pwaApp` splits React and Firebase (`vendor-*.js`) from the app's code (`stableChunks`, Vite 8), so an app-only deploy changes one chunk of about 60 KB compressed instead of the 270 to 320 KB bundle, and installed copies download only that on update (Hosting bandwidth, docs/one-site.md).
 * `pwa.yml`: the `staging-sweep` job is gone (no process schedules); `hh ops staging-cleanup` removes staging leftovers. The input stays, unused, so callers that pass it don't fail.
 
 ## 0.93.0 (2026-10-05)
