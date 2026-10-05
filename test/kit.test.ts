@@ -135,8 +135,8 @@ describe('telemetryChunks', () => {
 
   test("pwaApp's Workbox options ignore them, alongside an app's own globIgnores", () => {
     const base = { name: 'Demo', description: 'd', themeColor: '#000', backgroundColor: '#fff' };
-    expect(pwaWorkbox(base).globIgnores).toEqual([TELEMETRY_CHUNKS]);
-    expect(pwaWorkbox({ ...base, overrides: { workbox: { globIgnores: ['**/big-*.js'] } } }).globIgnores).toEqual([TELEMETRY_CHUNKS, '**/big-*.js']);
+    expect(pwaWorkbox(base).globIgnores).toEqual([TELEMETRY_CHUNKS, 'og.png']);
+    expect(pwaWorkbox({ ...base, overrides: { workbox: { globIgnores: ['**/big-*.js'] } } }).globIgnores).toEqual([TELEMETRY_CHUNKS, 'og.png', '**/big-*.js']);
   });
 });
 
