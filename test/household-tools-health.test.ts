@@ -166,3 +166,34 @@ describe('health_add_medicine and health_update_medicine', () => {
     expect(docs.get(`${NAN}/meds/m1`)).toMatchObject({ endDate: '2031-01-06', times: ['08:00', '20:00'], strength: '10 mg', createdAt: 1, updatedAt: NOW });
   });
 });
+
+describe('Health visits', () => {
+  test('add_appointment for Health writes a visit, its notes apart, and publishes "Appointment for Nan" and the reminders', async () => {
+    const { db, docs } = household({ [`${H}/contacts/c1`]: { name: 'Dr. Example', role: 'Doctor', address: '1 Example Way', apps: ['health'], private: true, createdAt: 1, by: SAM } });
+    const call = await run(SAM, db, 'add_appointment', { app: 'health', person: 'Nan', title: 'Eye exam', start: '2031-01-09T10:00', doctor: 'Dr. Example', notes: 'Drops: no driving after', prep: ['Bring her glasses'], idempotency_key: 'eye-1' });
+    expect(call.result.error).toBeFalsy();
+    const at = Date.UTC(2031, 0, 9, 15);
+    const visit = [...docs.entries()].find(([p]) => p.startsWith(`${NAN}/visits/`))!;
+    expect(visit[1]).toMatchObject({ personId: 'p1', kind: 'eye', title: 'Eye exam', at, contactId: 'c1', prep: ['Bring her glasses'], remindBefore: [1440, 120], by: SAM });
+    expect(docs.get(`${NAN}/visitNotes/${visit[0].split('/').pop()}`)).toMatchObject({ text: 'Drops: no driving after', by: SAM });
+    const agenda = [...docs.entries()].filter(([p]) => p.startsWith(`${H}/personalAgenda/`)).map(([, d]) => d);
+    expect(agenda).toEqual([expect.objectContaining({ app: 'health', kind: 'appointment', title: 'Appointment for Nan', start: at, audience: [ALEX, SAM], calendarDetail: 'Eye doctor: Eye exam with Dr. Example · 1 Example Way · Bring her glasses' })]);
+    const reminders = [...docs.entries()].filter(([p]) => p.startsWith(`${H}/personalReminders/`)).map(([, d]) => d as { at: number; body: string; recipients: string[] });
+    expect(reminders.map((r) => r.at).sort()).toEqual([at - 86_400_000, at - 2 * 3_600_000]);
+    expect(reminders[0].recipients).toEqual([ALEX, SAM]);
+    expect(JSON.stringify([...agenda, ...reminders])).not.toContain('no driving');
+  });
+
+  test('a helper carer adds no notes; health_appointments gives notes to keepers only', async () => {
+    const { db } = household({
+      [`${NAN}/visits/v1`]: { personId: 'p1', kind: 'dentist', title: 'Cleaning', at: Date.UTC(2031, 0, 8, 14), remindBefore: [1440], createdAt: 1, by: SAM },
+      [`${NAN}/visitNotes/v1`]: { personId: 'p1', text: 'Two fillings next time', updatedAt: 1, by: SAM },
+    });
+    expect((await run(ALEX, db, 'add_appointment', { app: 'health', person: 'Nan', title: 'X', start: '2031-01-10T09:00', notes: 'secret' })).result.error).toBe(true);
+    const sam = await run(SAM, db, 'health_appointments', { person: 'Nan' });
+    expect((sam.result.data!.visits as { notes?: string; state: string }[])[0]).toMatchObject({ notes: 'Two fillings next time', state: 'upcoming' });
+    const alex = await run(ALEX, db, 'health_appointments', {});
+    expect((alex.result.data!.visits as { notes?: string }[])[0].notes).toBeUndefined();
+    expect(alex.result.text).not.toContain('fillings');
+  });
+});

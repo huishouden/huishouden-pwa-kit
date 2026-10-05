@@ -1,3 +1,4 @@
+import { type Role } from './role-core.js';
 /**
  * Items for named people only. The household agenda, to-do list and reminders are read by every
  * admin and member (and helpers and kids see what isn't private). Some records are about one
@@ -19,3 +20,20 @@ export declare const AUDIENCE_MAX = 12;
 export declare function cleanAudience(emails: readonly string[]): string[];
 /** Whether `email` is in a stored item's audience (as read back, defensively). */
 export declare function inAudience(audience: unknown, email: string | null | undefined): boolean;
+/** The household as `personAudience` needs it: its members and their roles. */
+export interface AudienceHousehold {
+    members: readonly string[];
+    roles?: Readonly<Record<string, Role>>;
+}
+/** A member who may be in an audience: in the household and not a kid. */
+export declare const audienceMember: (h: AudienceHousehold, email: string) => boolean;
+/** The household's admins, in member order. */
+export declare const householdAdmins: (h: AudienceHousehold) => string[];
+/**
+ * Who reads what Health publishes about a person (their medicines' and visits' agenda items, to-dos
+ * and reminders): the household's admins and the person's readers (carers and the person) who are
+ * members and not kids. Lowercase and sorted.
+ */
+export declare function personAudience(p: {
+    readers: readonly string[];
+}, h: AudienceHousehold): string[];

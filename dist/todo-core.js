@@ -43,7 +43,7 @@ export function todoWords(item) {
  * `healthPeople`, `*`, `doses` joined with slashes.
  */
 export const TODO_COLLECTIONS = {
-    health: ['healthPeople/*/doses', 'healthPeople/*/meds'],
+    health: ['healthPeople/*/doses', 'healthPeople/*/meds', 'healthPeople/*/visits'],
     tasks: ['items'],
     groceries: [],
     home: ['homeTasks', 'homeServiceLog', 'homeEventPrep'],

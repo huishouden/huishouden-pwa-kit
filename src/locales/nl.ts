@@ -29,6 +29,7 @@ import suggestions from './nl/suggestions.js';
 import time from './nl/time.js';
 import todos from './nl/todos.js';
 import ui from './nl/ui.js';
+import visit from './nl/visit.js';
 
 export default {
   ...agenda,
@@ -59,4 +60,5 @@ export default {
   ...time,
   ...todos,
   ...ui,
+  ...visit,
 } satisfies CatalogueOf<typeof en>;

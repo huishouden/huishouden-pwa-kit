@@ -363,9 +363,10 @@ those people. They go to the personal collections instead of the shared ones (`.
   touches them.
 - **Readers**: the portal follows a member's personal items next to the shared ones
   (`watchAgenda(..., { me })`, `watchTodos(..., { me })`); the sender reads `personalReminders` too.
-- **What they say**: a person's name and the kind of thing ("Medicine for Nan"), never what the
-  record holds (a medicine's name): the portal may be on a wall tablet. Notifications go to the
-  recipients' own devices and may name it.
+- **What they say**: a person's name and the kind of thing ("Medicine for Nan", "Appointment for
+  Nan"), never what the record holds (a medicine's name, a visit's doctor): the portal may be on a
+  wall tablet. The rest goes in `calendarDetail`, for the reader's own calendar when they turn on
+  Health details. Notifications go to the recipients' own devices and may name it.
 - **Never to analytics**: the app passes the names it holds to `setSensitiveWords` (`./observability`),
   which takes them out of everything sent to New Relic.
 - **Rules**: the `personalAgenda`, `personalTodos` and `personalReminders` blocks; fields match

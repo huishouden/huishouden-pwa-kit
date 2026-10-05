@@ -25,6 +25,7 @@ import { billsDue } from './money.js';
 import { petLogDose, petLogFeeding, petToday } from './pet.js';
 import { homeAddEvent, homeUpkeepDue } from './home.js';
 import { addAppointment, contactsAdd, contactsSearch } from './people.js';
+import { healthAppointments } from './health-visits.js';
 import { healthAddMedicine, healthDoctorList, healthDue, healthHistory, healthLogDose, healthMedicines, healthPeople, healthUpdateMedicine } from './health.js';
 export { Session, UserError } from './context.js';
 /** Every tool, in the order clients list them. */
@@ -57,6 +58,7 @@ export const TOOLS = [
     healthAddMedicine,
     healthUpdateMedicine,
     healthDoctorList,
+    healthAppointments,
 ];
 export const toolNamed = (name) => TOOLS.find((tool) => tool.name === name);
 /** The tool's arguments checked against its input schema: the parsed arguments, or what is wrong with them. */
