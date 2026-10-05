@@ -12,6 +12,8 @@
 import { getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { GoogleAuthProvider, connectAuthEmulator, getAuth, signInWithPopup, signOut, type Auth } from 'firebase/auth';
 import { connectFirestoreEmulator, type Firestore } from 'firebase/firestore';
+import { emulatorPort } from './emulator-port';
+export { emulatorPort } from './emulator-port';
 import { forgetSilentSignIn } from './auth.js';
 import { firebaseConfigFromEnv, type FirebaseWebConfig } from './firebase.js';
 import { initFirestore } from './firestore.js';
@@ -24,7 +26,8 @@ export interface InitAppOptions {
   /**
    * `import.meta.env`: the `VITE_FIREBASE_*`, `VITE_GOOGLE_CLIENT_ID` and `VITE_NEWRELIC_*` build
    * variables. `VITE_USE_EMULATORS=true` (the kit's app-tests job) connects Auth and Firestore to
-   * the emulators on 127.0.0.1 (`VITE_EMULATOR_HOST`), ports 9099 and 8080.
+   * the emulators on 127.0.0.1 (`VITE_EMULATOR_HOST`), ports 9099 and 8080 (`VITE_EMULATOR_AUTH_PORT`,
+   * `VITE_EMULATOR_FIRESTORE_PORT`, so runs side by side on one machine don't collide).
    */
   env: Record<string, string | boolean | undefined>;
   /** Web config for builds without the Firebase variables. */
@@ -49,10 +52,12 @@ export interface AppHandles {
 export function initApp({ app: name, env, fallback, preloadGoogle = true }: InitAppOptions): AppHandles {
   const emulators = env.VITE_USE_EMULATORS === 'true' || env.VITE_USE_EMULATORS === true;
   const emulatorHost = typeof env.VITE_EMULATOR_HOST === 'string' && env.VITE_EMULATOR_HOST ? env.VITE_EMULATOR_HOST : '127.0.0.1';
+  const authPort = emulatorPort(env.VITE_EMULATOR_AUTH_PORT, 9099);
+  const firestorePort = emulatorPort(env.VITE_EMULATOR_FIRESTORE_PORT, 8080);
   // getApps: a hot reload or a second import reuses the app rather than failing on a duplicate.
   const app = getApps()[0] ?? initializeApp(firebaseConfigFromEnv(env, fallback));
   const auth = getAuth(app);
-  if (emulators) connectAuthEmulator(auth, `http://${emulatorHost}:9099`, { disableWarnings: true });
+  if (emulators) connectAuthEmulator(auth, `http://${emulatorHost}:${authPort}`, { disableWarnings: true });
   // Error, speed and anonymous usage reports (the portal's /privacy page); off without VITE_NEWRELIC_*.
   startObservability({ app: name, env });
   const googleClientId = typeof env.VITE_GOOGLE_CLIENT_ID === 'string' && env.VITE_GOOGLE_CLIENT_ID ? env.VITE_GOOGLE_CLIENT_ID : undefined;
@@ -65,7 +70,7 @@ export function initApp({ app: name, env, fallback, preloadGoogle = true }: Init
     get db() {
       if (!db) {
         db = initFirestore(app, { auth });
-        if (emulators) connectFirestoreEmulator(db, emulatorHost, 8080);
+        if (emulators) connectFirestoreEmulator(db, emulatorHost, firestorePort);
       }
       return db;
     },
