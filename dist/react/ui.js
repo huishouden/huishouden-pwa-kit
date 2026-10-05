@@ -390,22 +390,24 @@ export function CompletionRow({ title, meta, attention, by, byMe, at, status, le
     useKitT();
     const { done, skipped, size = 'md' } = button;
     const lg = size === 'lg';
+    // With extra actions (Skip, Late) a phone has no room for them beside the title: they take a row below.
+    const wrap = lg || (!done && !!actions);
     const heading = `${lg ? 'text-2xl sm:text-3xl tracking-tight' : 'text-lg'} leading-snug font-semibold [overflow-wrap:anywhere] ${done ? 'text-muted' : attention && lg ? 'text-attention' : 'text-ink'}`;
     const line = done ? (status ?? doneLine({ by, byMe, at, skipped })) : meta;
     const lineClass = `${lg ? 'text-lg' : 'text-base'} ${!done && attention ? 'font-semibold text-attention' : 'text-muted'}`;
     const text = (_jsxs(_Fragment, { children: [_jsx("span", { className: `block ${heading}`, children: title }), line ? _jsx("span", { className: `block ${lineClass}`, children: line }) : null] }));
-    return (_jsxs("li", { "data-completion": done ? (skipped ? 'skipped' : 'done') : 'open', className: `flex items-center gap-3 py-2.5 sm:gap-4 ${lg ? 'flex-wrap' : ''}`, children: [done ? _jsx(DoneBadge, { skipped: skipped, size: size }) : leading, _jsxs("div", { className: "min-w-0 flex-1", children: [onOpen ? (_jsx("button", { type: "button", className: "-mx-2 flex min-h-11 w-[calc(100%+1rem)] flex-col justify-center rounded-xl px-2 text-left hover:bg-sunken", onClick: onOpen, "aria-label": openLabel, children: text })) : (text), children] }), _jsxs("div", { className: `flex shrink-0 items-center gap-1 ${lg ? 'w-full sm:w-auto' : ''}`, children: [!done && actions, _jsx(CompleteButton, { ...button })] })] }));
+    return (_jsxs("li", { "data-completion": done ? (skipped ? 'skipped' : 'done') : 'open', className: `flex items-center gap-3 py-2.5 sm:gap-4 ${wrap ? 'flex-wrap sm:flex-nowrap' : ''}`, children: [done ? _jsx(DoneBadge, { skipped: skipped, size: size }) : leading, _jsxs("div", { className: "min-w-0 flex-1", children: [onOpen ? (_jsx("button", { type: "button", className: "-mx-2 flex min-h-11 w-[calc(100%+1rem)] flex-col justify-center rounded-xl px-2 text-left hover:bg-sunken", onClick: onOpen, "aria-label": openLabel, children: text })) : (text), children] }), _jsxs("div", { className: `flex shrink-0 items-center gap-1 ${wrap ? 'w-full justify-end sm:w-auto' : ''}`, children: [!done && actions, _jsx(CompleteButton, { ...button })] })] }));
 }
 /**
  * Completable rows with the done ones after the open ones. Once every item is done the list folds
  * to one line, the check badge and "All done for tonight", which opens the rows again (to undo).
  */
-export function CompletionList({ items, isDone, children, label, allDone, className = '' }) {
+export function CompletionList({ items, isDone, children, label, allDone, showDone, className = '' }) {
     const kt = useKitT();
     const [open, setOpen] = useState(false);
     const every = items.length > 0 && items.every(isDone);
     const rows = (_jsx("ul", { "aria-label": label, className: `divide-y divide-line ${every ? '' : className}`, children: openFirst(items, isDone).map(children) }));
     if (!every)
         return rows;
-    return (_jsxs("div", { "data-all-done": "", className: className, children: [_jsxs("button", { type: "button", "aria-expanded": open, onClick: () => setOpen((o) => !o), className: "-mx-2 flex min-h-12 w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-1.5 text-left hover:bg-sunken sm:gap-4", children: [_jsx(DoneBadge, {}), _jsx("span", { className: "min-w-0 flex-1 text-lg font-semibold text-ink", children: allDone ?? kt('ui.allDone') }), _jsx("span", { className: "text-sm text-muted", children: open ? kt('ui.hideDone') : kt('ui.showDone', { count: items.length }) }), _jsx(ChevronDown, { size: 18, "aria-hidden": "true", className: `shrink-0 text-muted transition-transform duration-150 ${open ? 'rotate-180' : ''}` })] }), open && rows] }));
+    return (_jsxs("div", { "data-all-done": "", className: className, children: [_jsxs("button", { type: "button", "aria-expanded": open, onClick: () => setOpen((o) => !o), className: "-mx-2 flex min-h-12 w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-1.5 text-left hover:bg-sunken sm:gap-4", children: [_jsx(DoneBadge, {}), _jsx("span", { className: "min-w-0 flex-1 text-lg font-semibold text-ink", children: allDone ?? kt('ui.allDone') }), _jsx("span", { className: "text-sm text-muted", children: open ? kt('ui.hideDone') : (showDone ? showDone(items.length) : kt('ui.showDone', { count: items.length })) }), _jsx(ChevronDown, { size: 18, "aria-hidden": "true", className: `shrink-0 text-muted transition-transform duration-150 ${open ? 'rotate-180' : ''}` })] }), open && rows] }));
 }
