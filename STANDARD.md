@@ -24,7 +24,9 @@ user of it (dogfooding), never a special case. So:
 - **Know the limits we accept by staying free**: no scheduled server code on Spark (sync runs when
   someone opens an app, and the shared tablet keeps one open; the one exception is the shared
   notification sender on Cloudflare's free plan, see Notifications); Google's restricted scopes (reading
-  email) work unverified for up to 100 users with a warning screen.
+  email) work unverified for up to 100 users with a warning screen. Firebase Hosting on Spark
+  serves 10 GB a month for the whole suite and stops at the limit; no CI job opens production in a
+  browser (docs/one-site.md "Bandwidth").
 
 ## Shape
 
@@ -423,22 +425,23 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 
 | Job | Runs on | Does |
 |---|---|---|
-| `leak-scan` | every PR and push | gitleaks on the added commits (`actions/leak-scan`) |
-| `build` | every PR and push | `bun install --frozen-lockfile`, lint (`tsc --noEmit`), `pwa-design-check`, `pwa-write-check`, `pwa-headers-check`, unit tests, build |
+| `leak-scan` | push to `main` | gitleaks on the added commits (`actions/leak-scan`) |
+| `build` | push to `main` | `bun install --frozen-lockfile`, lint (`tsc --noEmit`), `pwa-design-check`, `pwa-write-check`, `pwa-headers-check`, unit tests, build |
 | `publish` | push to `main`, with `base` | The build (and a staging build) as `site.tar.gz` / `site-staging.tar.gz` on the repo's `hosting` pre-release |
 | `deploy` | push to `main`; the portal's schedule with `reconcile` | Keyless via Workload Identity Federation; with `base`, `pwa-site assemble` (every app's latest asset under its path, the combined `firebase.json`) and `firebase deploy`, rechecked for builds published meanwhile; without, `firebase deploy --only hosting:<target>` |
-| `smoke` | after `deploy` | Playwright against the live app path |
-| `app-tests` | apps with an `e2e:emulator` script, PRs and main | Build for the Auth and Firestore emulators with the household's rules and run `e2e:emulator` (see Staging) |
-| `staging` | same-repo PRs that change more than docs; manual runs with `staging-ref` | Build against the staging project, deploy to the app's staging site, `e2e` and `e2e:signed-in` there in households of the run's own, then remove them (see Staging) |
+| `smoke` | after `deploy` | One HTTP check of the live app path (index.html, a hashed asset, the manifest, `sw.js`, their caching and compression); no browser (docs/one-site.md "Bandwidth") |
+| `staging` | manual runs with `staging-ref` | Build against the staging project, deploy to the app's staging site, `e2e` and `e2e:signed-in` there in households of the run's own, then remove them (see Staging) |
 | `staging-sweep` | the portal's nightly schedule | Remove staging test households and users over a day old |
 
 - Repo variables (not secrets; the Firebase web config is public by design): `GCP_WIF_PROVIDER`,
   `GCP_DEPLOY_SA`, `VITE_FIREBASE_*` (the bootstrap sets them). Apps on the suite's site need no
   `VITE_NEWRELIC_*`: the deploy serves their New Relic settings (see Observability).
 - Deploy waits on `leak-scan` and `build`. `concurrency: cancel-in-progress` on every workflow.
-- `pull_request` ignores `CHANGELOG.md` and `package.json`-only changes (`templates/ci.yml`): release
-  PRs are opened by github-actions[bot], and GitHub holds a bot-opened PR's run for approval and
-  fails it with no jobs when nobody approves. The release commit still runs everything on main.
+- Pull requests run no jobs, by decision: hosted CI runs only on `main` (and on manual `staging-ref` runs); on `main` a failing build or
+  unit test stops the deploy. Before a PR is ready its author verifies it: the leak scan in the
+  pre-commit hook (`templates/githooks/pre-commit`, gitleaks, fails closed), build and tests
+  locally, and browser tests and screenshots on the app's staging site (see Staging). `leak-scan`
+  on `main` still scans every push.
 - Real secrets (test account passwords, API tokens) go in GitHub Actions secrets and are read
   only in the jobs that need them. Never in argv, logs, or the repo.
 
@@ -449,21 +452,19 @@ Firebase project, `huishouden-staging` (Spark, free), with its own Firestore, ru
 nothing deployed or tested there can read or write real household data.
 
 - **Sites**: each app has `huishouden-staging-<app>.web.app`; the portal is
-  `huishouden-staging.web.app`. A PR deploys the whole suite there, as production is laid out: its
+  `huishouden-staging.web.app`. A staging deploy (by the PR's author, or a manual `staging-ref` run) puts the whole suite there, as production is laid out: its
   own build under its path, every other app's latest staging build (`site-staging.tar.gz`) under
   theirs, so `https://huishouden-staging-pet.web.app/pet/` is the PR and `/` its portal. One site
   per app, so two repos' PRs never overwrite each other; a PR deploy replaces the app's previous
   one, and the PR comment says which commit is there.
-- **When it deploys**: every pull request from a branch of the same repo (never a fork's) that
-  changes more than `docs/`, `*.md` or `LICENSE`. The PR gets a comment with the URL and the result,
-  and the `staging` environment links the deployment. A manual run of the app's `ci` workflow with
-  `staging-ref` (a branch, tag or SHA) deploys that ref to staging instead of production. Main still
+- **When it deploys**: when the PR's author deploys it, from their machine, before marking the PR
+  ready, or with a manual run of the app's `ci` workflow given `staging-ref` (a branch, tag or SHA),
+  which deploys that ref to staging instead of production. Pull requests trigger no deploy. Main
   deploys to production only.
 - **What runs there**: one read to check the day's quota is not used up, the build with the
   `STAGING_VITE_FIREBASE_*` variables, the deploy, then `e2e` and `e2e:signed-in` against the app's
-  path on the staging site, then the removal of the run's test data (`pwa-staging cleanup`). A
-  failure fails the PR's checks. One staging run per app at a time (it tests the build on the app's
-  one site): a newer PR's run cancels a running one, and the PR comment says to rerun it.
+  path on the staging site, then the removal of the run's test data (`pwa-staging cleanup`). One
+  staging run per app at a time (it tests the build on the app's one site).
 - **Quota**: staging is on Firebase's free plan: 50,000 document reads, 20,000 writes and 20,000
   deletes a day for every app's runs together, reset at midnight Pacific (07:00 UTC in summer,
   08:00 in winter). When they are used up the job fails at its first step with "staging quota
@@ -491,7 +492,7 @@ nothing deployed or tested there can read or write real household data.
   staging account can sign the token, so it cannot sign anyone in to production. `useTestHousehold`
   skips the file where neither staging credentials nor the emulators are there.
 - **Emulators first**: the same specs run on the Auth and Firestore emulators with the household's
-  real rules in the `app-tests` job (`HH_E2E_TARGET=emulator`; `initApp` connects to them in a
+  real rules on the author's machine before the PR is ready (`HH_E2E_TARGET=emulator`; `initApp` connects to them in a
   build with `VITE_USE_EMULATORS=true`), free and without a quota. An app with an `e2e:emulator`
   script (`playwright test e2e/signed-in.spec.ts --grep-invert @staging`) runs there everything
   but the tests tagged `@staging`, and staging runs only those: flows through another app on the
