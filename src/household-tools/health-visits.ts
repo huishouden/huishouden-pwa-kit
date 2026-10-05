@@ -85,14 +85,14 @@ export async function addHealthVisit(ctx: ToolContext, id: string, args: HealthV
   if (args.notes && !keeps(ctx, person)) throw new UserError('visits.notesKeepersOnly');
   if (args.videoLink && !/^https:\/\/\S+$/i.test(args.videoLink)) throw new UserError('error.badLink');
   let conditionId: string | undefined;
-  let specialty = args.specialty;
+  const specialty = args.specialty;
   if (args.condition) {
     if (!readsConditions(ctx, person)) throw new UserError('conditions.keepersOnly');
     const conditions = await loadConditions(ctx, person);
     const { found } = pick(conditions, args.condition, (c) => c.id, (c) => c.name);
     if (!found) throw new UserError('conditions.unknown', { name: args.condition, conditions: conditions.map((c) => c.name).join(', ') || '-' });
+    // The condition's area is not copied onto the visit: helper carers read the visit's area.
     conditionId = found.id;
-    specialty ??= found.specialty;
   }
   const contacts = await healthContacts(ctx);
   let contactId: string | undefined;
@@ -155,7 +155,7 @@ export const healthAppointments = defineTool({
   name: 'health_appointments',
   title: "A person's visits in Health",
   description:
-    "The doctor's, dentist's, eye, lab, vaccine and therapy appointments (visits) of the people this person looks after in Huishouden Health: coming up, and past ones with whether they went (attended or missed). Each has its kind, time, doctor or clinic, place or video link, what to do or bring, reminders and follow-up; its medical area, and the condition it is about and the notes only for admins and members who care for the person (helpers never get them). Leave out `person` for everyone.",
+    "The doctor's, dentist's, eye, lab, vaccine and therapy appointments (visits) of the people this person looks after in Huishouden Health: coming up, and past ones with whether they went (attended or missed). Each has its kind, time, doctor or clinic, place or video link, what to do or bring, reminders and follow-up; its medical area (every reader, helper carers included); the condition it is about only for admins, member carers and the person, and the notes only for admins and member carers (helper carers never get either). Leave out `person` for everyone.",
   kind: 'read',
   health: true,
   input: {

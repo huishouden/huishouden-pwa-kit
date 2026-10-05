@@ -81,6 +81,7 @@ describe('ICD-10-CM to medical area', () => {
     expect(guessSpecialty('Type 2 diabetes')).toBe('endocrinology');
     expect(guessSpecialty('Heartburn')).toBe('gastroenterology');
     expect(guessSpecialty('Hepatitis C')).toBe('infectious');
+    expect(guessSpecialty('Autoimmune hepatitis')).toBe('gastroenterology');
     expect(guessSpecialty('Heart failure')).toBe('cardiology');
     expect(guessSpecialty('Archive')).toBeNull();
     expect(guessSpecialty('Tornado')).toBeNull();

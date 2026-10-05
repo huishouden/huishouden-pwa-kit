@@ -259,12 +259,13 @@ describe('Health conditions', () => {
     expect((visits.result.data!.visits as { condition?: { id?: string; name: string } }[])[0].condition).toEqual({ id: 'k1', name: 'Asthma' });
   });
 
-  test('add_appointment links a visit to a condition and takes its area', async () => {
+  test("add_appointment links a visit to a condition, without copying the condition's area", async () => {
     const { db, docs } = seeded();
     const call = await run(SAM, db, 'add_appointment', { app: 'health', person: 'Nan', title: 'Asthma review', start: '2031-01-10T09:00', condition: 'asthma' });
     expect(call.result.error).toBeFalsy();
     const visit = [...docs.entries()].find(([p, d]) => p.startsWith(`${NAN}/visits/`) && (d as { title?: string }).title === 'Asthma review')!;
-    expect(visit[1]).toMatchObject({ conditionId: 'k1', specialty: 'pulmonology' });
+    expect(visit[1]).toMatchObject({ conditionId: 'k1' });
+    expect(visit[1]).not.toHaveProperty('specialty');
     const agenda = JSON.stringify([...docs.entries()].filter(([p]) => p.includes('/personalAgenda/') || p.includes('/personalReminders/')).map(([, d]) => d));
     expect(agenda).not.toContain('Pulmonology');
     expect(agenda).not.toContain('k1');

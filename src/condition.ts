@@ -308,9 +308,9 @@ export function specialtyForIcd10(code: string | undefined): Specialty | null {
 
 /** Words in a condition's name that say its area, for names without a code (typed, or from the assistant). English, Spanish and Dutch. */
 const NAME_WORDS: readonly [RegExp, Specialty][] = [
-  // Before the heart and liver words they contain.
-  [/heartburn|acidez|brandend maagzuur|reflux|\bgerd\b|crohn|colitis|\bibs\b|celiac|celíac|coeliak|fatty liver|cirrhos|cirrosis|ulcer|úlcera|maagzweer/i, 'gastroenterology'],
-  [/hepatitis|\bhiv\b|\bvih\b|lyme|tubercul|covid|shingles|herpes/i, 'infectious'],
+  // Viral hepatitis before the digestive words; heartburn and the liver words before the heart's.
+  [/hepatitis [abce]\b|viral hepatitis|hepatitis viral|\bhiv\b|\bvih\b|lyme|tubercul|covid|shingles|herpes/i, 'infectious'],
+  [/heartburn|acidez|brandend maagzuur|reflux|\bgerd\b|crohn|colitis|\bibs\b|celiac|celíac|coeliak|fatty liver|cirrhos|cirrosis|hepatitis|ulcer|úlcera|maagzweer/i, 'gastroenterology'],
   [/radicul|sciatic|neuropath|migrain|epilep|seizure|parkinson|multiple sclerosis|dementia|alzheimer|stroke|neuralg|ciátic|ciatic|neuropat|epileps|beroerte|hernia (de )?disco|hernia nucle/i, 'neurology'],
   [/arrhythm|atrial fib|\bheart\b|\bcardi|hypertens|blood pressure|angina|corazón|hipertens|\bhart\b|hoge bloeddruk/i, 'cardiology'],
   [/diabet|thyroid|tiroid|schildklier|hypothyr|hyperthyr|cholesterol|osteopor/i, 'endocrinology'],

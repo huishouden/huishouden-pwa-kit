@@ -271,7 +271,7 @@ const nl: Record<keyof typeof en, string> = {
   'conditions.added': '{condition} toegevoegd voor {name}, onder {area}. [Gezondheid]({url})',
   'conditions.placeOrClinic': 'Geef `clinic` (een contact van het huishouden) of `place` (in woorden), niet allebei.',
   'conditions.resolvedNeedsStatus': 'Een `resolved`-datum hoort bij `status: "resolved"`; laat `status` weg of zet hem op resolved.',
-  'conditions.unknown': '„{name}” is niet een van hun aandoeningen. Aandoeningen: {conditions}.',
+  'conditions.unknown': '„{name}” is geen van hun aandoeningen. Aandoeningen: {conditions}.',
 
 };
 

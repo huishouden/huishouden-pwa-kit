@@ -271,7 +271,7 @@ const es: Record<keyof typeof en, string> = {
   'conditions.added': 'Añadí {condition} para {name}, en {area}. [Salud]({url})',
   'conditions.placeOrClinic': 'Indica `clinic` (un contacto del hogar) o `place` (en palabras), no los dos.',
   'conditions.resolvedNeedsStatus': 'Una fecha `resolved` va con `status: "resolved"`; deja `status` fuera o ponlo en resolved.',
-  'conditions.unknown': '"{name}" no es una de sus afecciones. Afecciones: {conditions}.',
+  'conditions.unknown': '«{name}» no es una de sus afecciones. Afecciones: {conditions}.',
 
 };
 
