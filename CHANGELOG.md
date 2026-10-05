@@ -3,6 +3,12 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## [0.103.0](https://github.com/huishouden/pwa-kit/compare/v0.102.0...v0.103.0) (2026-10-05)
+
+### Features
+
+* an unchanged republish reads nothing; read budgets and a 60% alert ([508207d](https://github.com/huishouden/pwa-kit/commit/508207dd5f597f3068bc541ccca4fcf7cceec9a5))
+
 ## 0.102.0 (2026-10-05)
 
 ### Bug Fixes
