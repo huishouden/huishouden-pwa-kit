@@ -18,6 +18,8 @@ export const REMINDER_SOURCES = deepFreeze({
         petMedCourses: { fields: [], roles: EVERYDAY },
         petMedDoses: { fields: [], roles: EVERYDAY },
         petMeals: { fields: [], roles: EVERYDAY },
+        petOutingPlans: { fields: ['on'], roles: EVERYDAY },
+        petOutings: { fields: [], roles: EVERYDAY },
         petProfiles: { fields: ['birthDate', 'birthDateApprox'], roles: EVERYDAY },
     },
     health: {

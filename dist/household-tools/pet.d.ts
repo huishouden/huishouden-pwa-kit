@@ -10,4 +10,7 @@ export declare const petLogFeeding: import("./registry.js").ToolDef<Readonly<{
 export declare const petLogDose: import("./registry.js").ToolDef<Readonly<{
     [k: string]: z.core.$ZodType<unknown, unknown, z.core.$ZodTypeInternals<unknown, unknown>>;
 }>>;
+export declare const petLogOuting: import("./registry.js").ToolDef<Readonly<{
+    [k: string]: z.core.$ZodType<unknown, unknown, z.core.$ZodTypeInternals<unknown, unknown>>;
+}>>;
 export { petUrl };

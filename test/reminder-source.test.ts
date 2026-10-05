@@ -12,6 +12,16 @@ describe('readSource', () => {
     expect(readSource('pet', { checks: [{ doc: 'petMedCourses/c1' }], any: false })).toEqual({ checks: [{ doc: 'petMedCourses/c1' }] });
   });
 
+  test("a pet outing slot's reminder: the plan still on, the slot's outing not yet logged", () => {
+    const outing = { checks: [{ doc: 'petOutingPlans/p1', due: [{ field: 'on', in: [true] }] }, { doc: 'petOutings/out-p1-2031-01-06-meal-m1', absent: true }] };
+    expect(readSource('pet', outing)).toEqual(outing);
+    expect(stillDue(outing, docs({ 'petOutingPlans/p1': { on: true }, 'petOutings/out-p1-2031-01-06-meal-m1': null }))).toBe(true);
+    expect(stillDue(outing, docs({ 'petOutingPlans/p1': { on: true }, 'petOutings/out-p1-2031-01-06-meal-m1': { poop: true } }))).toBe(false);
+    expect(stillDue(outing, docs({ 'petOutingPlans/p1': { on: false }, 'petOutings/out-p1-2031-01-06-meal-m1': null }))).toBe(false);
+    // Only the plan's on/off may be read, never a field that says more about the outings.
+    expect(readSource('pet', { checks: [{ doc: 'petOutings/o1', due: [{ field: 'poop', in: [true] }] }] })).toBeNull();
+  });
+
   test('null for none, or for anything past the limits', () => {
     for (const bad of [
       undefined,

@@ -3,6 +3,14 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## [0.105.0](https://github.com/huishouden/pwa-kit/compare/v0.104.0...v0.105.0) (2026-10-05)
+
+### Features
+
+* **household-tools:** Pet outings (bathroom breaks). `pet_today` gives each pet whose outings are on (`petOutingPlans/{petId}`, `on: true`) an `outings` object: today's scheduled `slots` (`key`, `label`, `time`, `state` `done`/`due`/`late`, and once logged `pooped`, `pee`, `at`, `by`), `extra` (unscheduled outings today), `poops_today`, `poop_min`, `under_days` (days in a row ending yesterday with outings logged and fewer poops than the minimum), `walk_minutes_today` and `walk_goal`; slots follow the pet's meals (`meal-<mealId>`), set times or every N hours within waking hours (`t-HHMM`). New write tool `pet_log_outing` (`pet`, `pooped`, `pee`, `slot`, `at`, `walk_minutes`, `note`): ticks the named slot, or today's open slot closest to the time (due within 90 minutes or past), under the id the app and the portal's To-do list write (`out-<petId>-<day>-<slotKey>`), so one slot is never logged twice; otherwise an extra outing. `walk_minutes` alone logs a walk that ticks no slot.
+* **reminder-source:** Pet reminders may name `petOutingPlans` (field `on`) and `petOutings` (existence only), so a slot's reminder is dropped unsent once the outing is logged anywhere or outings are turned off. huishouden/rules mirrors it in `hhSourceDoc`.
+* **todos:** Pet's to-do actions may write `petOutings` (Pooped / Pee only on a scheduled outing).
+
 ## [0.104.0](https://github.com/huishouden/pwa-kit/compare/v0.103.0...v0.104.0) (2026-10-05)
 
 ### Features
