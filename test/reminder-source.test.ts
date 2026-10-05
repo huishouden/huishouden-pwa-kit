@@ -44,6 +44,8 @@ describe('readSource', () => {
     expect(sourceCollection('health', 'healthPeople/p1/notes/n1')).toBeUndefined();
     expect(sourceCollection('health', 'healthPeople/p1')).toBeUndefined();
     for (const [app, cols] of Object.entries(REMINDER_SOURCES)) for (const col of Object.keys(cols)) expect(sourceCollection(app, `${col.replace('*', 'x')}/d1`)).toBe(cols[col]);
+    // Frozen: nothing at runtime can widen what a source may name.
+    expect(Object.isFrozen(REMINDER_SOURCES) && Object.isFrozen(REMINDER_SOURCES.bills) && Object.isFrozen(REMINDER_SOURCES.bills.bills.fields)).toBe(true);
   });
 });
 
@@ -66,6 +68,9 @@ describe('sourceAllowed', () => {
     expect(sourceAllowed('health', doses, 'carol@example.com', 'admin', docs({}))).toBe(true);
     expect(sourceAllowed('health', doses, 'bob@example.com', 'member', docs({ 'healthPeople/p1': null }))).toBe(false);
     expect(sourceAllowed('health', doses, 'bob@example.com', 'member', docs({}))).toBeUndefined();
+    // Never a kid, even one named; never a helper who isn't a reader.
+    expect(sourceAllowed('health', doses, 'kim@example.com', 'kid', docs({ 'healthPeople/p1': { readers: ['kim@example.com'] } }))).toBe(false);
+    expect(sourceAllowed('health', doses, 'hank@example.com', 'helper', person)).toBe(false);
   });
 });
 

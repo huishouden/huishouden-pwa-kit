@@ -4,10 +4,14 @@ const EVERYDAY = ['admin', 'member', 'helper'];
 const HEALTH = ['admin', 'member', 'helper'];
 /**
  * By app, the collections its reminders' sources may name (`*` is one document id) and what each
- * allows. Kids' reminders never carry a source the sender uses. Add an app's collections here
- * before its reminders name them.
+ * allows. Kids' sources are never used. Every collection listed is one any member of the roles
+ * given may read in full (the rules' `isMember()` reads), except Bills (admins and members) and
+ * Health records (the person's readers), which `roles` and `readers` cover; so even a check on
+ * whether a document exists tells its writer nothing new. huishouden/rules mirrors the
+ * collections (`hhSourceDoc`); add an app's collections here and there before its reminders name
+ * them.
  */
-export const REMINDER_SOURCES = {
+export const REMINDER_SOURCES = deepFreeze({
     bills: { bills: { fields: ['status', 'dismissed', 'due'], roles: ['admin', 'member'] } },
     tasks: { items: { fields: ['completed', 'dueAt'], roles: EVERYDAY } },
     pet: {
@@ -24,7 +28,13 @@ export const REMINDER_SOURCES = {
         homeEvents: { fields: [], roles: EVERYDAY },
         homeEventPrep: { fields: [], roles: EVERYDAY },
     },
-};
+});
+function deepFreeze(value) {
+    if (value && typeof value === 'object')
+        for (const v of Object.values(value))
+            deepFreeze(v);
+    return Object.freeze(value);
+}
 const SEGMENT = /^(?!\.\.?$)(?!__.*__$)[^/]{1,200}$/;
 /** The collection entry a document path falls in for `app`, or undefined when its sources may not name it. */
 export function sourceCollection(app, doc) {
@@ -87,17 +97,14 @@ export function readSource(app, value) {
     return { checks: checks, ...(value.any ? { any: true } : {}) };
 }
 /**
- * `source` as `reminderDoc` writes it, or undefined for none. One the sender would refuse is left
- * off with a console warning, so the reminder still goes out (as one without a source) rather than
- * failing the app's whole sync.
+ * `source` as `reminderDoc` writes it, or undefined for none or for one the sender would refuse:
+ * left off, the reminder still goes out (as one without a source) rather than failing the app's
+ * sync. `readSource(app, source) === null` tells a caller it was refused.
  */
 export function cleanSource(app, source) {
     if (source === undefined || source === null)
         return undefined;
-    const read = readSource(app, source);
-    if (!read)
-        console.warn(`Reminder source left off: ${app}'s reminders may not check ${JSON.stringify(source).slice(0, 200)}`);
-    return read ?? undefined;
+    return readSource(app, source) ?? undefined;
 }
 /** The person document a Health record belongs to (`healthPeople/p1`), whose `readers` decide who may check it. */
 const personOf = (doc) => doc.split('/').slice(0, 2).join('/');

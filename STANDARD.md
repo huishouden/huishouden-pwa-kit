@@ -249,7 +249,10 @@ and no household sets anything up.
   the record and when it is still due (a bill's `status` not paid, a dose record not yet written).
   The sender checks it before sending and deletes the reminder unsent once it is done, without
   waiting for the app to be opened. A source names only the app's own records and done fields
-  (`REMINDER_SOURCES`; add a collection there first).
+  (`REMINDER_SOURCES`, mirrored by the rules' `hhSourceDoc`; add a collection in both first). This
+  is the one place a server reads household records with a service account rather than as a
+  member: huishouden/notify, document by document (`get`, never a list), only what
+  `REMINDER_SOURCES` allows, and it counts a source only when its writer could read those records.
 - **Each person opts in per device.** A "Notify me" control calls `enablePush` from a tap; it stores
   the device's subscription in `households/{id}/pushSubscriptions`, which only that person and the
   sender can read. Build with `pwaApp({ push: true })` and the `VITE_VAPID_PUBLIC_KEY` repo variable

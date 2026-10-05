@@ -180,16 +180,8 @@ describe('a source', () => {
   });
 
   test("one the sender would refuse is left off, so the reminder still goes out", () => {
-    const warn = console.warn;
-    const warned: unknown[] = [];
-    console.warn = (...a: unknown[]) => warned.push(a);
-    try {
-      expect(reminderDoc(input({ checks: [{ doc: 'bills/b1' }] }), 'alex@example.com', NOW).source).toBeUndefined();
-      expect(reminderDoc(input({ checks: [{ doc: 'items/a', due: [{ field: 'name', in: ['x'] }] }] }), 'alex@example.com', NOW).source).toBeUndefined();
-    } finally {
-      console.warn = warn;
-    }
-    expect(warned).toHaveLength(2);
+    expect(reminderDoc(input({ checks: [{ doc: 'bills/b1' }] }), 'alex@example.com', NOW).source).toBeUndefined();
+    expect(reminderDoc(input({ checks: [{ doc: 'items/a', due: [{ field: 'name', in: ['x'] }] }] }), 'alex@example.com', NOW).source).toBeUndefined();
   });
 
   test('syncReminders rewrites a reminder whose source changed, and only then', async () => {
