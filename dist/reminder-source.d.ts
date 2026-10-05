@@ -15,8 +15,9 @@ import type { Role } from './role-core.js';
  * The reminder is due while every check passes, or with `any: true` while at least one does (a
  * reminder for several doses at once, due while any is unmarked).
  *
- * The sender reads with its own service account, so what a source may name is limited here, and
- * the sender refuses anything else: only the reminder's own app's collections and, in each, only
+ * The sender reads with its own service account (STANDARD.md "Reminders": the one place a server
+ * reads household records that way), so what a source may name is limited here, and the sender
+ * refuses anything else: only the reminder's own app's collections and, in each, only
  * the fields that say whether a record is done (`REMINDER_SOURCES`); only from writers who may read
  * those records (`roles`, and a Health person's `readers`); the rules make `by` the writer. A
  * refused source counts as none. So a source never tells its writer anything they couldn't see.
@@ -65,10 +66,14 @@ export interface SourceCollection {
 }
 /**
  * By app, the collections its reminders' sources may name (`*` is one document id) and what each
- * allows. Kids' reminders never carry a source the sender uses. Add an app's collections here
- * before its reminders name them.
+ * allows. Kids' sources are never used. Every collection listed is one any member of the roles
+ * given may read in full (the rules' `isMember()` reads), except Bills (admins and members) and
+ * Health records (the person's readers), which `roles` and `readers` cover; so even a check on
+ * whether a document exists tells its writer nothing new. huishouden/rules mirrors the
+ * collections (`hhSourceDoc`); add an app's collections here and there before its reminders name
+ * them.
  */
-export declare const REMINDER_SOURCES: Record<string, Record<string, SourceCollection>>;
+export declare const REMINDER_SOURCES: Readonly<Record<string, Readonly<Record<string, SourceCollection>>>>;
 /** The collection entry a document path falls in for `app`, or undefined when its sources may not name it. */
 export declare function sourceCollection(app: string, doc: string): SourceCollection | undefined;
 /**
@@ -77,9 +82,9 @@ export declare function sourceCollection(app: string, doc: string): SourceCollec
  */
 export declare function readSource(app: string, value: unknown): ReminderSource | null;
 /**
- * `source` as `reminderDoc` writes it, or undefined for none. One the sender would refuse is left
- * off with a console warning, so the reminder still goes out (as one without a source) rather than
- * failing the app's whole sync.
+ * `source` as `reminderDoc` writes it, or undefined for none or for one the sender would refuse:
+ * left off, the reminder still goes out (as one without a source) rather than failing the app's
+ * sync. `readSource(app, source) === null` tells a caller it was refused.
  */
 export declare function cleanSource(app: string, source: ReminderSource | undefined | null): ReminderSource | undefined;
 /** Every document the sender reads for a source: its checks' and, for Health records, their people's. */
