@@ -1,10 +1,7 @@
-# Reusable: versions and changelog from Conventional Commit PR titles (release-please). On each push
-# to main it opens or updates a release PR that bumps package.json and CHANGELOG.md; merging that PR
-# tags vX.Y.Z and publishes the release notes. Callers:
-#
-#   release:
-#     uses: huishouden/pwa-kit/.github/workflows/release.yml@v0
-#     permissions: { contents: write, pull-requests: write }
+# Retired (pwa-kit 0.91.0): release-please no longer runs. The PR's author bumps package.json and
+# adds the CHANGELOG.md section (`hh dev release`); pwa.yml's deploy tags the version and publishes
+# the release (STANDARD.md "Versions"). Kept so callers that still list `release:` don't fail;
+# remove the job from the caller's ci.yml.
 name: release
 
 on:
@@ -14,13 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  release-please:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  retired:
+    if: false
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
-      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
-        with:
-          release-type: node
+      - run: echo "release-please is retired; see STANDARD.md Versions"

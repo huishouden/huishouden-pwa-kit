@@ -95,10 +95,10 @@ and reads the other apps only from public release assets:
 4. `smoke` checks the live app over HTTP, no browser (see Bandwidth).
 
 Races: two repos deploying at once each include the other's newest asset or notice it afterwards
-(step 3's recheck), and the last deploy wins with both. The portal's scheduled run (every 30
-minutes, `reconcile: true`) compares the live `/hh-site.json` with the latest assets (the apps'
-and the observability settings) and deploys only when they differ, so a lost update lives at most
-half an hour.
+(step 3's recheck), and the last deploy wins with both. A manual run of the portal's `ci` with
+`reconcile: true` compares the live `/hh-site.json` with the latest assets (the apps' and the
+observability settings) and deploys only when they differ; nothing runs it on a schedule (STANDARD.md
+"CI/CD"), and the next deploy of any app picks up a lost update.
 
 Rejected: cloning the live Hosting version and replacing one path (Hosting API `versions.clone`).
 No deploy would hold every app's source, so a lost update could not be repaired, and the site's
@@ -146,8 +146,8 @@ costs as much as a new household member. CI therefore never opens production in 
   manifest and `sw.js`: about 4 KB per deploy, 4 MB for 1,000 deploys;
 - pull requests run no CI; their browser tests and screenshots run on staging or locally, never
   on production;
-- the New Relic uptime monitors are pings (one GET of index.html), about 0.25 GB a month for
-  the suite.
+- the New Relic uptime monitors are pings (one GET of index.html, about 3 KB) every 30 minutes
+  from two locations: about 0.1 GB a month for the suite.
 
 Hashed files under `/assets/` are `public, max-age=31536000, immutable`; HTML, `sw.js` and
 manifests are `no-cache` (revalidated with the ETag, a 304 costs headers only). Hosting compresses

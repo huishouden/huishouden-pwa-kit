@@ -77,7 +77,7 @@ All apps share one origin ([docs/one-site.md](docs/one-site.md) has the design a
   next), Google API tokens (`hh-google-tokens`).
 - **Deploys**: no repo deploys alone. `pwa.yml` with `base` publishes each build of `main` as the
   repo's `hosting` release asset and deploys the whole site from every app's latest asset; the
-  portal reconciles every 30 minutes. A failed build never replaces an app's last good one.
+  each deploy rechecks for builds published meanwhile. A failed build never replaces an app's last good one.
 - **Old addresses**: `<family>-<app>.web.app` 301s every path to the app's path, query kept, and
   serves a `/sw.js` that retires the old installed copy (`"redirect": true` in `apps.json`).
 
@@ -426,24 +426,61 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 | Job | Runs on | Does |
 |---|---|---|
 | `leak-scan` | push to `main` | gitleaks on the added commits (`actions/leak-scan`) |
-| `build` | push to `main` | `bun install --frozen-lockfile`, lint (`tsc --noEmit`), `pwa-design-check`, `pwa-write-check`, `pwa-headers-check`, unit tests, build |
+| `build` | push to `main` | the version check (see Versions), `bun install --frozen-lockfile`, `pwa-bandwidth-check`, lint (`tsc --noEmit`), `pwa-design-check`, `pwa-write-check`, `pwa-headers-check`, unit tests, build |
 | `publish` | push to `main`, with `base` | The build (and a staging build) as `site.tar.gz` / `site-staging.tar.gz` on the repo's `hosting` pre-release |
-| `deploy` | push to `main`; the portal's schedule with `reconcile` | Keyless via Workload Identity Federation; with `base`, `pwa-site assemble` (every app's latest asset under its path, the combined `firebase.json`) and `firebase deploy`, rechecked for builds published meanwhile; without, `firebase deploy --only hosting:<target>` |
+| `deploy` | push to `main`; a manual run with `reconcile` | Keyless via Workload Identity Federation; with `base`, `pwa-site assemble` (every app's latest asset under its path, the combined `firebase.json`) and `firebase deploy`, rechecked for builds published meanwhile; without, `firebase deploy --only hosting:<target>`. Then tags `v<version>` and publishes its CHANGELOG.md section as the GitHub release, once per version |
 | `smoke` | after `deploy` | One HTTP check of the live app path (index.html, a hashed asset, the manifest, `sw.js`, their caching and compression); no browser (docs/one-site.md "Bandwidth") |
 | `staging` | manual runs with `staging-ref` | Build against the staging project, deploy to the app's staging site, `e2e` and `e2e:signed-in` there in households of the run's own, then remove them (see Staging) |
-| `staging-sweep` | the portal's nightly schedule | Remove staging test households and users over a day old |
+| `staging-sweep` | manual runs with `staging-sweep` | Remove staging test households and users over a day old (`hh ops staging-cleanup` does the same from a laptop) |
 
 - Repo variables (not secrets; the Firebase web config is public by design): `GCP_WIF_PROVIDER`,
   `GCP_DEPLOY_SA`, `VITE_FIREBASE_*` (the bootstrap sets them). Apps on the suite's site need no
   `VITE_NEWRELIC_*`: the deploy serves their New Relic settings (see Observability).
 - Deploy waits on `leak-scan` and `build`. `concurrency: cancel-in-progress` on every workflow.
-- Pull requests run no jobs, by decision: hosted CI runs only on `main` (and on manual `staging-ref` runs); on `main` a failing build or
-  unit test stops the deploy. Before a PR is ready its author verifies it: the leak scan in the
-  pre-commit hook (`templates/githooks/pre-commit`, gitleaks, fails closed), build and tests
-  locally, and browser tests and screenshots on the app's staging site (see Staging). `leak-scan`
-  on `main` still scans every push.
+- No schedules: nothing hosted runs on a timer for the process (no reconcile, no sweep, no digest,
+  no Renovate). The Workers' own product schedules (notifications, calendar sync) are product, not
+  process.
+- Pull requests run no jobs, by decision: hosted CI runs only on `main` (and on manual `staging-ref`
+  runs), where a failing build or unit test, or a version not bumped, stops the deploy. The PR's
+  author verifies it before it is ready (see Pull requests); `leak-scan` on `main` still scans
+  every push. No browser runs against production (docs/one-site.md "Bandwidth": Hosting on Spark
+  serves 10 GB a month for the whole suite; `pwa-bandwidth-check` fails a workflow step that would).
 - Real secrets (test account passwords, API tokens) go in GitHub Actions secrets and are read
   only in the jobs that need them. Never in argv, logs, or the repo.
+
+## Pull requests
+
+The author owns everything before `main`; nothing hosted runs on a PR. The `hh` CLI
+(huishouden/cli, `bunx github:huishouden/cli#v1 dev …`) does each step, and the `huishouden`
+Claude Code plugin (huishouden/claude-plugins, skill `pr-lifecycle`) tells agents to:
+
+1. **Open it as a draft**: `gh pr create --draft`.
+2. **Review while draft**: `hh dev review` runs the local `cr` reviewer (org reviewers from
+   huishouden/cr-reviewers), one review at a time on a machine; address findings and resolve the
+   threads. Bar: no Blocking or Major finding left.
+3. **Verify**: `hh dev verify` (build, unit tests, the emulator tests, screenshots on a local
+   preview) or `hh dev evidence` (the branch deployed to the app's staging site, the browser tests
+   there, phone and tablet screenshots in light and dark). `hh dev evidence` picks staging when the
+   change touches rules, Workers, sign-in, Google or notifications, local otherwise
+   (`--staging`/`--local` override), and posts or updates one PR comment with the results and
+   images for the head commit. Never production.
+4. **Version and changelog**: `hh dev release` bumps package.json (semver from the branch's
+   Conventional Commits) and writes the CHANGELOG.md section, in the same PR.
+5. **Ready**: `hh dev ready` checks the review bar, evidence green for the head commit and the
+   version bump, then runs `gh pr ready`; it refuses otherwise.
+6. **Merge**: `main` builds, tests, deploys, smoke-checks over HTTP and tags the version.
+
+## Versions
+
+Every repo's `package.json` version is set by the PR that changes code, with its `## <version>`
+section in CHANGELOG.md (`hh dev release`). `main`'s build fails, so nothing deploys, when code
+changed since the current version's tag (docs, `*.md` and workflows alone need no bump). After the
+deploy, `pwa.yml` tags `v<version>` and publishes the section as the release. release-please and
+Renovate are retired.
+
+**Update the kit when you touch a repo**: `hh dev bump-kit` moves `@huishouden/pwa-kit` to the
+latest tag (package.json and bun.lock) and runs the checks; include it in the PR. Nothing bumps
+dependencies on a schedule.
 
 ## Staging
 
