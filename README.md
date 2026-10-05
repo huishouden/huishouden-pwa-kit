@@ -153,8 +153,10 @@ jobs:
 
 ## Versioning
 
-Tags `v0.x.y` are immutable; `v0` moves to the latest `v0.x.y`. Workflows reference `@v0`,
-package installs pin `#v0.x.y`.
+Tags `v0.x.y` are immutable; `v0` moves to the latest `v0.x.y`. Workflows reference an exact tag
+(`@vX.Y.Z`, as `hh dev bump-kit` sets them) and packages install from the release tarball
+(`pwa-kit-X.Y.Z.tgz`) of the same tag. Releases through v0.105.0 have no tarball and install from the
+git tag.
 
 ## Household rules
 

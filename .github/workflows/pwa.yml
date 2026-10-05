@@ -132,7 +132,7 @@ jobs:
         id: next
         if: github.ref == 'refs/heads/main' && inputs.staging-ref == ''
         run: |
-          git fetch --tags --force -q || true
+          git fetch --tags --force -q
           python3 - <<'PY' > "$RUNNER_TEMP/next.txt"
           # next-version:begin
           import re, subprocess
@@ -274,7 +274,11 @@ jobs:
           set -euo pipefail
           git fetch --tags --force -q
           if [ -n "$TAG" ]; then
-            if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then echo "$TAG is already tagged"; else
+            if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              # Two pushes close together can compute the same tag: it must be this commit's, or this build is mislabelled.
+              if [ "$(git rev-list -n 1 "$TAG")" != "$GITHUB_SHA" ]; then echo "::error title=$TAG is another commit's::$TAG already points to $(git rev-list -n 1 "$TAG"), not $GITHUB_SHA: a newer push was tagged first; rerun this workflow"; exit 1; fi
+              echo "$TAG is already tagged"
+            else
               git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
               git push origin "$TAG"
             fi
@@ -403,14 +407,13 @@ jobs:
         run: |
           spec=$(jq -r '(.devDependencies // {})["@huishouden/pwa-kit"] // (.dependencies // {})["@huishouden/pwa-kit"] // empty' ref/package.json)
           ref=${spec##*#}
-          case "$spec" in
-            https://github.com/huishouden/pwa-kit/releases/download/v*/pwa-kit-*.tgz)
-              # The kit's release tarball (0.104+): scripts and src, nothing built or installed.
-              mkdir -p "$RUNNER_TEMP/pwa-kit" && curl -fsSL --retry 3 "$spec" | tar -xz -C "$RUNNER_TEMP/pwa-kit" --strip-components=1 ;;
-            *)
-              if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a release (its tarball URL, or github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
-              git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit" ;;
-          esac
+          if [[ "$spec" =~ ^https://github\.com/huishouden/pwa-kit/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/pwa-kit-[0-9]+\.[0-9]+\.[0-9]+\.tgz$ ]]; then
+            # The kit's release tarball: scripts and src, nothing built or installed. Only that exact URL shape.
+            mkdir -p "$RUNNER_TEMP/pwa-kit" && curl -fsSL --retry 3 "$spec" | tar -xz -C "$RUNNER_TEMP/pwa-kit" --strip-components=1
+          else
+            if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a release (its tarball URL, or github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
+            git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
+          fi
           echo "SITE_TOOL=$RUNNER_TEMP/pwa-kit/scripts/site.ts" >> "$GITHUB_ENV"
       - name: Asset CDN off for staging
         id: cdn
@@ -634,14 +637,13 @@ jobs:
         run: |
           spec=$(jq -r '(.devDependencies // {})["@huishouden/pwa-kit"] // (.dependencies // {})["@huishouden/pwa-kit"] // empty' package.json)
           ref=${spec##*#}
-          case "$spec" in
-            https://github.com/huishouden/pwa-kit/releases/download/v*/pwa-kit-*.tgz)
-              # The kit's release tarball (0.104+): scripts and src, nothing built or installed.
-              mkdir -p "$RUNNER_TEMP/pwa-kit" && curl -fsSL --retry 3 "$spec" | tar -xz -C "$RUNNER_TEMP/pwa-kit" --strip-components=1 ;;
-            *)
-              if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a release (its tarball URL, or github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
-              git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit" ;;
-          esac
+          if [[ "$spec" =~ ^https://github\.com/huishouden/pwa-kit/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/pwa-kit-[0-9]+\.[0-9]+\.[0-9]+\.tgz$ ]]; then
+            # The kit's release tarball: scripts and src, nothing built or installed. Only that exact URL shape.
+            mkdir -p "$RUNNER_TEMP/pwa-kit" && curl -fsSL --retry 3 "$spec" | tar -xz -C "$RUNNER_TEMP/pwa-kit" --strip-components=1
+          else
+            if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a release (its tarball URL, or github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
+            git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
+          fi
           echo "SITE_TOOL=$RUNNER_TEMP/pwa-kit/scripts/site.ts" >> "$GITHUB_ENV"
       # The asset CDN (docs/one-site.md "Asset CDN"): with the Cloudflare token (the portal), on and
       # uploaded; without it (every app), on for the builds the CDN already holds (--cdn-held), the

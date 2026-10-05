@@ -615,7 +615,7 @@ nothing deployed or tested there can read or write real household data.
   byte for byte (the official text from polyformproject.org and the line
   `Required Notice: Copyright (c) 2026 Caleb Piekstra (https://github.com/huishouden)`), and
   `package.json` says `"license": "PolyForm-Shield-1.0.0"` and `"private": true` (nothing is
-  published to npm; the kit is installed from its git tags).
+  published to npm; the kit is installed from its release tarball, `pwa-kit-X.Y.Z.tgz`; git tags through v0.105.0).
 - The README ends with a License section: the terms in one sentence, and that the Huishouden name
   and logo are the project's brand.
 - CI checks both: `pwa.yml` runs `actions/license-check` in its leak-scan job; the Workers and the
