@@ -46,6 +46,10 @@
       "types": "./dist/chart.d.ts",
       "default": "./dist/chart.js"
     },
+    "./condition": {
+      "types": "./dist/condition.d.ts",
+      "default": "./dist/condition.js"
+    },
     "./contacts": {
       "types": "./dist/contacts.d.ts",
       "default": "./dist/contacts.js"

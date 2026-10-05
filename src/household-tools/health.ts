@@ -7,6 +7,7 @@ import { isDenied, UserError } from './context.js';
 import { FirestoreError } from '../firestore-rest.js';
 import { common, defineTool, idempotency, render, type ToolContext } from './registry.js';
 import { alreadyThere, clip, pick, recordId } from './shared.js';
+import { conditionSections } from './health-conditions.js';
 import {
   adherenceOf,
   ageOn,
@@ -19,6 +20,7 @@ import {
   isCurrent,
   isEventRule,
   isStopped,
+  loadConditions,
   loadDoses,
   loadMeds,
   loadPeople,
@@ -46,7 +48,7 @@ import {
 const personArg = z.string().min(1).max(60).describe('Person by name or id, from `health_people`.');
 const medArg = z.string().min(1).max(80).describe('Medicine by name or id, from `health_medicines`.');
 
-async function choosePerson(ctx: ToolContext, wanted: string): Promise<Person> {
+export async function choosePerson(ctx: ToolContext, wanted: string): Promise<Person> {
   if (ctx.here.role === 'kid') throw new UserError('health.noKids');
   const people = await loadPeople(ctx);
   const { found } = pick(people, wanted, (p) => p.id, (p) => p.name);
@@ -63,7 +65,7 @@ function chooseMed(meds: Med[], wanted: string): Med {
   throw new UserError(ambiguous || byName.ambiguous ? 'health.ambiguousMed' : 'health.unknownMed', { name: wanted, meds: meds.map(medLabel).join(', ') || '-' });
 }
 
-async function contactsById(ctx: ToolContext): Promise<Map<string, Contact>> {
+export async function contactsById(ctx: ToolContext): Promise<Map<string, Contact>> {
   // A reader the rules don't let see contacts gets none; any other failure is said as itself.
   const docs = await ctx.session.openRecords(ctx.here, 'contacts', true).catch((e) => (isDenied(e) ? [] : Promise.reject(e)));
   return new Map(docs.map((d) => [d.id, toContact(d.id, d.data)]));
@@ -543,16 +545,17 @@ export const healthDoctorList = defineTool({
   name: 'health_doctor_list',
   title: 'Medicine list for the doctor',
   description:
-    "Health's printable medicine list for a person, as Markdown: name and age, allergies, medicines taken regularly and when needed (dose, when, prescriber, since), those stopped in the last three months, doses given in the last 30 days, and the doctors and pharmacy. For a doctor's visit, a hospital form or a new carer.",
+    "Health's printable medicine list for a person, as Markdown: name and age, allergies, active and managed conditions by medical area (for those who may see conditions), medicines taken regularly and when needed (dose, when, prescriber, since), those stopped in the last three months, doses given in the last 30 days, and the doctors and pharmacy. For a doctor's visit, a hospital form or a new carer.",
   kind: 'read',
   health: true,
   input: { ...common, person: personArg },
   async run(ctx, args) {
     const person = await choosePerson(ctx, args.person);
     const now = ctx.clock.now();
-    const [meds, doses, contacts] = await Promise.all([loadMeds(ctx, person), loadDoses(ctx, person, now - 31 * DAY), contactsById(ctx)]);
+    const [meds, doses, contacts, conditions] = await Promise.all([loadMeds(ctx, person), loadDoses(ctx, person, now - 31 * DAY), contactsById(ctx), loadConditions(ctx, person)]);
     ctx.touched('health', `healthPeople/${person.id}`);
     const today = ctx.clock.today();
+    const openConditions = conditions.filter((c) => c.status !== 'resolved');
     return render(ctx.lang, () => {
       const mine = [...meds].sort((a, b) => Number(a.asNeeded) - Number(b.asNeeded) || medLabel(a).localeCompare(medLabel(b)));
       const since: Ymd = addDays(today, -90);
@@ -582,6 +585,7 @@ export const healthDoctorList = defineTool({
       const regular = current.filter((m) => !m.asNeeded);
       const needed = current.filter((m) => m.asNeeded);
       const lines = [`# ${t('print.title', { name: person.name })}`, '', sub, '', person.allergies ? t('today.allergies', { allergies: person.allergies }) : t('print.noAllergies')];
+      if (openConditions.length) lines.push('', `## ${t('print.conditions')}`, ...conditionSections(ctx, openConditions, contacts, meds));
       if (!current.length) lines.push('', t('today.noMeds'));
       if (regular.length) lines.push('', `## ${t('print.regular')}`, '', ...table(regular));
       if (needed.length) lines.push('', `## ${t('today.whenNeeded')}`, '', ...table(needed));

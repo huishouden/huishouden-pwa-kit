@@ -4,6 +4,7 @@ import { reminderId, type PersonalReminderInput } from './reminder-core.js';
 import { capitalize, formatList, getLang, kt, type Lang } from './i18n.js';
 import { addDays, atClock, DAY, formatDayShort, HOUR, MINUTE, shortDate, toHhmm, toYmd, ymdToTime, type Ymd } from './time.js';
 import { addInterval } from './schedule.js';
+import { isSpecialty, type Specialty } from './condition.js';
 import { audienceMember, audienceSeesPrivate, cleanAudience, householdAdmins, type AudienceHousehold } from './audience.js';
 
 /**
@@ -71,6 +72,17 @@ export interface VisitData {
   prep?: string[];
   /** Bring the printable medicine list (Health links to it). */
   medList?: boolean;
+  /**
+   * The person's condition it is about (`./condition`). Only an id: helper carers read visits but
+   * never conditions, so they see no more than that it is about one.
+   */
+  conditionId?: string;
+  /**
+   * The medical area it is with ("Neurology"). Like the title and the doctor, every reader of the
+   * visit sees it, helper carers included (they take the person there); it is never published to the
+   * agenda, reminders or calendars, which name only the kind.
+   */
+  specialty?: Specialty;
   /** Reminders this many minutes before (0 at the time), soonest last. */
   remindBefore: number[];
   /** Another visit is due this long after this one. */
@@ -109,8 +121,8 @@ export interface VisitNote extends VisitNoteData {
 }
 
 export const VISIT_FIELDS = [
-  'personId', 'kind', 'title', 'at', 'allDay', 'minutes', 'contactId', 'location', 'link', 'prep', 'medList', 'remindBefore',
-  'followUp', 'followUpOf', 'followUpDoneAt', 'status', 'markedAt', 'markedBy', 'calendarEventId', 'calendarLink', 'createdAt', 'updatedAt', 'by', 'via',
+  'personId', 'kind', 'title', 'at', 'allDay', 'minutes', 'contactId', 'location', 'link', 'prep', 'medList', 'conditionId', 'specialty',
+  'remindBefore', 'followUp', 'followUpOf', 'followUpDoneAt', 'status', 'markedAt', 'markedBy', 'calendarEventId', 'calendarLink', 'createdAt', 'updatedAt', 'by', 'via',
 ] as const;
 export const VISIT_NOTE_FIELDS = ['personId', 'text', 'updatedAt', 'by', 'via'] as const;
 /** What a carer who may not change the visit may still write: Attended or Missed, and the follow-up's answer. */
@@ -195,6 +207,8 @@ export function toVisit(id: string, d: Record<string, unknown>, personId?: strin
     ...(str(d.link) ? { link: str(d.link) } : {}),
     ...(prep.length ? { prep } : {}),
     ...(d.medList === true ? { medList: true } : {}),
+    ...(str(d.conditionId) ? { conditionId: str(d.conditionId) } : {}),
+    ...(isSpecialty(d.specialty) ? { specialty: d.specialty } : {}),
     remindBefore: Array.isArray(d.remindBefore) ? cleanRemindBefore(d.remindBefore) : [...DEFAULT_REMIND_BEFORE],
     ...(followUp ? { followUp } : {}),
     ...(str(d.followUpOf) ? { followUpOf: str(d.followUpOf) } : {}),
@@ -240,6 +254,8 @@ export function visitDoc(input: VisitInput, stamp: { createdAt: number; by: stri
     ...(link ? { link } : {}),
     ...(prep.length ? { prep } : {}),
     ...(input.medList ? { medList: true } : {}),
+    ...(id(input.conditionId) ? { conditionId: id(input.conditionId) } : {}),
+    ...(isSpecialty(input.specialty) ? { specialty: input.specialty } : {}),
     remindBefore: cleanRemindBefore(input.remindBefore ?? DEFAULT_REMIND_BEFORE),
     ...(followUp ? { followUp } : {}),
     ...(id(input.followUpOf) ? { followUpOf: id(input.followUpOf) } : {}),

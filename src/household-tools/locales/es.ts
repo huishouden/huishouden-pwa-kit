@@ -255,6 +255,23 @@ const es: Record<keyof typeof en, string> = {
   'print.stoppedItem': '{med}, dejado el {date}',
   'print.adherence': 'Dosis dadas en los últimos 30 días: {percent}.',
   'print.doctors': 'Médicos y farmacia',
+  'print.conditions': 'Afecciones',
+  'conditions.title': 'Afecciones',
+  'conditions.titleIn': 'Afecciones: {area}',
+  'conditions.none': 'No hay afecciones registradas.',
+  'conditions.noneIn': 'No hay afecciones en {area}.',
+  'conditions.nobody': 'No ves las afecciones de nadie en Salud: solo las ven los administradores y los miembros que cuidan a una persona, o que son esa persona.',
+  'conditions.notShared': 'Las afecciones de {name} son solo para los administradores y los miembros que cuidan a esa persona, o a {name}, si es miembro.',
+  'conditions.keepersOnly': 'Solo los administradores y los miembros que cuidan a esta persona pueden añadir sus afecciones.',
+  'conditions.diagnosed': 'diagnosticada {date}',
+  'conditions.by': 'por {name}',
+  'conditions.at': 'en {place}',
+  'conditions.resolvedOn': 'resuelta {date}',
+  'conditions.treatedWith': 'tratada con {meds}',
+  'conditions.added': 'Añadí {condition} para {name}, en {area}. [Salud]({url})',
+  'conditions.placeOrClinic': 'Indica `clinic` (un contacto del hogar) o `place` (en palabras), no los dos.',
+  'conditions.resolvedNeedsStatus': 'Una fecha `resolved` va con `status: "resolved"`; deja `status` fuera o ponlo en «Resuelta».',
+  'conditions.unknown': '«{name}» no es una de sus afecciones. Afecciones: {conditions}.',
 
 };
 

@@ -13,7 +13,8 @@ import { UserError } from './context.js';
 import { common, defineTool, render, type ToolContext } from './registry.js';
 import { clip, pick } from './shared.js';
 import { create } from './home.js';
-import { loadPeople, type Person } from './health-data.js';
+import { keeps, loadConditions, loadPeople, readsConditions, type Person } from './health-data.js';
+import { specialtyLabel, type Specialty } from '../condition.js';
 
 /**
  * Health's visits (`../visit`), as this person may read and write them: every
@@ -22,10 +23,7 @@ import { loadPeople, type Person } from './health-data.js';
  * would, so it is on the calendars and reminds before anyone opens Health.
  */
 
-/** Admins, and members who are among the person's readers (the rules' healthKeeper). */
-export function keeps(ctx: ToolContext, p: Person): boolean {
-  return ctx.here.role === 'admin' || (ctx.here.role === 'member' && p.readers.includes(ctx.session.email));
-}
+export { keeps };
 
 const audienceOf = (ctx: ToolContext, p: Person) => personAudience(p, ctx.here);
 const recipientsOf = (ctx: ToolContext, p: Person) => visitRecipients(p, ctx.here);
@@ -67,6 +65,10 @@ export interface HealthVisitArgs {
   medList?: boolean;
   remindBefore?: number[];
   followUp?: { every: number; unit: (typeof FOLLOW_UP_UNITS)[number] };
+  /** The medical area it is with. */
+  specialty?: Specialty;
+  /** The person's condition it is about, by name or id (only for those who may read conditions). */
+  condition?: string;
 }
 
 /**
@@ -82,6 +84,16 @@ export async function addHealthVisit(ctx: ToolContext, id: string, args: HealthV
   if (!person) throw new UserError('health.unknownPerson', { name: args.person, people: people.map((p) => p.name).join(', ') || '-' });
   if (args.notes && !keeps(ctx, person)) throw new UserError('visits.notesKeepersOnly');
   if (args.videoLink && !/^https:\/\/\S+$/i.test(args.videoLink)) throw new UserError('error.badLink');
+  let conditionId: string | undefined;
+  const specialty = args.specialty;
+  if (args.condition) {
+    if (!readsConditions(ctx, person)) throw new UserError('conditions.keepersOnly');
+    const conditions = await loadConditions(ctx, person);
+    const { found } = pick(conditions, args.condition, (c) => c.id, (c) => c.name);
+    if (!found) throw new UserError('conditions.unknown', { name: args.condition, conditions: conditions.map((c) => c.name).join(', ') || '-' });
+    // The condition's area is not copied onto the visit: helper carers read the visit's area.
+    conditionId = found.id;
+  }
   const contacts = await healthContacts(ctx);
   let contactId: string | undefined;
   if (args.doctor) {
@@ -103,6 +115,8 @@ export async function addHealthVisit(ctx: ToolContext, id: string, args: HealthV
       link: args.videoLink,
       prep: args.prep,
       medList: args.medList,
+      conditionId,
+      specialty,
       remindBefore: args.remindBefore ?? DEFAULT_REMIND_BEFORE,
       followUp: args.followUp,
     },
@@ -141,7 +155,7 @@ export const healthAppointments = defineTool({
   name: 'health_appointments',
   title: "A person's visits in Health",
   description:
-    "The doctor's, dentist's, eye, lab, vaccine and therapy appointments (visits) of the people this person looks after in Huishouden Health: coming up, and past ones with whether they went (attended or missed). Each has its kind, time, doctor or clinic, place or video link, what to do or bring, reminders and follow-up; the notes only for admins and members who care for the person (helpers never get them). Leave out `person` for everyone.",
+    "The doctor's, dentist's, eye, lab, vaccine and therapy appointments (visits) of the people this person looks after in Huishouden Health: coming up, and past ones with whether they went (attended or missed). Each has its kind, time, doctor or clinic, place or video link, what to do or bring, reminders and follow-up; its medical area (every reader, helper carers included); the condition it is about only for admins and member carers (the person too, when a member), and the notes only for admins and member carers (helper carers never get either). Leave out `person` for everyone.",
   kind: 'read',
   health: true,
   input: {
@@ -169,21 +183,26 @@ export const healthAppointments = defineTool({
         const under = `households/${ctx.here.id}/healthPeople/${p.id}`;
         const visits = (await ctx.session.db.query(under, VISITS)).map((d) => toVisit(d.id, d.data, p.id)).filter((v) => v.at >= from && v.at <= to);
         const notes = keeps(ctx, p) ? new Map((await ctx.session.db.query(under, VISIT_NOTES).catch(() => [])).map((d) => [d.id, String(d.data.text ?? '')])) : new Map<string, string>();
-        return { person: p, visits: visits.sort((a, b) => a.at - b.at), notes };
+        // The condition a visit is about, by name, only for those who may read conditions.
+        const conditions = new Map((await loadConditions(ctx, p).catch(() => [])).map((c) => [c.id, c.name]));
+        return { person: p, visits: visits.sort((a, b) => a.at - b.at), notes, conditions };
       }),
     );
     return render(ctx.lang, () => {
-      const rows = lists.flatMap(({ person, visits, notes }) =>
+      const rows = lists.flatMap(({ person, visits, notes, conditions }) =>
         visits.map((v) => {
           const c = contactOf(contacts, v.contactId);
           const state = visitState(v, now);
           const note = notes.get(v.id);
+          const condition = v.conditionId ? conditions.get(v.conditionId) : undefined;
           const fact = {
             id: v.id,
             person: { id: person.id, name: person.name },
             kind: v.kind,
             kind_label: visitKindLabel(v.kind),
             title: visitTitle(v),
+            ...(v.specialty ? { specialty: v.specialty, specialty_label: specialtyLabel(v.specialty) } : {}),
+            ...(condition ? { condition: { id: v.conditionId, name: condition } } : {}),
             start: ctx.clock.isoLocal(v.at),
             all_day: !!v.allDay,
             ...(v.allDay ? {} : { minutes: v.minutes ?? 60 }),
@@ -199,7 +218,7 @@ export const healthAppointments = defineTool({
             ...(note ? { notes: note } : {}),
             url: visitUrl(ctx, v),
           };
-          const bits = [visitKindLabel(v.kind), when(ctx, v), c?.name ?? '', v.location ?? c?.address ?? '', v.link ? t('visits.video') : '', ...(v.prep ?? []), v.medList ? t('visits.medList') : '', t(`visits.state.${state}`)].filter(Boolean);
+          const bits = [visitKindLabel(v.kind), v.specialty ? specialtyLabel(v.specialty) : '', condition ?? '', when(ctx, v), c?.name ?? '', v.location ?? c?.address ?? '', v.link ? t('visits.video') : '', ...(v.prep ?? []), v.medList ? t('visits.medList') : '', t(`visits.state.${state}`)].filter(Boolean);
           const line = `- **[${fact.title}](${fact.url})** (${person.name}) · ${bits.join(' · ')}${note ? ` · ${t('visits.notes', { notes: note })}` : ''} · id \`${v.id}\``;
           return { fact, line };
         }),
