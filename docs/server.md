@@ -78,8 +78,13 @@ if (checked.ok) {
 }
 ```
 
-`via: 'assistant'` marks what the session writes (the rules accept only that value, and the apps
-show it). The command line leaves it out, so its writes look like the person's own from an app.
+`via: 'assistant'` marks what the session writes as the assistant's (the rules accept that value or
+none, and the apps show it). The command line leaves it out, so its writes look like the person's
+own from an app.
+
+The entry needs `zod` installed (an optional peer of the kit: only servers and the command line
+load this entry) and a process in UTC, as Workers are: `LocalClock` moves times into a frame whose
+UTC fields are the person's wall clock. `hh` sets `TZ=UTC` before it runs a tool.
 `connectionId` with a write's `idempotency_key` makes a retry land on the same record.
 
 ## Acting as the person

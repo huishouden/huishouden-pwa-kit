@@ -37,7 +37,9 @@
  * 3. The browser goes to `${redirect}?state=…&code=…` (no token in it). `hh` checks the state and
  *    posts the code with the verifier to `CLI_TOKEN_PATH`, which hands the refresh token over once
  *    (`takeCliHandoff`): a replayed, expired or mismatched code gets nothing, and the first attempt
- *    uses it up either way.
+ *    uses it up either way. Workers KV has no atomic take: two requests racing within the same moment
+ *    could both read the code before the delete lands. Both would still need the PKCE verifier,
+ *    which never leaves the `hh` process, so the race gives nothing to anyone else.
  */
 
 /** The portal page that hands a signed-in person over to a service. */
