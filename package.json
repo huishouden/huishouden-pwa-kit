@@ -368,6 +368,7 @@
   },
   "files": [
     "DESIGN.md",
+    "actions/leak-scan",
     "dist",
     "infra",
     "scripts",
