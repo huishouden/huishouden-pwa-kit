@@ -17,6 +17,7 @@ import {
   siteApps,
   siteConfig,
   staleApps,
+  staleCdn,
   staleObservability,
 } from '../src/site';
 import { globToRegExp } from '../src/security-headers';
@@ -187,6 +188,24 @@ describe('staleApps', () => {
     expect(staleApps(manifest, { '/': 1, '/pet/': 3 })).toEqual(['/pet/']);
     expect(staleApps(manifest, { '/': 1, '/pet/': 2, '/baby/': 7 })).toEqual(['/baby/']);
     expect(staleApps(null, { '/': 1 })).toEqual(['/']);
+  });
+});
+
+describe('staleCdn', () => {
+  const O = 'https://huishouden-assets.huishouden-app.workers.dev';
+  const live = { site: 's', flavor: 'production' as const, deployedAt: '', apps: {}, assetOrigin: O };
+  test('a different origin is stale for every run', () => {
+    expect(staleCdn(live, null, false)).toBe(`asset CDN off (live: ${O})`);
+    expect(staleCdn({ ...live, assetOrigin: null }, O, false)).toBe(`asset CDN ${O} (live: off)`);
+  });
+  test('apps off the CDN are stale only for a run that can upload them (the portal)', () => {
+    const held = { ...live, offCdn: ['/pet/'] };
+    expect(staleCdn(held, O, true)).toBe('not on the asset CDN yet: /pet/');
+    expect(staleCdn(held, O, false)).toBeNull();
+    expect(staleCdn(live, O, true)).toBeNull();
+  });
+  test('no live manifest: nothing to compare', () => {
+    expect(staleCdn(null, O, true)).toBeNull();
   });
 });
 

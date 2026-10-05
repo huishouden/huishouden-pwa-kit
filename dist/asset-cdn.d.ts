@@ -97,6 +97,8 @@ export declare function planAssetOrigin(files: {
 };
 /** The app path (`/pet/`, the portal `/`) whose folder holds `path`: the longest of `appPaths` it starts with. */
 export declare function appOf(path: string, appPaths: string[]): string | undefined;
+/** `planAssetOrigin`'s `offCdn` for the apps `offApps` (of `appPaths`): whether a file is in one of their folders. */
+export declare function offCdnPredicate(offApps: string[], appPaths: string[]): (path: string) => boolean;
 /**
  * The apps (of `appPaths`) with an asset the live CDN (`live`, its manifest; null: none yet) does
  * not hold. A deploy without the Cloudflare token can't upload them, so their pages load the

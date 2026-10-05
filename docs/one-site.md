@@ -92,8 +92,10 @@ and reads the other apps only from public release assets:
    combined `firebase.json` and `/hh-site.json` (which asset of each app is in this deploy), and
    `/hh-observability.json` (each included app's New Relic browser settings, from the portal's
    `observability` release asset; production only, docs/observability.md). With the asset CDN on,
-   it uploads the assets there first (`pwa-site cdn`, `wrangler deploy`, "Asset CDN") and then
-   deploys to Firebase. Then `pwa-site stale` asks GitHub for the assets again; if any app
+   the portal's deploy (the only one with the Cloudflare token) uploads the assets there first
+   (`pwa-site cdn`, `wrangler deploy`, "Asset CDN") and then deploys to Firebase; an app's deploy
+   uploads nothing and keeps the CDN only for builds it already holds ("Asset CDN", without the
+   token). Then `pwa-site stale` asks GitHub for the assets again; if any app
    published since the download, it assembles, uploads to the CDN and deploys again (up to three
    rounds). Apps without an asset yet are
    left out (their path falls to the portal).
@@ -129,9 +131,9 @@ copies its `Permissions-Policy` into the build's stamp for the assembler.
 
 Same shape, staging builds: a staging deploy (the PR author's, or a manual `staging-ref` run) assembles the branch's build with the latest
 `site-staging.tar.gz` of every other app and deploys the whole suite to that app's own staging site
-(`huishouden-staging-<app>.web.app`, the portal's is `huishouden-staging.web.app`). Its assets go
-first to the staging asset CDN (`huishouden-assets-staging`, "Asset CDN"), from a job that holds
-the Cloudflare token and runs nothing from the ref; the build runs in a job with no credentials. The signed-in
+(`huishouden-staging-<app>.web.app`, the portal's is `huishouden-staging.web.app`). It serves its
+own assets: no job that builds a ref holds the Cloudflare token, so nothing goes to the staging
+asset CDN ("Asset CDN"); the build runs in a job with no credentials. The signed-in
 tests run at `https://<staging site>/<app>/`. Each app keeps its own staging site so two repos' PRs
 never overwrite each other mid-test; every staging site is a full mirror (portal at `/`, all apps
 under their paths), so cross-app checks (one sign-in, tiles) work on any of them. Only
@@ -452,6 +454,8 @@ Reinstalling the portal once per device fixes that; the old icons can then be re
 5. Portal: tiles become paths, `apps.json` marks the old sites `redirect`, the old sites redirect.
 6. Registry, uptime checks, sign-in origins and authorized domains ("Sign-in origins") and docs
    follow the paths.
-7. Asset CDN (kit 0.100): each app repo gets the two Cloudflare secrets ("Asset CDN", Token), its
-   `ci.yml` passing them by name, and the kit bump; `HH_ASSET_CDN` stays unset. Until an app's own
-   deploy runs with them, its deploys serve the site's own assets, as before.
+7. Asset CDN (kit 0.100; the upload the portal's alone since 0.104): the two Cloudflare secrets go
+   in the portal's `production` environment ("Asset CDN", Token), no app repo holds them or
+   passes them in `ci.yml`, and every app takes the kit bump; `HH_ASSET_CDN` stays unset. An app's
+   deploy keeps the CDN for builds it already holds (`--cdn-held`); an app with a new build is
+   served from the site until the portal's next deploy uploads it.

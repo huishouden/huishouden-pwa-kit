@@ -173,6 +173,14 @@ export function planAssetOrigin(files, origin, offCdn = () => false) {
 export function appOf(path, appPaths) {
     return appPaths.filter((p) => path.startsWith(p)).sort((a, b) => b.length - a.length)[0];
 }
+/** `planAssetOrigin`'s `offCdn` for the apps `offApps` (of `appPaths`): whether a file is in one of their folders. */
+export function offCdnPredicate(offApps, appPaths) {
+    const off = new Set(offApps);
+    return (path) => {
+        const app = appOf(path, appPaths);
+        return app !== undefined && off.has(app);
+    };
+}
 /**
  * The apps (of `appPaths`) with an asset the live CDN (`live`, its manifest; null: none yet) does
  * not hold. A deploy without the Cloudflare token can't upload them, so their pages load the

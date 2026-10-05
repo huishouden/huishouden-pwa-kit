@@ -309,19 +309,15 @@ jobs:
           retention-days: 1
 
   staging-site:
-    # The whole suite with this build, for the app's own staging site (docs/one-site.md "Staging"),
-    # and its assets on the staging asset CDN when a token is passed (none is: the token is the
-    # portal's production environment's alone, so staging serves its own assets). Could hold the
-    # Cloudflare token, so it runs nothing from
-    # the ref: the ref is checked out into ref/ and read as data (the kit pin, apps.json and
-    # firebase.json); bun and wrangler run from the workspace root, so no bunfig.toml or .env of the
-    # ref applies; the assembler is the kit at the version the ref pins, wrangler an exact version.
+    # The whole suite with this build, for the app's own staging site (docs/one-site.md "Staging").
+    # Never holds the Cloudflare token (the portal's production environment alone does): staging
+    # builds any ref, so its pages load the site's own assets and nothing goes to the staging CDN.
+    # The ref is checked out into ref/ and read as data (the kit pin, apps.json and firebase.json);
+    # bun runs from the workspace root, so no bunfig.toml or .env of the ref applies; the assembler
+    # is the kit at the version the ref pins.
     needs: [staging-build]
     if: inputs.base != ''
     runs-on: ubuntu-latest
-    concurrency:
-      group: staging-cdn-${{ github.repository }}
-      cancel-in-progress: false
     permissions:
       contents: read
     steps:
@@ -342,24 +338,12 @@ jobs:
           if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a tag (github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
           git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
           echo "SITE_TOOL=$RUNNER_TEMP/pwa-kit/scripts/site.ts" >> "$GITHUB_ENV"
-      - name: Asset CDN on?
+      - name: Asset CDN off for staging
         id: cdn
-        env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          SWITCH: ${{ vars.HH_ASSET_CDN }}
         run: |
           if ! grep -q "'asset-origin'" "$SITE_TOOL"; then echo "args=" >> "$GITHUB_OUTPUT"; echo "the pinned kit has no asset CDN"; exit 0; fi
-          origin=$(bun "$SITE_TOOL" asset-origin --flavor staging | sed -n 's/^origin=//p')
-          if [ -z "$origin" ]; then echo "::error::pwa-site asset-origin gave no origin"; exit 1; fi
-          if [ -z "$TOKEN" ] || [ "$SWITCH" = off ]; then
-            # The token lives only in the portal's production environment (main), so staging runs, from
-            # any ref, never hold it: staging serves the site's own assets.
-            echo "::notice::Asset CDN off for staging ($([ -z "$TOKEN" ] && echo 'no Cloudflare token: only the portal'"'"'s production deploy holds it' || echo 'HH_ASSET_CDN=off')): the site serves its own assets"
-            echo "args=--assets-origin none" >> "$GITHUB_OUTPUT"
-          else
-            echo "on=true" >> "$GITHUB_OUTPUT"
-            echo "args=--assets-origin $origin" >> "$GITHUB_OUTPUT"
-          fi
+          echo "Staging serves the site's own assets: no job that builds a ref holds the Cloudflare token"
+          echo "args=--assets-origin none" >> "$GITHUB_OUTPUT"
       - name: Assemble the suite with this build
         env:
           BASE: ${{ inputs.base }}
@@ -371,23 +355,6 @@ jobs:
           set -- $ARGS
           if [ -f ref/apps.json ]; then set -- "$@" --registry ref/apps.json; fi
           bun "$SITE_TOOL" assemble --flavor staging --site "$SITE" --own "$BASE=dist" --out site-out --firebase ref/firebase.json "$@"
-      # Assets first: the pages deployed after this name them. Another repo's staging upload can
-      # replace this one moments later; then upload again (its files are in the manifest by then).
-      - name: Assets to the staging asset CDN
-        if: steps.cdn.outputs.on == 'true'
-        # The token is written into the wrangler command only, not the step's environment: the
-        # kit's cdn and cdn-check run without it.
-        run: |
-          for round in 1 2 3; do
-            bun "$SITE_TOOL" cdn --flavor staging --site-dir site-out/public --out cdn-out
-            (cd cdn-out && CLOUDFLARE_API_TOKEN="${{ secrets.CLOUDFLARE_API_TOKEN }}" CLOUDFLARE_ACCOUNT_ID="${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" npx --yes "wrangler@$WRANGLER_VERSION" deploy)
-            sleep 5
-            bun "$SITE_TOOL" cdn-check --flavor staging --site-dir site-out/public > "$RUNNER_TEMP/check.txt"
-            cat "$RUNNER_TEMP/check.txt"
-            grep -q '^ok=true' "$RUNNER_TEMP/check.txt" && exit 0
-            echo "::notice::round $round: another upload replaced this one; uploading again"
-          done
-          echo "::error::the staging asset CDN still lacks this site's assets after three uploads"; exit 1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: staging-site

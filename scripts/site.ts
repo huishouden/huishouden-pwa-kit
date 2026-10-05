@@ -32,8 +32,8 @@ import {
   ASSET_MANIFEST,
   ASSET_ORIGINS,
   ASSET_RETENTION_DAYS,
-  appOf,
   appsOffCdn,
+  offCdnPredicate,
   cdnHeaders,
   cdnWranglerConfig,
   isCdnAsset,
@@ -58,6 +58,7 @@ import {
   siteApps,
   siteConfig,
   staleApps,
+  staleCdn,
   type BuildStamp,
   type HostingSite,
   type SiteManifest,
@@ -273,7 +274,7 @@ async function assemble() {
   if (flavor === 'production') manifest.observability = await writeObservability(portalRepo(registry), pub, included);
   const origin = assetOriginOpt(flavor);
   const offCdn = origin && flag('cdn-held') ? appsOffCdn(walk(pub).filter(isCdnAsset), included, await liveAssets(origin)) : [];
-  manifest.assetOrigin = applyAssetOrigin(pub, origin, offCdn, included);
+  manifest.assetOrigin = applyAssetOrigin(pub, origin, offCdn, offCdnPredicate(offCdn, included));
   if (offCdn.length) manifest.offCdn = offCdn;
   writeFileSync(join(pub, SITE_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
 
@@ -319,10 +320,9 @@ function assetOriginOpt(flavor: string): string | null {
 }
 
 /** Applies `planAssetOrigin` (src/asset-cdn.ts) to the assembled site; returns what the manifest records. */
-function applyAssetOrigin(pub: string, origin: string | null, offCdn: string[] = [], appPaths: string[] = []): string | null {
+function applyAssetOrigin(pub: string, origin: string | null, offCdn: string[] = [], isOffCdn: (path: string) => boolean = () => false): string | null {
   const files = walk(pub).filter(namesCdn).map((path) => ({ path, text: readFileSync(join(pub, path), 'utf8') }));
-  const off = new Set(offCdn);
-  const plan = planAssetOrigin(files, origin, (path) => off.has(appOf(path, appPaths) ?? ''));
+  const plan = planAssetOrigin(files, origin, isOffCdn);
   if (plan.error) fail(plan.error);
   for (const w of plan.writes) writeFileSync(join(pub, w.path), w.text);
   console.log(origin ? `asset CDN ${origin}: ${plan.naming} pages and workers name it; ${plan.writes.length} rewritten (fallback pages, and apps off it)` : `asset CDN off: ${plan.writes.length} pages and workers load the site's own assets`);
@@ -434,8 +434,8 @@ async function stale() {
   for (const app of apps) latest[app.path] = await latestAsset(app.repo, flavor);
   const paths = staleApps(manifest, latest);
   const wantOrigin = assetOriginOpt(flavor);
-  if (manifest && (manifest.assetOrigin ?? null) !== wantOrigin) paths.push(`asset CDN ${wantOrigin ?? 'off'} (live: ${manifest.assetOrigin ?? 'off'})`);
-  else if (wantOrigin && !flag('cdn-held') && manifest?.offCdn?.length) paths.push(`not on the asset CDN yet: ${manifest.offCdn.join(' ')}`);
+  const cdnWhy = staleCdn(manifest, wantOrigin, !flag('cdn-held'));
+  if (cdnWhy) paths.push(cdnWhy);
   if (flavor === 'production' && staleObservability(manifest, await latestAsset(portalRepo(registry), flavor, OBSERVABILITY_TAG, OBSERVABILITY_ASSET)))
     paths.push(`/${SITE_OBSERVABILITY}`);
   if (paths.length) console.log(`newer builds than ${from}: ${paths.join(' ')}`);

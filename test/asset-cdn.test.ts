@@ -5,6 +5,7 @@ import {
   ASSET_WORKERS,
   appOf,
   appsOffCdn,
+  offCdnPredicate,
   cdnFallbackScript,
   cdnHints,
   cdnHeaders,
@@ -278,6 +279,14 @@ describe('apps off the CDN (a deploy without the Cloudflare token)', () => {
     expect(appsOffCdn(['/assets/p.js', '/pet/assets/a.js', '/spending/assets/new.js'], apps, live)).toEqual(['/spending/']);
     expect(appsOffCdn(['/assets/p.js', '/pet/assets/a.js', '/pet/assets/b.js'], apps, live)).toEqual(['/pet/']);
     expect(appsOffCdn(['/assets/p.js', '/pet/assets/a.js', '/pet/index.html'], apps, live)).toEqual([]);
+  });
+  test('offCdnPredicate: files in an off app\'s folder, not the portal\'s around it', () => {
+    const off = offCdnPredicate(['/pet/'], apps);
+    expect(off('/pet/index.html')).toBe(true);
+    expect(off('/pet/sw.js')).toBe(true);
+    expect(off('/index.html')).toBe(false);
+    expect(off('/spending/index.html')).toBe(false);
+    expect(offCdnPredicate(['/'], apps)('/pet/index.html')).toBe(false);
   });
   test('before the CDN has a manifest every app with assets is off', () => {
     expect(appsOffCdn(['/assets/p.js', '/pet/assets/a.js'], apps, null)).toEqual(['/', '/pet/']);
