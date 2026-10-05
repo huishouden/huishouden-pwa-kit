@@ -368,6 +368,7 @@
   },
   "files": [
     "DESIGN.md",
+    "actions",
     "dist",
     "infra",
     "scripts",
