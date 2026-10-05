@@ -122,7 +122,7 @@ copies its `Permissions-Policy` into the build's stamp for the assembler.
 
 ## Staging
 
-Same shape, staging builds: a pull request's `staging` job assembles the PR's build with the latest
+Same shape, staging builds: a staging deploy (the PR author's, or a manual `staging-ref` run) assembles the branch's build with the latest
 `site-staging.tar.gz` of every other app and deploys the whole suite to that app's own staging site
 (`huishouden-staging-<app>.web.app`, the portal's is `huishouden-staging.web.app`). The signed-in
 tests run at `https://<staging site>/<app>/`. Each app keeps its own staging site so two repos' PRs
@@ -144,9 +144,8 @@ costs as much as a new household member. CI therefore never opens production in 
 
 - each deploy's `smoke` is one GET of index.html and HEAD requests for one hashed asset, the web
   manifest and `sw.js`: about 4 KB per deploy, 4 MB for 1,000 deploys;
-- PR evidence (screenshots, browser tests) runs on staging (`pwa-evidence`), never production;
-- `pwa-bandwidth-check` fails a workflow step that runs a browser without a non-production
-  `BASE_URL`;
+- pull requests run no CI; their browser tests and screenshots run on staging or locally, never
+  on production;
 - the New Relic uptime monitors are pings (one GET of index.html), about 0.25 GB a month for
   the suite.
 

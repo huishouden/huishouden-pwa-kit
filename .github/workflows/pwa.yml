@@ -22,9 +22,9 @@
 # without `base`: on the suite's site the deploy serves /hh-observability.json, docs/observability.md;
 # staging gets neither, so staging sends no reports). Optional package.json script: test (unit).
 #
-# Only main runs (STANDARD.md "Pull requests"): build and unit tests, leak and license scans, publish,
+# Only main runs (STANDARD.md "CI/CD"): build and unit tests, leak and license scans, publish,
 # deploy, then one HTTP smoke check of the live app, no browser. Pull requests run no CI: their
-# author runs `pwa-evidence` (build, deploy to the app's staging site, browser tests and screenshots
+# author verifies it (build, deploy to the app's staging site, browser tests and screenshots
 # there, one PR comment). Production is on Firebase's free plan, 10 GB of Hosting transfer a month for
 # the whole suite (docs/one-site.md "Bandwidth"), so nothing here loads it in a browser.
 #
@@ -189,8 +189,8 @@ jobs:
 
   staging-scope:
     # A manual run given staging-ref deploys that ref to the app's staging site and tests it there.
-    # Pull requests never run CI: their author produces the evidence on staging with `pwa-evidence`
-    # (STANDARD.md "Evidence on staging before merge"). Skipped until the staging variables exist.
+    # Pull requests never run CI: their author verifies them on staging (STANDARD.md "Staging").
+    # Skipped until the staging variables exist.
     if: vars.STAGING_GCP_WIF_PROVIDER != '' && vars.STAGING_SITE != '' && github.event_name == 'workflow_dispatch' && inputs.staging-ref != ''
     runs-on: ubuntu-latest
     permissions:
@@ -311,7 +311,7 @@ jobs:
       - run: bunx playwright install --with-deps chromium
       - name: Smoke tests on staging
         run: if jq -e '.scripts.e2e' package.json >/dev/null; then bun run e2e; else echo "no e2e script"; fi
-      # With an e2e:emulator script, the signed-in flows run on the emulators (`pwa-evidence`) and
+      # With an e2e:emulator script, the signed-in flows run on the emulators (the author's machine) and
       # staging only those that need it (@staging: other apps on the site, the Workers).
       - name: Signed-in tests on staging
         env:
@@ -459,8 +459,8 @@ jobs:
     # hashed asset, the web manifest and sw.js, with their caching and compression. No browser:
     # production is on Firebase's free plan, 10 GB of Hosting transfer a month for the whole suite
     # (docs/one-site.md "Bandwidth"), and a browser visit with the service worker downloads every
-    # precached file. Browser tests run on staging (pwa-evidence) and never against production;
-    # `pwa-bandwidth-check` fails a workflow that would. About 4 KB per deploy.
+    # precached file. Browser tests run on staging or locally, never against production.
+    # About 4 KB per deploy.
     needs: deploy
     if: ${{ !inputs.reconcile }}
     runs-on: ubuntu-latest
