@@ -96,10 +96,13 @@ export declare function sourceReads(app: string, source: ReminderSource): string
 export type SourceDocs = Map<string, Record<string, unknown> | null>;
 /**
  * Whether a writer with this role may have their source checked: every collection allows the role
- * and, for Health records, the writer is an admin or one of the person's `readers`. Undefined while a
- * person document it needs wasn't read.
+ * and, for Health records, the reminder is personal (`personal: true`, a `personalReminders`
+ * document) and the writer is an admin or one of the person's `readers`. Undefined while a person
+ * document it needs wasn't read.
  */
-export declare function sourceAllowed(app: string, source: ReminderSource, writer: string, role: string, read: SourceDocs): boolean | undefined;
+export declare function sourceAllowed(app: string, source: ReminderSource, writer: string, role: string, read: SourceDocs, { personal }?: {
+    personal?: boolean;
+}): boolean | undefined;
 /**
  * Whether the reminder is still due by its documents as read. Undefined when a document it needs
  * wasn't read and the ones that were don't settle it: the sender then sends it as before.
