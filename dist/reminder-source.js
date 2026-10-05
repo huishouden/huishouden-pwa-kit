@@ -124,15 +124,19 @@ export function sourceReads(app, source) {
 }
 /**
  * Whether a writer with this role may have their source checked: every collection allows the role
- * and, for Health records, the writer is an admin or one of the person's `readers`. Undefined while a
- * person document it needs wasn't read.
+ * and, for Health records, the reminder is personal (`personal: true`, a `personalReminders`
+ * document) and the writer is an admin or one of the person's `readers`. Undefined while a person
+ * document it needs wasn't read.
  */
-export function sourceAllowed(app, source, writer, role, read) {
+export function sourceAllowed(app, source, writer, role, read, { personal = false } = {}) {
     const email = writer.trim().toLowerCase();
     let unknown = false;
     for (const c of source.checks) {
         const entry = sourceCollection(app, c.doc);
         if (!entry || !entry.roles.includes(role))
+            return false;
+        // Records only some may read (Health's) only on a personal reminder, which only its audience reads.
+        if (entry.readers && !personal)
             return false;
         if (!entry.readers || role === 'admin')
             continue;
