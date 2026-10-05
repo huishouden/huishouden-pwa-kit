@@ -440,7 +440,7 @@ Every app's `.github/workflows/ci.yml` calls `pwa-kit/.github/workflows/pwa.yml@
 - No schedules: nothing hosted runs on a timer for the process (no reconcile, no sweep, no digest,
   no Renovate). The Workers' own product schedules (notifications, calendar sync) are product, not
   process.
-- Pull requests run no jobs, by decision: hosted CI runs only on `main` (and on manual `staging-ref`
+- Apps' and Workers' pull requests run no jobs, by decision (the kit's own `ci.yml` still checks its PRs: it publishes nothing to Hosting): hosted CI runs only on `main` (and on manual `staging-ref`
   runs), where a failing build or unit test, or a version not bumped, stops the deploy. The PR's
   author verifies it before it is ready (see Pull requests); `leak-scan` on `main` still scans
   every push. No browser runs against production (docs/one-site.md "Bandwidth": Hosting on Spark
