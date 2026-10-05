@@ -91,7 +91,7 @@ describe('pet_today outings', () => {
       walk_minutes_today: 15,
       walk_goal: 0,
     });
-    expect(call.result.text).toContain('Outings: 0 of 2 poops today · 15 min walked · Breakfast 7:30 AM not out yet, Dinner 6:00 PM due · under the minimum 2 days running');
+    expect(call.result.text).toContain('Outings: 0 of 2 poops today, 15 min walked, Breakfast at 7:30 AM: not out yet, Dinner at 6:00 PM: due, and under the minimum 2 days running');
   });
 
   test('every N hours within waking hours, and set times', async () => {
@@ -115,8 +115,7 @@ describe('pet_log_outing', () => {
     const { db, docs } = household();
     const call = await run(JO, db, 'pet_log_outing', { pet: 'theo', pooped: true }, 'assistant');
     expect(call.result.error).toBeUndefined();
-    expect(call.result.text).toContain("Logged Theo's Breakfast outing at 8:00 AM: pooped.");
-    expect(call.result.text).toContain('1 of 2 poops today.');
+    expect(call.result.text).toContain("Logged Theo's Breakfast outing at 8:00 AM: pooped. 1 of 2 poops today.");
     expect(docs.get(`${H}/petOutings/out-p1-2031-01-06-meal-m1`)).toEqual({ petId: 'p1', slot: 'meal-m1', at: NOW, pee: true, poop: true, by: JO, createdAt: NOW, via: 'assistant' });
     const again = await run(JO, db, 'pet_log_outing', { pet: 'Theo', pooped: true, slot: 'breakfast' });
     expect(again.result.text).toContain('already logged');
@@ -139,6 +138,33 @@ describe('pet_log_outing', () => {
     expect(docs.has(`${H}/petOutings/out-p1-2031-01-06-meal-m1`)).toBe(false);
     const walk = [...docs.values()].find((d) => d.walkMin === 30)!;
     expect(walk).toEqual({ petId: 'p1', at: NOW, walkMin: 30, note: 'Park loop', by: SAM, createdAt: NOW });
+  });
+
+  test('a retry with the same key writes nothing new and answers the same, whichever slot the first call ticked', async () => {
+    const { db, docs } = household();
+    const first = await run(SAM, db, 'pet_log_outing', { pet: 'Theo', pooped: true, idempotency_key: 'k2' });
+    expect(first.result.data).toMatchObject({ id: 'out-p1-2031-01-06-meal-m1', repeated: false });
+    expect(docs.get(`${H}/petOutings/out-p1-2031-01-06-meal-m1`)!.req).toEqual(expect.any(String));
+    const count = () => [...docs.keys()].filter((p) => p.includes('/petOutings/')).length;
+    const before = count();
+    const retry = await run(SAM, db, 'pet_log_outing', { pet: 'Theo', pooped: true, idempotency_key: 'k2' });
+    expect(retry.result.data).toMatchObject({ id: 'out-p1-2031-01-06-meal-m1', repeated: true });
+    expect(retry.result.text).toContain('Already logged');
+    expect(count()).toBe(before);
+    // An extra outing (no slot open) retried is the same document too.
+    const extra = await run(SAM, db, 'pet_log_outing', { pet: 'Theo', pooped: false, idempotency_key: 'k3' });
+    const again = await run(SAM, db, 'pet_log_outing', { pet: 'Theo', pooped: false, idempotency_key: 'k3' });
+    expect((again.result.data as { id: string }).id).toBe((extra.result.data as { id: string }).id);
+    expect(count()).toBe(before + 1);
+  });
+
+  test('a walk naming a slot is still an extra outing: the slot stays open for the bathroom log', async () => {
+    const { db, docs } = household();
+    const call = await run(SAM, db, 'pet_log_outing', { pet: 'Theo', slot: 'Breakfast', walk_minutes: 20 });
+    expect(call.result.text).toContain('Logged a 20 min walk for Theo');
+    expect(docs.has(`${H}/petOutings/out-p1-2031-01-06-meal-m1`)).toBe(false);
+    const after = await run(SAM, db, 'pet_log_outing', { pet: 'Theo', slot: 'Breakfast', pooped: true });
+    expect(after.result.data).toMatchObject({ slot: 'meal-m1', repeated: false });
   });
 
   test('says what is missing, and which pets have no outings', async () => {

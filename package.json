@@ -166,6 +166,10 @@
       "types": "./dist/people.d.ts",
       "default": "./dist/people.js"
     },
+    "./pet-outings": {
+      "types": "./dist/pet-outings.d.ts",
+      "default": "./dist/pet-outings.js"
+    },
     "./photo": {
       "types": "./dist/photo.d.ts",
       "default": "./dist/photo.js"

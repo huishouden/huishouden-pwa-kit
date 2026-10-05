@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { addDays, atTime, daysBetween, dueText, formatTime, isHhmm, toYmd } from '../time.js';
+import { addDays, atTime, daysBetween, dueText, formatTime, toYmd } from '../time.js';
+import { formatList } from '../i18n.js';
+import { outingId, outingSlots } from '../pet-outings.js';
 import { addInterval } from '../schedule.js';
 import { t } from './i18n.js';
 import { UserError } from './context.js';
@@ -114,50 +116,39 @@ async function loadOutings(ctx, today) {
         ctx.session.db.query(base, 'petOutingPlans'),
         ctx.session.db.query(base, 'petOutings', { where: [{ field: 'at', op: 'GREATER_THAN_OR_EQUAL', value: since }] }),
     ]);
-    const hhmm = (v, d) => (typeof v === 'string' && isHhmm(v) ? v : d);
     return {
         plans: plans
             .filter((d) => d.data.on === true)
             .map((d) => ({
             petId: d.id,
             mode: d.data.mode === 'times' || d.data.mode === 'every' ? d.data.mode : 'meals',
-            times: [...new Set(Array.isArray(d.data.times) ? d.data.times.filter((x) => typeof x === 'string' && isHhmm(x)) : [])].sort().slice(0, 8),
-            every: Math.min(12, Math.max(1, num(d.data.every) ?? 4)),
-            from: hhmm(d.data.from, '07:00'),
-            to: hhmm(d.data.to, '21:00'),
+            times: Array.isArray(d.data.times) ? d.data.times.filter((x) => typeof x === 'string') : [],
+            every: num(d.data.every),
+            from: str(d.data.from),
+            to: str(d.data.to),
             poopMin: Math.max(0, num(d.data.poopMin) ?? 0),
             walkGoal: Math.max(0, num(d.data.walkGoal) ?? 0),
         })),
         outings,
     };
 }
-const minutesOf = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
-const hhmmOf = (minutes) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-/** A pet's scheduled outings on any day, earliest first: its meals, set times, or every N hours within waking hours. */
-function outingSlots(plan, meals) {
-    const label = (time) => formatTime(atTime('2031-01-01', time));
-    if (plan.mode === 'meals')
-        return meals.filter((m) => m.petId === plan.petId).map((m) => ({ key: `meal-${m.id}`, label: m.name, time: m.time }));
-    const times = plan.mode === 'times' ? plan.times : [];
-    if (plan.mode === 'every')
-        for (let m = minutesOf(plan.from); m <= minutesOf(plan.to) && times.length < 24; m += plan.every * 60)
-            times.push(hhmmOf(m));
-    return times.map((time) => ({ key: `t-${time.replace(':', '')}`, label: label(time), time }));
+/** A pet's scheduled outings, labelled: the meal's name, or the time in the person's words. */
+function slotsOf(plan, meals) {
+    return outingSlots(plan, meals).map((s) => ({ ...s, label: s.meal ?? formatTime(atTime('2031-01-01', s.time)) }));
 }
-/** The id of the outing logged for a slot on a day (the app, the portal's To-do list and this tool write the same). */
-const slotOutingId = (petId, day, key) => `out-${petId}-${day}-${key}`;
-/** A pet's outings on a local day, with the slot each was for. Local frame. */
+/** A pet's outings on a local day. Local frame. */
 function outingsOn(ctx, outings, petId, day) {
     return outings.filter((o) => o.data.petId === petId && toYmd(ctx.clock.local(Number(o.data.at))) === day);
 }
 const poopsIn = (list) => list.filter((o) => o.data.poop === true).length;
 const walkIn = (list) => list.reduce((n, o) => n + (num(o.data.walkMin) ?? 0), 0);
-/** Each slot of `day`: done (an outing logged for it), or due / late. Local frame. */
+/** Each slot of `day`: done (the outing logged for it), or due / late. Local frame. */
 function slotStates(ctx, plan, meals, outings, day, localNow) {
     const that = outingsOn(ctx, outings, plan.petId, day);
-    return outingSlots(plan, meals).map((slot) => {
+    return slotsOf(plan, meals).map((slot) => {
         const at = atTime(day, slot.time);
-        const done = that.filter((o) => o.data.slot === slot.key).sort((a, b) => Number(b.data.at) - Number(a.data.at))[0];
+        const id = outingId(plan.petId, day, slot.key);
+        const done = that.find((o) => o.id === id) ?? that.filter((o) => o.data.slot === slot.key).sort((a, b) => Number(b.data.at) - Number(a.data.at))[0];
         return { slot, at, outing: done, state: done ? 'done' : localNow > at ? 'late' : 'due' };
     });
 }
@@ -173,6 +164,26 @@ function underDays(ctx, plan, outings, today) {
         n++;
     }
     return n;
+}
+/** How an outing went, as one of `pet.outingSlot*`'s shapes. */
+const howOf = (o) => (o.data.poop === true ? 'pooped' : o.data.pee === true ? 'pee' : 'out');
+/** A pet's outings today: each slot's state, the poops against the minimum, the walk, and days under it. */
+export function outingSummary(ctx, plan, meals, outings, today, localNow) {
+    const slots = slotStates(ctx, plan, meals, outings, today, localNow);
+    const todays = outingsOn(ctx, outings, plan.petId, today);
+    return { slots, extra: todays.filter((o) => typeof o.data.slot !== 'string').length, poops: poopsIn(todays), walked: walkIn(todays), under: underDays(ctx, plan, outings, today) };
+}
+/** The summary's line, each part one whole message, joined as a list in the person's language. */
+function outingLine(ctx, plan, s) {
+    const parts = [
+        plan.poopMin ? t('pet.outingPoops', { n: s.poops, min: plan.poopMin }) : t('pet.outingPoopsNoMin', { n: s.poops }),
+        ...(plan.walkGoal ? [t('pet.walkGoal', { n: s.walked, goal: plan.walkGoal })] : s.walked ? [t('pet.walked', { n: s.walked })] : []),
+        ...s.slots.map((x) => x.outing
+            ? t(`pet.outingSlot.${howOf(x.outing)}`, { slot: x.slot.label, time: formatTime(ctx.clock.local(Number(x.outing.data.at))), who: String(x.outing.data.by ?? '') })
+            : t(x.state === 'late' ? 'pet.outingSlotLate' : 'pet.outingSlotDue', { slot: x.slot.label, time: formatTime(x.at) })),
+        ...(s.under ? [t('pet.underDays', { n: s.under })] : []),
+    ];
+    return t('pet.outingsLine', { parts: formatList(parts) });
 }
 export const petToday = defineTool({
     name: 'pet_today',
@@ -204,19 +215,9 @@ export const petToday = defineTool({
                 for (const { c, slots } of courses)
                     lines.push(`- ${c.name} (${c.dose}): ${slots.map((s) => `${formatTime(s.at)} ${t(`pet.slot.${s.state}`)}`).join(', ')}`);
                 const plan = outs.plans.find((x) => x.petId === p.id);
-                const slots = plan ? slotStates(ctx, plan, data.meals, outs.outings, today, localNow) : [];
-                const todays = plan ? outingsOn(ctx, outs.outings, p.id, today) : [];
-                const poops = poopsIn(todays);
-                const walked = walkIn(todays);
-                const under = plan ? underDays(ctx, plan, outs.outings, today) : 0;
-                if (plan) {
-                    const count = plan.poopMin ? t('pet.outingPoops', { n: poops, min: plan.poopMin }) : t('pet.outingPoopsNoMin', { n: poops });
-                    const parts = slots.map((s) => s.outing
-                        ? t(s.outing.data.poop === true ? 'pet.outingPooped' : s.outing.data.pee === false ? 'pet.outingOut' : 'pet.outingPeeOnly', { slot: s.slot.label, time: formatTime(ctx.clock.local(Number(s.outing.data.at))), who: String(s.outing.data.by ?? '') })
-                        : `${s.slot.label} ${formatTime(s.at)} ${t(s.state === 'late' ? 'pet.outingLate' : 'pet.due')}`);
-                    const walk = walked || plan.walkGoal ? ` · ${plan.walkGoal ? t('pet.walkGoal', { n: walked, goal: plan.walkGoal }) : t('pet.walked', { n: walked })}` : '';
-                    lines.push(`- ${t('pet.outings')}: ${count}${walk}${parts.length ? ` · ${parts.join(', ')}` : ''}${under ? ` · ${t('pet.underDays', { n: under })}` : ''}`);
-                }
+                const sum = plan ? outingSummary(ctx, plan, data.meals, outs.outings, today, localNow) : undefined;
+                if (plan && sum)
+                    lines.push(`- ${outingLine(ctx, plan, sum)}`);
                 if (!meals.length && !reminders.length && !courses.length && !plan)
                     lines.push(`- ${t('pet.nothing')}`);
                 return {
@@ -226,23 +227,23 @@ export const petToday = defineTool({
                     meals: meals.map((m) => ({ id: m.meal.id, name: m.meal.name, time: m.meal.time, state: m.state, ...(m.fedAt ? { fed_at: new Date(m.fedAt).toISOString().slice(11, 16), fed_by: m.by } : {}) })),
                     reminders: reminders.map(({ r, state }) => ({ id: r.id, title: r.title, kind: r.kind, due: r.due, state, medicine: MED_KINDS.includes(r.kind) })),
                     courses: courses.map(({ c, slots }) => ({ id: c.id, name: c.name, dose: c.dose, slots: slots.map((s) => ({ slot: s.slot, time: s.time, state: s.state })) })),
-                    ...(plan
+                    ...(plan && sum
                         ? {
                             outings: {
-                                slots: slots.map((s) => ({
+                                slots: sum.slots.map((s) => ({
                                     key: s.slot.key,
                                     label: s.slot.label,
                                     time: s.slot.time,
                                     state: s.state,
                                     ...(s.outing
-                                        ? { pooped: s.outing.data.poop === true, pee: s.outing.data.pee !== false, at: new Date(ctx.clock.local(Number(s.outing.data.at))).toISOString().slice(11, 16), by: String(s.outing.data.by ?? '') }
+                                        ? { pooped: s.outing.data.poop === true, pee: s.outing.data.pee === true, at: new Date(ctx.clock.local(Number(s.outing.data.at))).toISOString().slice(11, 16), by: String(s.outing.data.by ?? '') }
                                         : {}),
                                 })),
-                                extra: todays.filter((o) => typeof o.data.slot !== 'string').length,
-                                poops_today: poops,
+                                extra: sum.extra,
+                                poops_today: sum.poops,
                                 poop_min: plan.poopMin,
-                                under_days: under,
-                                walk_minutes_today: walked,
+                                under_days: sum.under,
+                                walk_minutes_today: sum.walked,
                                 walk_goal: plan.walkGoal,
                             },
                         }
@@ -424,27 +425,39 @@ export const petLogOuting = defineTool({
         const local = ctx.clock.local(when.at);
         const day = toYmd(local);
         const plan = outs.plans.find((p) => p.petId === pet.id);
+        const base = `households/${ctx.here.id}`;
+        // The request's own id: an extra outing's document id, and on a slot's outing its `req`, so a
+        // retry with the same key finds what the first call wrote, wherever it went.
+        const req = await recordId(ctx.session.props.connectionId, 'pet_log_outing', args.idempotency_key);
+        const earlier = args.idempotency_key ? outs.outings.find((o) => o.id === req || o.data.req === req) : undefined;
+        if (earlier) {
+            ctx.touched('pet', `petOutings/${earlier.id}`);
+            return render(ctx.lang, () => ({
+                text: t('pet.outingRepeated', { url: petUrl(ctx) }),
+                data: { id: earlier.id, pet: pet.id, slot: typeof earlier.data.slot === 'string' ? earlier.data.slot : null, at: ctx.clock.isoLocal(Number(earlier.data.at)), pooped: earlier.data.poop ?? null, repeated: true },
+            }));
+        }
         const slots = plan ? slotStates(ctx, plan, data.meals, outs.outings, day, local) : [];
+        // A walk on its own never ticks a bathroom slot, even when one is named: it is an extra outing.
+        const bathroom = args.pooped !== undefined;
         let slot;
-        if (args.slot) {
+        if (args.slot && bathroom) {
             if (!plan)
                 throw new UserError('pet.noOutings', { pet: pet.name });
             slot = pick(slots, args.slot, (s) => s.slot.key, (s) => s.slot.label).found ?? slots.find((s) => s.slot.time === args.slot || formatTime(s.at) === args.slot);
             if (!slot)
                 throw new UserError('pet.unknownOuting', { name: args.slot, slots: slots.map((s) => s.slot.label).join(', ') || '-' });
         }
-        else if (args.pooped !== undefined)
-            // A walk on its own never ticks a bathroom slot.
+        else if (bathroom)
             slot = slots.filter((s) => s.state !== 'done' && s.at <= local + 90 * 60_000).sort((a, b) => Math.abs(a.at - local) - Math.abs(b.at - local))[0];
         const now = ctx.clock.now();
-        const base = `households/${ctx.here.id}`;
-        const id = slot ? slotOutingId(pet.id, day, slot.slot.key) : await recordId(ctx.session.props.connectionId, 'pet_log_outing', args.idempotency_key);
+        const id = slot ? outingId(pet.id, day, slot.slot.key) : req;
         const note = clip(args.note, 200);
         const doc = {
             petId: pet.id,
-            ...(slot ? { slot: slot.slot.key } : {}),
+            ...(slot ? { slot: slot.slot.key, ...(args.idempotency_key ? { req } : {}) } : {}),
             at: Math.round(when.at),
-            ...(args.pooped !== undefined ? { pee: args.pee ?? true, poop: args.pooped } : args.pee !== undefined ? { pee: args.pee } : {}),
+            ...(bathroom ? { pee: args.pee ?? true, poop: args.pooped } : {}),
             ...(args.walk_minutes ? { walkMin: args.walk_minutes } : {}),
             ...(note ? { note } : {}),
             by: ctx.session.email,
@@ -462,23 +475,19 @@ export const petLogOuting = defineTool({
         }
         ctx.touched('pet', `petOutings/${id}`);
         const poops = poopsIn(outingsOn(ctx, outs.outings, pet.id, day)) + (!repeated && args.pooped ? 1 : 0);
-        const vars = { pet: pet.name, slot: slot?.slot.label ?? '', time: formatTime(local), n: poops, min: plan?.poopMin ?? 0, minutes: args.walk_minutes ?? 0, url: petUrl(ctx) };
+        const min = plan?.poopMin ?? 0;
+        const vars = { pet: pet.name, slot: slot?.slot.label ?? '', time: formatTime(local), n: poops, min, minutes: args.walk_minutes ?? 0, url: petUrl(ctx) };
+        const how = args.pooped ? 'Pooped' : 'Pee';
         const key = repeated
             ? slot
                 ? 'pet.outingAlready'
                 : 'pet.outingRepeated'
-            : args.pooped === undefined
+            : !bathroom
                 ? 'pet.walkLogged'
-                : slot
-                    ? args.pooped
-                        ? 'pet.outingLoggedPooped'
-                        : 'pet.outingLoggedPee'
-                    : args.pooped
-                        ? 'pet.outingExtraPooped'
-                        : 'pet.outingExtraPee';
+                : `pet.outing${slot ? 'Logged' : 'Extra'}${how}${min ? 'Min' : ''}`;
         return render(ctx.lang, () => ({
-            text: `${t(key, vars)}${plan?.poopMin && args.pooped !== undefined ? ` ${t('pet.outingPoops', { n: poops, min: plan.poopMin })}.` : ''}`,
-            data: { id, pet: pet.id, slot: slot?.slot.key ?? null, at: ctx.clock.isoLocal(when.at), pooped: args.pooped ?? null, poops_today: poops, poop_min: plan?.poopMin ?? 0, repeated },
+            text: t(key, vars),
+            data: { id, pet: pet.id, slot: slot?.slot.key ?? null, at: ctx.clock.isoLocal(when.at), pooped: args.pooped ?? null, poops_today: poops, poop_min: min, repeated },
         }));
     },
 });
