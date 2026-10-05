@@ -159,3 +159,14 @@ test('emulator ports: a valid number or the default', async () => {
   expect(emulatorPort('x', 9099)).toBe(9099);
   expect(emulatorPort('70000', 9099)).toBe(9099);
 });
+
+test('stable chunks: React and Firebase, then the kit, out of the app chunk', async () => {
+  const { STABLE_CHUNK_GROUPS, stableChunks } = await import('../src/vite');
+  const [vendor, kit] = STABLE_CHUNK_GROUPS;
+  expect(vendor.test.test('/a/node_modules/react-dom/client.js')).toBe(true);
+  expect(vendor.test.test('/a/node_modules/@firebase/firestore/dist/index.mjs')).toBe(true);
+  expect(vendor.test.test('/a/src/App.tsx')).toBe(false);
+  expect(kit.test.test('/a/node_modules/@huishouden/pwa-kit/dist/ui.js')).toBe(true);
+  expect(stableChunks().config({})).toEqual({ build: { rollupOptions: { output: { codeSplitting: { groups: STABLE_CHUNK_GROUPS } } } } });
+  expect(stableChunks().config({ build: { rollupOptions: { output: { codeSplitting: false } } } })).toEqual({});
+});

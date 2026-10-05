@@ -101,6 +101,32 @@ export declare function pwaApp(options: PwaAppOptions): ({
     };
 } | {
     name: string;
+    apply: "build";
+    config(user?: {
+        build?: {
+            rollupOptions?: {
+                output?: unknown;
+            };
+        };
+    }): {
+        build?: undefined;
+    } | {
+        build: {
+            rollupOptions: {
+                output: {
+                    codeSplitting: {
+                        groups: {
+                            name: string;
+                            test: RegExp;
+                            priority: number;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+} | {
+    name: string;
     transformIndexHtml(html: string): string;
 } | {
     name: string;
@@ -281,6 +307,46 @@ export declare function telemetryChunks(): {
             rollupOptions: {
                 output: {
                     chunkFileNames: (chunk: ChunkInfo) => string;
+                };
+            };
+        };
+    };
+};
+/** Libraries that change only when the lockfile does: React and Firebase, then the kit. */
+export declare const STABLE_CHUNK_GROUPS: {
+    name: string;
+    test: RegExp;
+    priority: number;
+}[];
+/**
+ * Splits React and Firebase (`vendor-*.js`) and the kit (`kit-*.js`) out of the app's own code, so
+ * a deploy that changes only the app keeps those files' hashes: an installed copy downloads the
+ * app's chunk on update, not the whole bundle again (about 300 KB compressed per app before). Hosting
+ * transfer is the suite's scarcest free resource (docs/one-site.md "Bandwidth"). An app that sets
+ * its own codeSplitting or several outputs is left alone.
+ */
+export declare function stableChunks(): {
+    name: string;
+    apply: "build";
+    config(user?: {
+        build?: {
+            rollupOptions?: {
+                output?: unknown;
+            };
+        };
+    }): {
+        build?: undefined;
+    } | {
+        build: {
+            rollupOptions: {
+                output: {
+                    codeSplitting: {
+                        groups: {
+                            name: string;
+                            test: RegExp;
+                            priority: number;
+                        }[];
+                    };
                 };
             };
         };

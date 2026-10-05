@@ -32,7 +32,7 @@
 # STAGING_VITE_FIREBASE_* set (infra/bootstrap.sh --staging), a manual run given `staging-ref` builds
 # that ref against the huishouden-staging project, deploys it to https://<STAGING_SITE>.web.app and
 # checks it with `e2e` plus the optional `e2e:signed-in` script, in households of the run's own that
-# the job removes afterwards. `staging-sweep: true` (manual) only removes what runs left behind.
+# the job removes afterwards. Leftovers older than a day: `hh ops staging-cleanup` (huishouden/cli).
 name: pwa
 
 on:
@@ -59,7 +59,7 @@ on:
         type: string
         default: ''
       staging-sweep:
-        description: The portal's nightly schedule. Remove staging test households and users over a day old; nothing else runs
+        description: Retired (0.94.0); `hh ops staging-cleanup` removes leftovers. Kept so callers that pass it don't fail
         type: boolean
         default: false
 
@@ -352,7 +352,7 @@ jobs:
           bun run e2e:signed-in "$@"
       - name: Remove this run's households and people
         if: always() && steps.kit.outputs.own == 'true'
-        continue-on-error: true # the nightly sweep removes what this leaves
+        continue-on-error: true # `hh ops staging-cleanup` removes what this leaves
         env:
           HH_STAGING_ACCESS_TOKEN: ${{ steps.gcp.outputs.access_token }}
         run: bunx pwa-staging cleanup
@@ -576,36 +576,3 @@ jobs:
         env:
           CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           PROJECT: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
-
-  staging-sweep:
-    # The portal's nightly schedule (staging-sweep: true): removes staging test households and users
-    # over a day old that a cancelled or killed run left, and the shared household of kits before
-    # 0.72. The kit's own code at the version the repo pins; nothing from the repo runs.
-    if: inputs.staging-sweep && vars.STAGING_GCP_WIF_PROVIDER != ''
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-      - name: The kit, at the version this repo pins
-        run: |
-          spec=$(jq -r '(.devDependencies // {})["@huishouden/pwa-kit"] // (.dependencies // {})["@huishouden/pwa-kit"] // empty' package.json)
-          ref=${spec##*#}
-          if [ -z "$spec" ] || [ "$ref" = "$spec" ]; then echo "::error::package.json must pin @huishouden/pwa-kit to a tag (github:huishouden/pwa-kit#vX.Y.Z)"; exit 1; fi
-          git clone -q --depth 1 --branch "$ref" https://github.com/huishouden/pwa-kit.git "$RUNNER_TEMP/pwa-kit"
-      - id: gcp
-        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
-        with:
-          workload_identity_provider: ${{ vars.STAGING_GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.STAGING_GCP_DEPLOY_SA }}
-          token_format: access_token
-      - name: Sweep
-        env:
-          HH_STAGING_ACCESS_TOKEN: ${{ steps.gcp.outputs.access_token }}
-        run: |
-          if ! grep -q sweepStaging "$RUNNER_TEMP/pwa-kit/scripts/staging.ts"; then echo "::notice::The pinned kit has no sweep (0.72+)"; exit 0; fi
-          bun "$RUNNER_TEMP/pwa-kit/scripts/staging.ts" sweep

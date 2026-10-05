@@ -12,7 +12,7 @@ import { SHARE_ACTION, SHARE_FILE_FIELD, SHARE_SW_FILE, shareServiceWorkerSource
 export function pwaApp(options) {
     const { overrides = {} } = options;
     const base = normalizeBase(options.base);
-    return [sitePath(base), buildStamp(), telemetryChunks(), linkPreview(options), themeBoot(), langBoot(), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
+    return [sitePath(base), buildStamp(), telemetryChunks(), stableChunks(), linkPreview(options), themeBoot(), langBoot(), ...(options.push ? [pushServiceWorkerFile()] : []), ...(sharesContacts(options) ? [shareServiceWorkerFile()] : []), ...VitePWA({
             registerType: 'autoUpdate',
             includeAssets: options.includeAssets ?? ['icon.svg', 'apple-touch-icon.png', 'og.png'],
             base,
@@ -180,6 +180,30 @@ export function telemetryChunks() {
                     },
                 },
             };
+        },
+    };
+}
+/** Libraries that change only when the lockfile does: React and Firebase, then the kit. */
+export const STABLE_CHUNK_GROUPS = [
+    { name: 'vendor', test: /node_modules[\\/](react|react-dom|scheduler|firebase|@firebase|idb|tslib)[\\/]/, priority: 3 },
+    { name: 'kit', test: /node_modules[\\/]@huishouden[\\/]pwa-kit[\\/]/, priority: 2 },
+];
+/**
+ * Splits React and Firebase (`vendor-*.js`) and the kit (`kit-*.js`) out of the app's own code, so
+ * a deploy that changes only the app keeps those files' hashes: an installed copy downloads the
+ * app's chunk on update, not the whole bundle again (about 300 KB compressed per app before). Hosting
+ * transfer is the suite's scarcest free resource (docs/one-site.md "Bandwidth"). An app that sets
+ * its own codeSplitting or several outputs is left alone.
+ */
+export function stableChunks() {
+    return {
+        name: 'huishouden-stable-chunks',
+        apply: 'build',
+        config(user = {}) {
+            const output = user.build?.rollupOptions?.output;
+            if (Array.isArray(output) || output?.codeSplitting !== undefined)
+                return {};
+            return { build: { rollupOptions: { output: { codeSplitting: { groups: STABLE_CHUNK_GROUPS } } } } };
         },
     };
 }
