@@ -3,6 +3,7 @@ import { commitOps, writeBatch } from './firestore.js';
 import { MONEY_APPS } from './role-core.js';
 import { PERSONAL_TODOS, personalTodoDoc, planTodo, sortTodos, todoActionOps, todoDoc, todoId, toTodoItem, } from './todo-core.js';
 import { cleanAudience, inAudience } from './audience.js';
+import { fingerprint, forgetPublished, publishedKey, publishedStore, unlessPublished } from './published.js';
 /**
  * The household's to-do list over the Firebase SDK: publishing (`syncTodos`), following
  * (`watchTodos`) and applying an action (`applyTodo`). The list's data contract, reading helpers and
@@ -44,8 +45,7 @@ const visible = (db, householdId, restricted, ...filters) => query(todosOf(db, h
  * a change (as `syncAgenda`). Writes only what changed and deletes what is no longer open, so a
  * record done or cancelled anywhere leaves the list on the next sync.
  */
-export async function syncTodos(db, householdId, app, items, { by, restricted = false, now = Date.now() }) {
-    const snap = await getDocs(visible(db, householdId, restricted, where('app', '==', app)));
+export async function syncTodos(db, householdId, app, items, { by, restricted = false, now = Date.now(), published }) {
     const wanted = new Map();
     for (const item of items) {
         // A helper's device can't see private items, so it never publishes or removes them.
@@ -53,7 +53,8 @@ export async function syncTodos(db, householdId, app, items, { by, restricted = 
             continue;
         wanted.set(todoId(app, item.ref), todoDoc(app, item, by, now));
     }
-    return reconcile(db, todosOf(db, householdId), snap.docs, wanted, restricted);
+    // The same items this device published a short while ago: nothing to read or write (`./published`).
+    return unlessPublished(publishedStore(published), publishedKey(db, householdId, 'todos', app, by), fingerprint(wanted, String(restricted)), now, () => ({ written: 0, deleted: 0, unchanged: wanted.size, skipped: true }), async () => reconcile(db, todosOf(db, householdId), (await getDocs(visible(db, householdId, restricted, where('app', '==', app)))).docs, wanted, restricted));
 }
 /** Makes the stored documents exactly `wanted`, writing only what changed. */
 async function reconcile(db, col, stored, wanted, restricted) {
@@ -79,17 +80,16 @@ async function reconcile(db, col, stored, wanted, restricted) {
  * list: the items whose audience includes `by` (the only ones this member may read or write).
  * Items whose audience leaves `by` out are skipped; another allowed member's device keeps them.
  */
-export async function syncPersonalTodos(db, householdId, app, items, { by, now = Date.now() }) {
+export async function syncPersonalTodos(db, householdId, app, items, { by, now = Date.now(), published }) {
     const me = by.trim().toLowerCase();
     const col = personalOf(db, householdId);
-    const snap = await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)));
     const wanted = new Map();
     for (const item of items) {
         if (!inAudience(cleanAudience(item.audience), me))
             continue;
         wanted.set(todoId(app, item.ref), personalTodoDoc(app, item, me, now));
     }
-    return reconcile(db, col, snap.docs, wanted, false);
+    return unlessPublished(publishedStore(published), publishedKey(db, householdId, PERSONAL_TODOS, app, me), fingerprint(wanted), now, () => ({ written: 0, deleted: 0, unchanged: wanted.size, skipped: true }), async () => reconcile(db, col, (await getDocs(query(col, where('app', '==', app), where('audience', 'array-contains', me)))).docs, wanted, false));
 }
 /** Follows the household's to-dos (with `me`, the member's personal ones too), newest first. Waits for both lists before the first answer. */
 export function watchTodos(db, householdId, { restricted, me, onError }, onChange) {
@@ -124,7 +124,7 @@ export function watchTodos(db, householdId, { restricted, me, onError }, onChang
  * A merge onto a record that no longer exists is refused (it was deleted in its app): the item is
  * left for the app to clear on its next sync.
  */
-export async function applyTodo(db, householdId, item, which, { me, now = Date.now() }) {
+export async function applyTodo(db, householdId, item, which, { me, now = Date.now(), published }) {
     const ops = todoActionOps(item, which, { now, me });
     const base = `households/${householdId}`;
     const before = new Map();
@@ -136,6 +136,9 @@ export async function applyTodo(db, householdId, item, which, { me, now = Date.n
         before.set(key, snap.exists() ? { id: op.id, ...snap.data() } : undefined);
     }
     const plan = planTodo(item, ops, (col, id) => before.get(`${col}/${id}`), { now, me });
+    // The item leaves the list here, not in its app's sync: that app's next sync on this device reads again.
+    for (const list of ['todos', PERSONAL_TODOS])
+        forgetPublished(publishedStore(published), db, householdId, list, item.app);
     const written = commitOps(db, base, plan.writes);
     return {
         written,

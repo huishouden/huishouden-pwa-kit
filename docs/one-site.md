@@ -61,6 +61,7 @@ One origin means one `localStorage`, one IndexedDB and one Cache Storage for eve
 | Firebase Auth | IndexedDB `firebaseLocalStorageDb`, `firebase:authUser:<apiKey>:[DEFAULT]` | Shared on purpose: one sign-in |
 | Firestore cache | IndexedDB `firestore/[DEFAULT]/<project>/main`, multi-tab manager | Shared: one cache, any number of tabs and apps. A failed open falls back to memory |
 | Write outbox | `hh-outbox:<project>:<time>-<seq>-<tab>` | Shared on purpose: a note is a complete write (path and data), so whichever app opens next replays it for the same member |
+| Republish notes | `hh-published:<project>:<household>:<list>:<app>:<member>` | Shared on purpose: a fingerprint of what this device last published to the agenda, to-dos or reminders, so any app skips an unchanged republish ("Budgets") |
 | Google API tokens | `hh-google-tokens` (entries keyed by uid and scopes) | Shared on purpose: the same OAuth client, so a Calendar token granted in Pet serves Home |
 | Calendar asked | `<app>-calendar-allowed` | Per app already |
 | Suggestion dismissals | `<app>-calendar-dismissed-<uid>`, `<app>-google-tasks-dismissed-<uid>` | Per app already |
@@ -169,6 +170,92 @@ text with Brotli or gzip.
 
 The hashed files themselves are served from the asset CDN (next section), so what Hosting sends per
 page load is the HTML, the service worker check and the manifest.
+
+## Budgets
+
+Production runs on Firebase's free Spark plan. Its limits are per project, shared by every
+household, every app and every Worker, and a limit reached stops that service for everyone:
+
+| Resource | Spark limit | Resets | What happens at the limit |
+|---|---|---|---|
+| Firestore document reads | 50,000 a day | midnight Pacific | every read fails, in every app and Worker |
+| Firestore writes | 20,000 a day | midnight Pacific | every write fails (the outbox keeps them) |
+| Firestore deletes | 20,000 a day | midnight Pacific | every delete fails |
+| Firestore stored data | 1 GiB | | writes fail |
+| Hosting transfer | 10 GB a month | the 1st | the suite stops loading (see Bandwidth) |
+| Hosting storage | 10 GB | | deploys fail |
+
+Reads are the limit that bites. Firestore bills, and counts against the quota
+(https://cloud.google.com/firestore/pricing):
+
+- one read per document a query, `get` or listener returns;
+- **at least one read per query and per aggregation**, even when nothing comes back, and one per
+  1,000 index entries an aggregation (`count`, `sum`) walks;
+- a listener: its whole result when it starts, then one per changed document. When its connection
+  has been gone for **more than 30 minutes** (a tablet asleep, a closed lid), it is billed its whole
+  result again on reconnecting, persistent cache or not. Within 30 minutes only changes are billed;
+- `getDocs` always asks the server (the cache is not trusted to be complete): its whole result each time.
+
+Cloud Monitoring's `firestore.googleapis.com/document/read_count` counts documents returned only, so
+it leaves out the one-read minimum of empty queries and aggregations. The Workers' checks are
+mostly those: add the `RunQuery` and `RunAggregationQuery` requests (`api/request_count`) to get what
+is billed.
+
+### A household's day
+
+The budget is **under 5,000 reads a day per active household**, so the free plan holds about ten
+(50,000 less the fixed costs below and a margin). The sizing assumes a household (invented, round
+numbers) of four members, two with Google Calendar sync, one Spending alert inbox, a screen that
+shows the portal all day, and about fifteen app opens a day, two of them Spending.
+
+| Source | What it reads | Reads a day |
+|---|---|---|
+| Calendar Worker, checks | per Google-synced member: the household and their settings (`batchGet`, 2) and four aggregations, every 5 minutes while the household changed in the last hour, every 15 otherwise | ~1,500 |
+| Calendar Worker, syncs and feeds | per change: an aggregation per list, then only the documents changed since the cached copy; a full read when something was deleted or once a day | ~400 |
+| Calendar Worker, alert inbox | Gmail first (no Firestore read); cards, rules and settings every 12 hours (~125); the import's few days of transactions | ~300 |
+| Spending | per open after 30 minutes: this and last month's transactions (~250), rules, cards, settings; an older month when opened | ~800 |
+| Portal on the always-on screen | per wake after 30 minutes asleep: a week of agenda (the Calendar tab: all of it), to-dos, contacts, members, settings (~75) | ~800 |
+| Other app opens | each app's own lists (10 to 60), and its agenda, to-dos and reminders only when they changed or this device's last sync of them is over 6 hours old (`./published`) | ~600 |
+| **Household total** | | **~4,400** |
+
+Fixed, once for the project: Notify's due-reminder queries, two every 5 minutes (`FIRESTORE_NOTIFY_READS`
+caps the rest), ~600 a day.
+
+What keeps it there, and what to keep when changing an app:
+
+- **No full-history listeners.** A listener's whole result is billed again after every 30-minute
+  gap, so a list that only grows (Spending's transactions) is followed by date window, and older
+  months are read when shown; the portal follows a week of agenda except on its Calendar tab.
+- **Apps republish only what changed.** `syncAgenda`, `syncTodos`, `syncReminders` and their
+  personal forms skip the read when this device published the same items in the last 6 hours
+  (`src/published.ts`).
+- **Workers ask cheaply first.** A check is aggregations and a `batchGet`, never a list; a sync reads
+  documents changed since its cached copy. Each Worker has its own daily share:
+  `FIRESTORE_CHECK_READS` (calendar, 20,000) and `FIRESTORE_NOTIFY_READS` (notify), and spaces its work
+  out rather than go over.
+- **No browser against production** (Bandwidth): one automated browser run reads as much as a
+  household's day.
+- **An alert at 60%.** `infra/read-alert.sh` (run by the bootstrap with `ALERT_EMAIL`) emails when the
+  last 24 hours' billed reads pass 30,000 (documents returned plus one per query and aggregation
+  request), a Cloud Monitoring alert policy, free.
+
+Writes are not close: a household writes a few hundred documents a day (each saved record, its
+agenda and to-do items when they change, the Workers' syncs), against 20,000.
+
+### Past ten households: Blaze
+
+On the pay-as-you-go Blaze plan the same free amounts apply each day, and beyond them
+(us-east1, where the production database is):
+
+| | Price | A household at the budget (30 days) | Cost a month |
+|---|---|---|---|
+| Reads | $0.03 per 100,000 | 5,000 a day: 150,000 | $0.045 |
+| Writes | $0.09 per 100,000 | ~500 a day: 15,000 | $0.014 |
+| Deletes | $0.01 per 100,000 | ~100 a day: 3,000 | $0.0003 |
+| Hosting transfer | $0.15 per GB past 10 GB a month | well under 0.1 GB | under $0.015 |
+
+About **$0.06 a household a month** past the free ten; a hundred households cost about $6 a month,
+less the free amounts. Blaze needs a billing account; set a budget alert on it.
 
 ## Asset CDN
 

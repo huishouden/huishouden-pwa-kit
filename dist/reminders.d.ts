@@ -1,6 +1,7 @@
 import { type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { type MedCourse } from './dose.js';
 import { type PersonalReminderInput, type Reminder, type ReminderInput } from './reminder-core.js';
+import { type PublishedStorage } from './published.js';
 export type { ReminderSource, SourceCheck, SourceCondition, SourceValue } from './reminder-source.js';
 export * from './reminder-core.js';
 /**
@@ -24,25 +25,30 @@ export * from './reminder-core.js';
  */
 export interface ReminderWriteOptions {
     restricted?: boolean;
+    /** Where this device notes what apps scheduled (`./published`): `localStorage` by default, null for none. */
+    published?: PublishedStorage | null;
 }
 /**
  * Creates or replaces a reminder (id from `reminderId(ref ?? app, at)` unless given). Writing it
  * again marks it unsent, so it is delivered again if its time has come.
  */
-export declare function upsertReminder(db: Firestore, householdId: string, input: ReminderInput, by: string): Promise<string>;
-export declare function cancelReminder(db: Firestore, householdId: string, id: string): Promise<void>;
+export declare function upsertReminder(db: Firestore, householdId: string, input: ReminderInput, by: string, { published }?: Pick<ReminderWriteOptions, 'published'>): Promise<string>;
+/** Deletes one reminder. Its app isn't known here, so every app's sync on this device reads again. */
+export declare function cancelReminder(db: Firestore, householdId: string, id: string, { published }?: Pick<ReminderWriteOptions, 'published'>): Promise<void>;
 /** Deletes every reminder with this `ref` (a course stopped, an appointment cancelled). */
-export declare function cancelReminders(db: Firestore, householdId: string, ref: string, { restricted }?: ReminderWriteOptions): Promise<number>;
+export declare function cancelReminders(db: Firestore, householdId: string, ref: string, { restricted, published }?: ReminderWriteOptions): Promise<number>;
 /**
  * Makes the reminders with this `ref` exactly `inputs` from now on: future ones not in the list are
  * deleted, the list is written (unchanged ones keep their ids), and past ones are left alone so a
  * sent reminder is never sent twice. Use it whenever a course or appointment is saved.
  */
-export declare function replaceReminders(db: Firestore, householdId: string, ref: string, inputs: ReminderInput[], by: string, now?: number, { restricted }?: ReminderWriteOptions): Promise<string[]>;
+export declare function replaceReminders(db: Firestore, householdId: string, ref: string, inputs: ReminderInput[], by: string, now?: number, { restricted, published }?: ReminderWriteOptions): Promise<string[]>;
 export interface SyncRemindersResult {
     written: number;
     deleted: number;
     unchanged: number;
+    /** Nothing read or written: this device scheduled exactly these reminders a short while ago (`./published`). */
+    skipped?: true;
 }
 /**
  * Makes everything this app has scheduled from now on exactly `inputs` (each with its own `ref`):
@@ -51,13 +57,13 @@ export interface SyncRemindersResult {
  * so running it often costs one read and almost no writes. Past and sent reminders are never
  * touched, so nothing is sent twice.
  */
-export declare function syncReminders(db: Firestore, householdId: string, app: string, inputs: ReminderInput[], by: string, now?: number, { restricted }?: ReminderWriteOptions): Promise<SyncRemindersResult>;
+export declare function syncReminders(db: Firestore, householdId: string, app: string, inputs: ReminderInput[], by: string, now?: number, { restricted, published }?: ReminderWriteOptions): Promise<SyncRemindersResult>;
 /**
  * Makes this app's reminders for named members exactly `inputs` from now on, as `syncReminders`
  * does for shared ones: the reminders whose audience includes `by`. Past and sent ones are never
  * touched; inputs whose audience leaves `by` out, or with no recipient in it, are skipped.
  */
-export declare function syncPersonalReminders(db: Firestore, householdId: string, app: string, inputs: PersonalReminderInput[], by: string, now?: number): Promise<SyncRemindersResult>;
+export declare function syncPersonalReminders(db: Firestore, householdId: string, app: string, inputs: PersonalReminderInput[], by: string, now?: number, { published }?: Pick<ReminderWriteOptions, 'published'>): Promise<SyncRemindersResult>;
 /** Follows the household's reminders, optionally one app's, soonest first. */
 export declare function watchReminders(db: Firestore, householdId: string, onChange: (reminders: Reminder[]) => void, { app, restricted, onError }?: {
     app?: string;

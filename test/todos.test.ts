@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
 import * as real from 'firebase/firestore';
 import { daysBetween } from '../src/time';
 
@@ -53,6 +53,8 @@ const {
   TODO_FIELDS, TODO_ACTION_FIELDS, addedText, applyTodo, canDo, olderThan, resolveOps, sortTodos, syncTodos, todoDoc, todoDueText, todoId,
   todoOpsAllowed, todoOverdue, toTodoItem, watchTodos, TodoActionError, personalTodoDoc, syncPersonalTodos, PERSONAL_TODO_FIELDS,
 } = await import('../src/todos');
+const { memoryNotes, withoutPageStorage } = await import('./published-notes');
+withoutPageStorage(beforeAll, afterAll);
 type TodoInput = import('../src/todos').TodoInput;
 type TodoItem = import('../src/todos').TodoItem;
 
@@ -158,6 +160,15 @@ describe('syncTodos and watchTodos', () => {
     expect(await syncTodos(db, H, 'tasks', [input()], { by: SAM, now: NOW + 5000 })).toEqual({ written: 0, deleted: 1, unchanged: 1 });
     expect(writes).toBe(1);
     expect(stored().map((t) => t.id).sort()).toEqual(['home:job:j1', 'tasks:item:i1']);
+  });
+
+  test('the same to-dos again from this device skip the read until they change', async () => {
+    reset();
+    const published = memoryNotes();
+    const items = [input(), input({ ref: 'item:i2', title: 'Return library books' })];
+    expect(await syncTodos(db, H, 'tasks', items, { by: ALEX, now: NOW, published })).toEqual({ written: 2, deleted: 0, unchanged: 0 });
+    expect(await syncTodos(db, H, 'tasks', items, { by: ALEX, now: NOW + 1000, published })).toEqual({ written: 0, deleted: 0, unchanged: 2, skipped: true });
+    expect(await syncTodos(db, H, 'tasks', [input()], { by: ALEX, now: NOW + 2000, published })).toEqual({ written: 0, deleted: 1, unchanged: 1 });
   });
 
   test('a helper never writes or removes private items, and a refused write is skipped', async () => {
@@ -268,6 +279,17 @@ describe('applying an action', () => {
     const job = store.get(`${base}/homeTasks/j1`)!;
     expect(job).toEqual({ title: 'Clean the gutters', schedule: monthly, due: '2026-10-15', lastDone: '2026-10-03', updatedAt: NOW, by: ALEX });
     expect(daysBetween('2026-10-03', job.due as string)).toBeGreaterThan(0);
+  });
+
+  test("a to-do done here forgets its app's note: the app's next sync reads again", async () => {
+    reset();
+    const notes = memoryNotes();
+    store.set(`${base}/items/i1`, { name: 'Fix the porch light', completed: false, by: SAM });
+    await syncTodos(db, H, 'tasks', [input()], { by: ALEX, now: NOW, published: notes });
+    expect(await syncTodos(db, H, 'tasks', [input()], { by: ALEX, now: NOW + 1000, published: notes })).toMatchObject({ skipped: true });
+    const [t] = stored();
+    await (await applyTodo(db, H, t, 'cancel', { me: ALEX, now: NOW + 2000, published: notes })).written;
+    expect(await syncTodos(db, H, 'tasks', [input()], { by: ALEX, now: NOW + 3000, published: notes })).not.toHaveProperty('skipped');
   });
 
   test('done writes the source record and removes the item in one batch; Undo puts both back', async () => {

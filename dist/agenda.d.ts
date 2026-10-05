@@ -1,5 +1,6 @@
 import { type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { type AgendaInput, type AgendaItem, type AgendaRange, type PersonalAgendaInput } from './agenda-core.js';
+import { type PublishedStorage } from './published.js';
 /**
  * The household's agenda over the Firebase SDK: publishing (`syncAgenda` and friends) and following
  * (`watchAgenda`). The data contract and every reading helper are in `./agenda-core` (re-exported
@@ -16,11 +17,15 @@ export interface AgendaWriteOptions {
      */
     restricted?: boolean;
     now?: number;
+    /** Where this device notes what it published (`./published`): `localStorage` by default, null for none. */
+    published?: PublishedStorage | null;
 }
 export interface AgendaWriteResult {
     written: number;
     deleted: number;
     unchanged: number;
+    /** Nothing read or written: this device published exactly these items a short while ago (`./published`). */
+    skipped?: true;
 }
 /**
  * Makes one source record's items exactly `items` (each gets `ref`): call it when the record is
@@ -29,13 +34,15 @@ export interface AgendaWriteResult {
  */
 export declare function replaceAgenda(db: Firestore, householdId: string, app: string, ref: string, items: Omit<AgendaInput, 'ref'>[], options: AgendaWriteOptions): Promise<AgendaWriteResult>;
 /** Deletes one source record's items (the record was deleted). */
-export declare function removeAgenda(db: Firestore, householdId: string, app: string, ref: string, { restricted }?: {
+export declare function removeAgenda(db: Firestore, householdId: string, app: string, ref: string, { restricted, published }?: {
     restricted?: boolean;
+    published?: PublishedStorage | null;
 }): Promise<number>;
 /**
  * Makes everything this app has published exactly `items`: for apps that work out all their dates
- * when they open. Writes only what changed and deletes what is no longer there, so running it on
- * every open costs one read of the app's items and almost no writes.
+ * when they open. Writes only what changed and deletes what is no longer there. When this device
+ * already published exactly these items in the last few hours (`./published`), it returns without
+ * reading (`skipped`); otherwise it costs one read of the app's items and almost no writes.
  */
 export declare function syncAgenda(db: Firestore, householdId: string, app: string, items: AgendaInput[], options: AgendaWriteOptions): Promise<AgendaWriteResult>;
 /**
@@ -43,7 +50,7 @@ export declare function syncAgenda(db: Firestore, householdId: string, app: stri
  * agenda: the items whose audience includes `by` (the only ones this member may read or write).
  * Items whose audience leaves `by` out are skipped; another allowed member's device keeps them.
  */
-export declare function syncPersonalAgenda(db: Firestore, householdId: string, app: string, items: PersonalAgendaInput[], { by, now }: Omit<AgendaWriteOptions, 'restricted'>): Promise<AgendaWriteResult>;
+export declare function syncPersonalAgenda(db: Firestore, householdId: string, app: string, items: PersonalAgendaInput[], { by, now, published }: Omit<AgendaWriteOptions, 'restricted'>): Promise<AgendaWriteResult>;
 /**
  * Follows the household's items overlapping `from`..`to` (and any overdue), soonest first; with
  * `me`, the member's personal items too. Waits for both lists before the first answer.
