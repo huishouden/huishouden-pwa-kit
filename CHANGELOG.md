@@ -3,6 +3,17 @@
 Versions from 0.91.0 on are set by the PR that changes the kit (STANDARD.md "Versions"); earlier
 ones are described in their PR titles and tags.
 
+## [0.96.0](https://github.com/huishouden/pwa-kit/compare/v0.95.1...v0.96.0) (2026-10-05)
+
+### Features
+
+* **reminders:** source, what a reminder is about, for the sender to check ([9b8a0b7](https://github.com/huishouden/pwa-kit/commit/9b8a0b70d07300658a91123197f59bfe35ebbf45))
+
+### Bug Fixes
+
+* **reminder-source:** a Health source stays on personal reminders only; README names the sender's exception ([ba8bf55](https://github.com/huishouden/pwa-kit/commit/ba8bf55ab0b41117d01d083e29d29bbe3fcffe50))
+* **reminder-source:** frozen table, pure cleanSource, the service-account exception in STANDARD.md ([1f5f8fa](https://github.com/huishouden/pwa-kit/commit/1f5f8fa8f5d3349f5d21661d62c8e9511594c1a2))
+
 ## 0.95.1 (2026-10-05)
 
 ### Bug Fixes
