@@ -92,7 +92,7 @@ and reads the other apps only from public release assets:
    `observability` release asset; production only, docs/observability.md) and deploys. Then `pwa-site stale` asks GitHub for the assets again; if any app published since the
    download, it assembles and deploys again (up to three rounds). Apps without an asset yet are
    left out (their path falls to the portal).
-4. `smoke` runs the app's `e2e` against `https://<site>/<app>/`.
+4. `smoke` checks the live app over HTTP, no browser (see Bandwidth).
 
 Races: two repos deploying at once each include the other's newest asset or notice it afterwards
 (step 3's recheck), and the last deploy wins with both. The portal's scheduled run (every 30
@@ -130,6 +130,29 @@ never overwrite each other mid-test; every staging site is a full mirror (portal
 under their paths), so cross-app checks (one sign-in, tiles) work on any of them. Only
 `huishouden-staging.web.app` is an origin of the staging OAuth client ("Sign-in origins"), so
 Google's prompt and Google API tokens work there and not on the per-app staging sites.
+
+## Bandwidth
+
+Production is on Firebase's free Spark plan: **10 GB of Hosting transfer a month** for the whole
+project (every app, the old per-app sites, preview channels), and at 10 GB Hosting stops serving
+until the month resets. Staging (`huishouden-staging`) is a separate project with its own 10 GB.
+
+Budget: households use well under 1 GB a month. A first visit to an app costs its precache (the
+service worker downloads every file of the build, compressed: 0.3 to 1.5 MB per app); a later
+visit costs index.html (about 3 KB) and whatever changed. So a browser session against production
+costs as much as a new household member. CI therefore never opens production in a browser:
+
+- each deploy's `smoke` is one GET of index.html and HEAD requests for one hashed asset, the web
+  manifest and `sw.js`: about 4 KB per deploy, 4 MB for 1,000 deploys;
+- PR evidence (screenshots, browser tests) runs on staging (`pwa-evidence`), never production;
+- `pwa-bandwidth-check` fails a workflow step that runs a browser without a non-production
+  `BASE_URL`;
+- the New Relic uptime monitors are pings (one GET of index.html), about 0.25 GB a month for
+  the suite.
+
+Hashed files under `/assets/` are `public, max-age=31536000, immutable`; HTML, `sw.js` and
+manifests are `no-cache` (revalidated with the ETag, a 304 costs headers only). Hosting compresses
+text with Brotli or gzip.
 
 ## Sign-in origins
 
